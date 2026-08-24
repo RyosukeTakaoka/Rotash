@@ -1,8 +1,10 @@
 import SwiftUI
 import UIKit
 
-/// 縦向き。進行中の作品（写真）はここでは見せない。
-/// 作る / 参加する / 招待コード / Memories / 設定 だけ。
+/// 縦向き。Rotash の入口。管理画面ではないので、ここに置くのは
+/// グループ名 / 招待コード / 今日の担当者 / Memories / 設定 だけ。
+/// 今週の7分割そのもの（進行中の作品）はここでは絶対に見せない。
+/// 横にした瞬間に「THIS WEEK」が現れることが Rotash 独自の体験になる。
 struct PortraitHomeView: View {
 
     @EnvironmentObject private var app: AppViewModel
@@ -10,21 +12,17 @@ struct PortraitHomeView: View {
     @State private var showCreate = false
     @State private var showJoin = false
     @State private var showSettings = false
-    @State private var showImporter = false
-    @State private var batonPayload: SharePayload?
     @State private var copied = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    wordmark
+                    header
 
                     if let group = app.group {
-                        groupHeader(group)
-                        thisWeekBlock(group)
+                        groupBlock(group)
                         memoriesBlock(group)
-                        actionsBlock
                     } else {
                         onboarding
                     }
@@ -54,36 +52,32 @@ struct PortraitHomeView: View {
                 .environmentObject(app)
                 .interactiveDismissDisabled()
         }
-        .sheet(item: $batonPayload) { payload in ActivityView(items: payload.urls) }
-        .fileImporter(isPresented: $showImporter,
-                      allowedContentTypes: [BatonTransfer.fileType]) { result in
-            switch result {
-            case .success(let url):
-                do { try app.importBaton(from: url) }
-                catch { app.alertMessage = error.localizedDescription }
-            case .failure(let error):
-                app.alertMessage = error.localizedDescription
-            }
-        }
     }
 
     // MARK: - Blocks
 
-    private var wordmark: some View {
+    private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("ROTASH")
-                .font(Typo.wordmark(28))
-                .tracking(10)
-                .foregroundStyle(Palette.text)
-                .padding(.top, 28)
-                .padding(.bottom, 22)
+            HStack(alignment: .firstTextBaseline) {
+                Text("ROTASH")
+                    .font(Typo.wordmark(28))
+                    .tracking(10)
+                    .foregroundStyle(Palette.text)
+                Spacer()
+                Button("SETTINGS") { showSettings = true }
+                    .font(Typo.label(9, weight: .medium))
+                    .tracking(1.6)
+                    .foregroundStyle(Palette.faint)
+            }
+            .padding(.top, 28)
+            .padding(.bottom, 22)
             HairLine()
         }
         .padding(.horizontal, 24)
     }
 
-    private func groupHeader(_ group: RotashGroup) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private func groupBlock(_ group: RotashGroup) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
             Text(group.name.uppercased())
                 .font(Typo.title(20))
                 .tracking(2)
@@ -106,45 +100,25 @@ struct PortraitHomeView: View {
             }
             .buttonStyle(.plain)
 
-            Text(group.members.map(\.name).joined(separator: "  ·  "))
-                .rotashLabel(10, color: Palette.dim, tracking: 0.6)
+            VStack(alignment: .leading, spacing: 6) {
+                if group.currentWeek.isComplete {
+                    Text("今週の作品が完成しました")
+                        .rotashLabel(11, color: Palette.text, tracking: 0.6)
+                } else {
+                    HStack(spacing: 8) {
+                        Text("今日の担当").rotashLabel(9, color: Palette.faint, tracking: 1.6)
+                        Text(app.assignee(forDay: app.todayIndex)?.name.uppercased() ?? "-")
+                            .rotashLabel(12, color: app.isMyDay(app.todayIndex) ? Palette.live : Palette.text, tracking: 0.6)
+                    }
+                }
+                Text("→ 横にして見る")
+                    .rotashLabel(9, color: Palette.faint, tracking: 1.2)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 24)
         .padding(.top, 22)
-        .padding(.bottom, 26)
-    }
-
-    private func thisWeekBlock(_ group: RotashGroup) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HairLine()
-            HStack {
-                Text("THIS WEEK").rotashLabel(10, tracking: 3)
-                Spacer()
-                Text("\(group.currentWeek.filledCount) / 7")
-                    .rotashLabel(10, color: Palette.text)
-            }
-            .padding(.top, 18)
-
-            Text(group.currentWeek.title).rotashLabel(10, color: Palette.faint)
-
-            WeekProgressStrip(week: group.currentWeek, todayIndex: app.todayIndex)
-
-            HStack(spacing: 8) {
-                Text("TODAY").rotashLabel(9, color: Palette.faint, tracking: 2)
-                Text(app.assignee(forDay: app.todayIndex)?.name.uppercased() ?? "-")
-                    .rotashLabel(10, color: app.isMyDay(app.todayIndex) ? Palette.live : Palette.dim)
-            }
-
-            Text(group.currentWeek.isComplete
-                 ? "今週の7枚がそろいました。横にすると作品が見られます。"
-                 : "端末を横にすると、今どこまで埋まったか全員分見られます。")
-                .rotashLabel(10, color: Palette.dim, tracking: 0.4)
-                .lineSpacing(4)
-                .padding(.top, 4)
-                .padding(.bottom, 22)
-        }
-        .padding(.horizontal, 24)
+        .padding(.bottom, 30)
     }
 
     private func memoriesBlock(_ group: RotashGroup) -> some View {
@@ -167,12 +141,7 @@ struct PortraitHomeView: View {
                     ForEach(group.archive) { week in
                         NavigationLink(value: week) {
                             VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text(week.title).rotashLabel(10, color: Palette.text, tracking: 1.2)
-                                    Spacer()
-                                    Text(week.isComplete ? "COMPLETE" : "\(week.filledCount) / 7")
-                                        .rotashLabel(9, color: Palette.faint)
-                                }
+                                Text(week.title).rotashLabel(10, color: Palette.text, tracking: 1.2)
                                 WeekThumbnailStrip(week: week)
                             }
                         }
@@ -181,20 +150,6 @@ struct PortraitHomeView: View {
                 }
                 .padding(.bottom, 26)
             }
-        }
-        .padding(.horizontal, 24)
-    }
-
-    private var actionsBlock: some View {
-        VStack(spacing: 12) {
-            HairLine().padding(.bottom, 18)
-
-            Button("バトンを渡す") { exportBaton() }
-                .buttonStyle(RotashButtonStyle())
-            Button("バトンを受け取る") { showImporter = true }
-                .buttonStyle(RotashButtonStyle())
-            Button("設定") { showSettings = true }
-                .buttonStyle(RotashButtonStyle())
         }
         .padding(.horizontal, 24)
     }
@@ -219,14 +174,5 @@ struct PortraitHomeView: View {
                 .buttonStyle(RotashButtonStyle())
         }
         .padding(.horizontal, 24)
-    }
-
-    private func exportBaton() {
-        do {
-            let url = try app.exportBaton()
-            batonPayload = SharePayload(urls: [url])
-        } catch {
-            app.alertMessage = error.localizedDescription
-        }
     }
 }

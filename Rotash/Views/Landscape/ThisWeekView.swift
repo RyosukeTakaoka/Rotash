@@ -54,13 +54,11 @@ struct ThisWeekView: View {
 
     private func header(week: RotashWeek) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
-            Text(week.isComplete ? "COMPLETE" : "THIS WEEK")
+            Text("THIS WEEK")
                 .rotashLabel(12, color: Palette.text, tracking: 3.4)
             Text(week.title)
                 .rotashLabel(10, color: Palette.faint)
             Spacer(minLength: 8)
-            Text("\(week.filledCount) / 7")
-                .rotashLabel(11, color: week.isComplete ? Palette.text : Palette.dim)
             if week.isComplete {
                 WorkShareButton(week: week) {
                     Text("SHARE").rotashLabel(11, color: Palette.live, tracking: 2.4)
@@ -72,11 +70,20 @@ struct ThisWeekView: View {
     }
 
     // MARK: - 7 分割
+    //
+    // 7枚が左から少しずつ埋まっていく状態そのものが Rotash の価値なので、
+    // どの枠も常に同じ比率になるよう GeometryReader で幅を明示的に割り当てる
+    // （HStack の柔軟なフレームだけに頼ると、内部コンテンツの都合で崩れうるため）。
 
     private func grid(week: RotashWeek) -> some View {
-        HStack(spacing: 1) {
-            ForEach(week.slots.sorted(by: { $0.dayIndex < $1.dayIndex })) { slot in
-                cell(slot: slot, week: week)
+        GeometryReader { geometry in
+            let spacing: CGFloat = 1
+            let cellWidth = (geometry.size.width - spacing * 6) / 7
+            HStack(spacing: spacing) {
+                ForEach(week.slots.sorted(by: { $0.dayIndex < $1.dayIndex })) { slot in
+                    cell(slot: slot, week: week)
+                        .frame(width: cellWidth)
+                }
             }
         }
         .background(Palette.background)
@@ -183,13 +190,12 @@ struct ThisWeekView: View {
 
     // MARK: - 撮影操作
 
+    // 完成したかどうかは7枚の写真そのもの（と SHARE ボタンの有無）で伝わるので、
+    // ここでは撮影ボタン以外のテキストは出さない。
+    // 今日の担当が誰かも、各枠に既に名前が出ているので改めて言葉にしない。
     @ViewBuilder
     private func bottomControl(week: RotashWeek) -> some View {
-        if week.isComplete {
-            Text("7枚そろいました")
-                .rotashLabel(10, color: Palette.text, tracking: 2)
-                .padding(.bottom, 14)
-        } else if activeDay != nil {
+        if !week.isComplete, activeDay != nil {
             VStack(spacing: 8) {
                 Text(isRetake ? "RETAKE" : "SHOOT")
                     .rotashLabel(9, color: Palette.live, tracking: 3)
@@ -208,17 +214,7 @@ struct ThisWeekView: View {
                 .disabled(isCapturing)
             }
             .padding(.bottom, 12)
-        } else {
-            waitingLine
-                .padding(.bottom, 14)
         }
-    }
-
-    /// 自分の当番ではない日でも、今日の担当者が誰かは常に見える（見るだけの人のための表示）。
-    private var waitingLine: some View {
-        let name = app.assignee(forDay: app.todayIndex)?.name.uppercased() ?? "-"
-        return Text("TODAY — \(name)")
-            .rotashLabel(10, color: Palette.dim, tracking: 2)
     }
 
     private func capture(day: Int) {

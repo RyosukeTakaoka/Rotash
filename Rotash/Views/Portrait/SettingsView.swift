@@ -7,6 +7,8 @@ struct SettingsView: View {
 
     @State private var newMember = ""
     @State private var confirmDelete = false
+    @State private var showImporter = false
+    @State private var batonPayload: SharePayload?
 
     var body: some View {
         ZStack {
@@ -18,6 +20,8 @@ struct SettingsView: View {
 
                     if let group = app.group {
                         members(group)
+                        HairLine()
+                        batonBlock
                         HairLine()
                     }
 
@@ -47,7 +51,7 @@ struct SettingsView: View {
                         .buttonStyle(RotashButtonStyle())
 
                     if app.hasGroup {
-                        Button(confirmDelete ? "本当に削除する（写真も消えます）" : "この Rotash を削除") {
+                        Button(confirmDelete ? "本当に削除する(写真も消えます)" : "この Rotash を削除") {
                             if confirmDelete {
                                 app.deleteRotash()
                                 dismiss()
@@ -68,6 +72,42 @@ struct SettingsView: View {
             .scrollIndicators(.hidden)
         }
         .presentationBackground(Palette.background)
+        .sheet(item: $batonPayload) { payload in ActivityView(items: payload.urls) }
+        .fileImporter(isPresented: $showImporter,
+                      allowedContentTypes: [BatonTransfer.fileType]) { result in
+            switch result {
+            case .success(let url):
+                do { try app.importBaton(from: url) }
+                catch { app.alertMessage = error.localizedDescription }
+            case .failure(let error):
+                app.alertMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private var batonBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("バトン（サーバーを使わないので、ファイルで手渡しします）")
+                .rotashLabel(9, color: Palette.faint, tracking: 0.6)
+                .lineSpacing(3)
+            HStack(spacing: 20) {
+                Button("渡す") { exportBaton() }
+                    .font(Typo.label(11, weight: .semibold))
+                    .foregroundStyle(Palette.text)
+                Button("受け取る") { showImporter = true }
+                    .font(Typo.label(11, weight: .semibold))
+                    .foregroundStyle(Palette.text)
+            }
+        }
+    }
+
+    private func exportBaton() {
+        do {
+            let url = try app.exportBaton()
+            batonPayload = SharePayload(urls: [url])
+        } catch {
+            app.alertMessage = error.localizedDescription
+        }
     }
 
     private func members(_ group: RotashGroup) -> some View {

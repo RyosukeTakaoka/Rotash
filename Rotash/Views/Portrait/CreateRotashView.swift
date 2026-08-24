@@ -66,7 +66,7 @@ struct CreateRotashView: View {
                     HairLine()
                 }
 
-                Text("1日にひとりだけが撮ります。\n7枚そろったら、その週の作品が完成します。")
+                Text("撮るのは1日にひとりだけですが、\n7分割はメンバー全員がいつでも見られます。")
                     .rotashLabel(10, color: Palette.dim, tracking: 0.4)
                     .lineSpacing(5)
 

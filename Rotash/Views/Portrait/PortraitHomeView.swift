@@ -126,7 +126,7 @@ struct PortraitHomeView: View {
 
             Text(group.currentWeek.isComplete
                  ? "今週の7枚がそろいました。横にすると作品が見られます。"
-                 : "端末を横にすると、今週のRotashが見られます。")
+                 : "端末を横にすると、今どこまで埋まったか全員分見られます。")
                 .rotashLabel(10, color: Palette.dim, tracking: 0.4)
                 .lineSpacing(4)
                 .padding(.top, 4)
@@ -196,7 +196,7 @@ struct PortraitHomeView: View {
                 .padding(.top, 30)
                 .padding(.bottom, 8)
 
-            Text("1日にひとりだけが撮る。\n7枚そろったら完成。")
+            Text("撮るのは1日にひとりだけ。\n見るのはいつでも全員。")
                 .rotashLabel(11, color: Palette.dim, tracking: 0.4)
                 .lineSpacing(6)
                 .padding(.bottom, 26)

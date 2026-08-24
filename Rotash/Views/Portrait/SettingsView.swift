@@ -29,7 +29,7 @@ struct SettingsView: View {
                         .toggleStyle(.switch)
                         .tint(Palette.live)
 
-                        Text("当番日でなくても空いている枠を撮れます。体験を試すとき用。")
+                        Text("当番日でなくても好きな枠を撮れます。体験を試すとき用。")
                             .rotashLabel(9, color: Palette.faint, tracking: 0.4)
                             .lineSpacing(4)
                     }
@@ -38,7 +38,7 @@ struct SettingsView: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("ROTASH について").rotashLabel(9, color: Palette.faint, tracking: 2)
-                        Text("1日にひとりだけが撮ります。\n7枚そろうと、その週の作品が完成します。\n完成した作品は Memories に残ります。")
+                        Text("撮るのは1日にひとりだけ。見るのはいつでも全員。\n7枚そろうと、その週の作品が完成します。\n完成した作品は Memories に残ります。")
                             .rotashLabel(10, color: Palette.dim, tracking: 0.4)
                             .lineSpacing(5)
                     }

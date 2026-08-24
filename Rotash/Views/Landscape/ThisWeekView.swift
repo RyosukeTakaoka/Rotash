@@ -1,7 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// 横向きのメイン体験。7 分割された状態そのものを見ながら撮る。
+/// 横向きのメイン体験。
+/// 7分割は誰にでも常に全部見える。撮影だけがその日の担当者に限られる。
 struct ThisWeekView: View {
 
     @EnvironmentObject private var app: AppViewModel
@@ -13,11 +14,17 @@ struct ThisWeekView: View {
 
     private var week: RotashWeek? { app.group?.currentWeek }
 
-    /// いま撮影対象になっている枠。
+    /// いま撮影対象になっている枠（= ライブビューが出ている枠）。
+    /// タップで選ぶと、撮影済みの枠でも撮り直しとして選択できる。
     private var activeDay: Int? {
         guard let week, !week.isComplete else { return nil }
         if let manualSelection, app.canShoot(dayIndex: manualSelection) { return manualSelection }
-        return app.suggestedDay
+        return app.autoActiveDay
+    }
+
+    private var isRetake: Bool {
+        guard let activeDay, let week else { return false }
+        return week.slot(at: activeDay)?.isFilled ?? false
     }
 
     var body: some View {
@@ -83,10 +90,11 @@ struct ThisWeekView: View {
         let isToday = day == app.todayIndex && !week.isComplete
 
         return ZStack {
-            if let filename = slot.photoFilename {
-                PhotoImageView(filename: filename)
-            } else if isActive {
+            if isActive {
+                // 撮影中／撮り直し中は自分の写真より優先してライブビューを見せる。
                 liveContent
+            } else if let filename = slot.photoFilename {
+                PhotoImageView(filename: filename)
             } else {
                 Palette.surface
             }
@@ -168,19 +176,23 @@ struct ThisWeekView: View {
                 .rotashLabel(10, color: Palette.text, tracking: 2)
                 .padding(.bottom, 14)
         } else if activeDay != nil {
-            Button { capture(day: activeDay ?? 0) } label: {
-                ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.9), lineWidth: 2)
-                        .frame(width: 54, height: 54)
-                    Circle()
-                        .fill(Color.white)
-                        .frame(width: 42, height: 42)
-                        .opacity(isCapturing ? 0.35 : 1)
+            VStack(spacing: 8) {
+                Text(isRetake ? "RETAKE" : "SHOOT")
+                    .rotashLabel(9, color: Palette.live, tracking: 3)
+                Button { capture(day: activeDay ?? 0) } label: {
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white.opacity(0.9), lineWidth: 2)
+                            .frame(width: 54, height: 54)
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: 42, height: 42)
+                            .opacity(isCapturing ? 0.35 : 1)
+                    }
                 }
+                .buttonStyle(.plain)
+                .disabled(isCapturing)
             }
-            .buttonStyle(.plain)
-            .disabled(isCapturing)
             .padding(.bottom, 12)
         } else {
             waitingLine
@@ -188,6 +200,7 @@ struct ThisWeekView: View {
         }
     }
 
+    /// 自分の当番ではない日でも、今日の担当者が誰かは常に見える（見るだけの人のための表示）。
     private var waitingLine: some View {
         let name = app.assignee(forDay: app.todayIndex)?.name.uppercased() ?? "-"
         return Text("TODAY — \(name)")

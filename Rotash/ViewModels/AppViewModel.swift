@@ -55,26 +55,26 @@ final class AppViewModel: ObservableObject {
         return group.isMyDay(dayIndex, in: group.currentWeek)
     }
 
+    /// 撮影できるかどうか。閲覧には一切関係しない — 7分割は誰でも常に全部見える。
+    /// 撮れるのはその日の担当者だけ。撮り直しも可能なので、埋まっている枠でも許可する。
     func canShoot(dayIndex: Int) -> Bool {
-        guard let group,
-              let slot = group.currentWeek.slot(at: dayIndex),
-              !slot.isFilled
-        else { return false }
+        guard let group, group.currentWeek.slot(at: dayIndex) != nil else { return false }
         if freeShooting { return true }
         guard group.isMyDay(dayIndex, in: group.currentWeek) else { return false }
         // 未来の日は撮れない。当番日を逃したぶんは追いつける。
         return dayIndex <= todayIndex
     }
 
-    var shootableDays: [Int] {
-        (0..<7).filter { canShoot(dayIndex: $0) }
-    }
-
-    /// 最初に選ばれる枠。今日が自分の当番ならそこ、なければ一番古い撮影可能な枠。
-    var suggestedDay: Int? {
-        let days = shootableDays
-        if days.contains(todayIndex) { return todayIndex }
-        return days.first
+    /// タップしなくても最初からカメラが開いている枠。
+    /// まだ誰も撮っていない「今日の担当日」だけを自動で開く。
+    /// 撮影済みの枠（撮り直し）は、タップして選ぶまでは自分の写真をそのまま見せる。
+    var autoActiveDay: Int? {
+        guard let group,
+              canShoot(dayIndex: todayIndex),
+              let todaySlot = group.currentWeek.slot(at: todayIndex),
+              !todaySlot.isFilled
+        else { return nil }
+        return todayIndex
     }
 
     // MARK: - Create / Join

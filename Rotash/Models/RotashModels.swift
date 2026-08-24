@@ -32,6 +32,20 @@ enum RotashDay: Int, CaseIterable, Codable {
 
 // MARK: - Slot
 
+/// 枠の状態。
+/// No Shot は「休み」「欠席」といった管理上の状態ではなく、
+/// 「その日には写真がなかった」という作品上の状態として扱う。
+enum SlotState: Equatable {
+    /// 写真がある
+    case photo
+    /// その日は写真がないまま終わった
+    case noShot
+    /// 今日。まだ写真がない
+    case today
+    /// これから来る日
+    case upcoming
+}
+
 /// 7 分割のうちの 1 枠。
 struct Slot: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
@@ -101,7 +115,35 @@ struct RotashWeek: Identifiable, Codable, Hashable {
 
     var dayIndices: [Int] { slots.map(\.dayIndex).sorted() }
     var filledCount: Int { slots.filter(\.isFilled).count }
+
+    /// すべての枠が写真で埋まった、欠けのない状態。
     var isComplete: Bool { !slots.isEmpty && filledCount == slots.count }
+
+    /// 写真が撮られないまま終わった日の数。
+    var noShotCount: Int { slots.filter { state(of: $0) == .noShot }.count }
+
+    /// その週の枠がすべて決着した状態（写真か No Shot か）。
+    /// 撮られなかった日があっても作品としては成立するので、
+    /// 共有できるかどうかはこちらで判断する。
+    var isFinished: Bool {
+        guard !slots.isEmpty else { return false }
+        return slots.allSatisfy { slot in
+            let state = state(of: slot)
+            return state == .photo || state == .noShot
+        }
+    }
+
+    /// 枠の状態。写真の有無と日付だけで決まる。
+    /// No Shot は別に記録するのではなく「過ぎたのに写真がない日」として導出するので、
+    /// 状態遷移の処理を持たずに済み、過去の週でも常に正しくなる。
+    func state(of slot: Slot, now: Date = Date()) -> SlotState {
+        if slot.isFilled { return .photo }
+        let calendar = Calendar.rotash
+        let slotDate = calendar.date(byAdding: .day, value: slot.dayIndex, to: startDate) ?? startDate
+        if calendar.isDate(slotDate, inSameDayAs: now) { return .today }
+        return slotDate < calendar.startOfDay(for: now) ? .noShot : .upcoming
+    }
+
 
     /// 作品としての初日（通常は月曜、週途中スタートならその日）。
     var displayStartDate: Date {

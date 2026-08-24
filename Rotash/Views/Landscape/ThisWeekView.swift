@@ -17,7 +17,7 @@ struct ThisWeekView: View {
     /// いま撮影対象になっている枠（= ライブビューが出ている枠）。
     /// タップで選ぶと、撮影済みの枠でも撮り直しとして選択できる。
     private var activeDay: Int? {
-        guard let week, !week.isComplete else { return nil }
+        guard let week, !week.isFinished else { return nil }
         if let manualSelection, app.canShoot(dayIndex: manualSelection) { return manualSelection }
         return app.autoActiveDay
     }
@@ -59,7 +59,8 @@ struct ThisWeekView: View {
             Text(week.title)
                 .rotashLabel(10, color: Palette.faint)
             Spacer(minLength: 8)
-            if week.isComplete {
+            // 撮られなかった日があっても作品は成立するので、全枠が決着したら共有できる。
+            if week.isFinished {
                 WorkShareButton(week: week) {
                     Text("SHARE").rotashLabel(11, color: Palette.live, tracking: 2.4)
                 }
@@ -98,7 +99,9 @@ struct ThisWeekView: View {
         let shootable = app.canShoot(dayIndex: day)
         // 未来の枠は担当者を出さない。空いた枠だけが見えている状態を保つ。
         let assignee = app.revealedAssignee(forDay: day)
-        let isToday = day == app.todayIndex && !week.isComplete
+        let isToday = day == app.todayIndex && !week.isFinished
+
+        let state = week.state(of: slot)
 
         return ZStack {
             if isActive {
@@ -108,6 +111,13 @@ struct ThisWeekView: View {
                 PhotoImageView(filename: filename)
             } else {
                 Palette.surface
+            }
+
+            // 撮られないまま終わった日。エラーでも欠席でもなく、
+            // 「その日には写真がなかった」という作品上の状態として静かに置いておく。
+            if state == .noShot {
+                Text("—")
+                    .rotashLabel(13, color: Palette.faint, tracking: 0)
             }
 
             LinearGradient(colors: [.clear, .black.opacity(0.55)],
@@ -185,7 +195,7 @@ struct ThisWeekView: View {
     // 今日の担当が誰かも、各枠に既に名前が出ているので改めて言葉にしない。
     @ViewBuilder
     private func bottomControl(week: RotashWeek) -> some View {
-        if !week.isComplete, activeDay != nil {
+        if !week.isFinished, activeDay != nil {
             VStack(spacing: 8) {
                 Text(isRetake ? "RETAKE" : "SHOOT")
                     .rotashLabel(9, color: Palette.live, tracking: 3)

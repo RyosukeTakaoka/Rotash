@@ -18,7 +18,7 @@ struct MemoryDetailView: View {
                             .tracking(2)
                             .foregroundStyle(Palette.dim)
                         Spacer()
-                        Text(week.isComplete ? "COMPLETE" : "\(week.filledCount) / 7")
+                        Text("\(week.filledCount) 枚")
                             .rotashLabel(9, color: Palette.faint)
                     }
                     .padding(.top, 22)
@@ -72,10 +72,12 @@ struct MemoryDetailView: View {
                 PhotoImageView(filename: filename, maxPixel: 900)
                     .aspectRatio(4.0 / 3.0, contentMode: .fit)
             } else {
+                // 写真がなかった日。作品の一部としてそのまま残す。
                 Rectangle()
                     .fill(Palette.surfaceDeep)
                     .aspectRatio(4.0 / 3.0, contentMode: .fit)
                     .overlay(Rectangle().stroke(Palette.line, lineWidth: 1))
+                    .overlay(Text("—").rotashLabel(13, color: Palette.faint, tracking: 0))
             }
             // 終わった週なので担当者はすべて公開してよい。
             HStack(spacing: 8) {

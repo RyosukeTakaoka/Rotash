@@ -20,22 +20,29 @@ enum AssignmentPlanner {
                      dayIndices: [Int],
                      history: [UUID: Int] = [:],
                      previousPattern: [Int: UUID] = [:],
-                     previousDayAssignee: UUID? = nil) -> [Int: UUID] {
+                     previousDayAssignee: UUID? = nil,
+                     firstDayPriority: UUID? = nil) -> [Int: UUID] {
         var generator = SystemRandomNumberGenerator()
         return plan(memberIDs: memberIDs,
                     dayIndices: dayIndices,
                     history: history,
                     previousPattern: previousPattern,
                     previousDayAssignee: previousDayAssignee,
+                    firstDayPriority: firstDayPriority,
                     using: &generator)
     }
 
     /// 乱数を差し替えられる形。テストではここに固定シードの生成器を渡す。
+    ///
+    /// - Parameter firstDayPriority: 最初の1日を必ずこの人に割り当てる。
+    ///   途中参加した人が「参加したのに来週まで何もできない」状態にならないようにするため。
+    ///   残りの日は通常どおり全員を対象に公平性ルールで決める。
     static func plan<G: RandomNumberGenerator>(memberIDs: [UUID],
                                                dayIndices: [Int],
                                                history: [UUID: Int] = [:],
                                                previousPattern: [Int: UUID] = [:],
                                                previousDayAssignee: UUID? = nil,
+                                               firstDayPriority: UUID? = nil,
                                                using generator: inout G) -> [Int: UUID] {
         guard !memberIDs.isEmpty else { return [:] }
         let days = dayIndices.sorted()
@@ -56,6 +63,18 @@ enum AssignmentPlanner {
         var previous = previousDayAssignee
 
         for day in days {
+            // 途中参加した人は、最初の1日だけ無条件で優先する。
+            if day == days.first,
+               let priority = firstDayPriority,
+               memberIDs.contains(priority) {
+                result[day] = priority
+                weekCount[priority] = 1
+                if hasCeil && base + 1 == 1 { membersAtCeil += 1 }
+                total[priority, default: 0] += 1
+                previous = priority
+                continue
+            }
+
             // Priority 2: 週の担当回数の上限に達していない人だけを候補にする。
             var candidates = memberIDs.filter { id in
                 let count = weekCount[id, default: 0]
@@ -104,7 +123,8 @@ enum WeekPlanner {
                         memberIDs: [UUID],
                         history: [UUID: Int],
                         previousWeek: RotashWeek?,
-                        days: [Int]? = nil) -> RotashWeek {
+                        days: [Int]? = nil,
+                        firstDayPriority: UUID? = nil) -> RotashWeek {
         var updated = week
         let targetDays = (days ?? week.dayIndices).sorted()
         guard !memberIDs.isEmpty, !targetDays.isEmpty else { return updated }
@@ -122,7 +142,8 @@ enum WeekPlanner {
                                           dayIndices: targetDays,
                                           history: history,
                                           previousPattern: previousWeek?.assignments ?? [:],
-                                          previousDayAssignee: previousDayAssignee)
+                                          previousDayAssignee: previousDayAssignee,
+                                          firstDayPriority: firstDayPriority)
 
         for (day, memberID) in plan {
             if let index = updated.slots.firstIndex(where: { $0.dayIndex == day }) {

@@ -74,8 +74,12 @@ final class AppViewModel: ObservableObject {
         if slot.isFilled && !RotashFeatureFlags.allowRetake { return false }
         if freeShooting { return true }
         guard group.isMyDay(dayIndex, in: group.currentWeek) else { return false }
-        // 未来の日は撮れない。当番日を逃したぶんは追いつける。
-        return dayIndex <= todayIndex
+        // 未来の日は撮れない。
+        // 過ぎた日も撮れない — 撮られなかった日は No Shot として確定する。
+        if RotashFeatureFlags.allowCatchUpShooting {
+            return dayIndex <= todayIndex
+        }
+        return dayIndex == todayIndex
     }
 
     /// タップしなくても最初からカメラが開いている枠。
@@ -145,17 +149,27 @@ final class AppViewModel: ObservableObject {
         let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard var current = group, !cleaned.isEmpty else { return }
         guard !current.members.contains(where: { $0.name.caseInsensitiveCompare(cleaned) == .orderedSame }) else { return }
-        current.members.append(Member(name: cleaned))
-        replanFutureDays(&current)
+
+        let newMember = Member(name: cleaned)
+        current.members.append(newMember)
+        // 途中参加でも今週から作品づくりに参加してもらう。
+        replanFutureDays(&current, joining: newMember.id)
         group = current
         persist()
     }
 
     /// メンバーが増えたときに、まだ公開していない未来の担当だけを組み替える。
-    /// 公開済み（今日まで）の担当は動かさないので、見えている情報は変わらない。
-    private func replanFutureDays(_ current: inout RotashGroup) {
+    ///
+    /// 未来の担当者はそもそも誰にも見せていないので、内部で組み替えても
+    /// 「予定が変更された」という見え方にはならない。この性質を使って途中参加者を今週に入れる。
+    /// 過去と今日の担当・写真には絶対に触らない。
+    ///
+    /// - Parameter joining: 途中参加した人。参加後の最初の枠を優先的に割り当てる。
+    private func replanFutureDays(_ current: inout RotashGroup, joining newMemberID: UUID? = nil) {
         guard !current.members.isEmpty else { return }
         let today = Calendar.dayIndex(for: Date(), weekStart: current.currentWeek.startDate)
+
+        // 再計算してよいのは「今日より後」の枠だけ。
         let futureDays = current.currentWeek.slots
             .filter { $0.dayIndex > today && !$0.isFilled }
             .map(\.dayIndex)
@@ -175,7 +189,8 @@ final class AppViewModel: ObservableObject {
                                                   memberIDs: current.members.map(\.id),
                                                   history: history,
                                                   previousWeek: current.archive.first,
-                                                  days: futureDays)
+                                                  days: futureDays,
+                                                  firstDayPriority: newMemberID)
     }
 
     func deleteRotash() {

@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Memories 用の小さな 7 枚プレビュー。
+/// Memories 用の小さなプレビュー。
+/// 写真がなかった日は空の枠のまま並べる（小さいので記号は足さない）。
 struct WeekThumbnailStrip: View {
     let week: RotashWeek
     var height: CGFloat = 46

@@ -101,8 +101,8 @@ struct PortraitHomeView: View {
             .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 6) {
-                if group.currentWeek.isComplete {
-                    Text("今週の作品が完成しました")
+                if group.currentWeek.isFinished {
+                    Text("今週の作品ができました")
                         .rotashLabel(11, color: Palette.text, tracking: 0.6)
                 } else {
                     HStack(spacing: 8) {

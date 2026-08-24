@@ -13,12 +13,15 @@ final class CameraController: NSObject, ObservableObject {
     }
 
     @Published private(set) var status: Status = .idle
+    /// 今どちらのカメラを使っているか。自撮り用に前面へ切り替えられる。
+    @Published private(set) var position: AVCaptureDevice.Position = .back
 
     let session = AVCaptureSession()
 
     private let sessionQueue = DispatchQueue(label: "com.rotash.camera.session")
     private let output = AVCapturePhotoOutput()
     private var device: AVCaptureDevice?
+    private var currentInput: AVCaptureDeviceInput?
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
     private var rotationObservation: NSKeyValueObservation?
     private var isConfigured = false
@@ -72,7 +75,7 @@ final class CameraController: NSObject, ObservableObject {
         session.beginConfiguration()
         session.sessionPreset = .photo
 
-        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+        guard let camera = device(for: position),
               let input = try? AVCaptureDeviceInput(device: camera),
               session.canAddInput(input),
               session.canAddOutput(output)
@@ -87,11 +90,49 @@ final class CameraController: NSObject, ObservableObject {
         session.commitConfiguration()
 
         device = camera
+        currentInput = input
         isConfigured = true
 
         DispatchQueue.main.async {
             self.status = .ready
             self.bindRotationCoordinator()
+        }
+    }
+
+    private func device(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
+        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position)
+    }
+
+    // MARK: - 前面 / 背面切り替え（自撮り対応）
+
+    /// 前面・背面カメラを切り替える。撮影中は呼び出し側で無効化しておくこと。
+    func switchCamera() {
+        sessionQueue.async { [weak self] in
+            guard let self, self.isConfigured else { return }
+            let newPosition: AVCaptureDevice.Position = self.position == .back ? .front : .back
+
+            guard let newDevice = self.device(for: newPosition),
+                  let newInput = try? AVCaptureDeviceInput(device: newDevice)
+            else { return }
+
+            self.session.beginConfiguration()
+            if let oldInput = self.currentInput {
+                self.session.removeInput(oldInput)
+            }
+            if self.session.canAddInput(newInput) {
+                self.session.addInput(newInput)
+                self.currentInput = newInput
+                self.device = newDevice
+            } else if let oldInput = self.currentInput {
+                // 追加できなかった場合は元に戻す。
+                self.session.addInput(oldInput)
+            }
+            self.session.commitConfiguration()
+
+            DispatchQueue.main.async {
+                self.position = newPosition
+                self.bindRotationCoordinator()
+            }
         }
     }
 

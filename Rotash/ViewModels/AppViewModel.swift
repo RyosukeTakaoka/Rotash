@@ -56,9 +56,12 @@ final class AppViewModel: ObservableObject {
     }
 
     /// 撮影できるかどうか。閲覧には一切関係しない — 7分割は誰でも常に全部見える。
-    /// 撮れるのはその日の担当者だけ。撮り直しも可能なので、埋まっている枠でも許可する。
+    /// 撮れるのはその日の担当者だけ。
     func canShoot(dayIndex: Int) -> Bool {
-        guard let group, group.currentWeek.slot(at: dayIndex) != nil else { return false }
+        guard let group, let slot = group.currentWeek.slot(at: dayIndex) else { return false }
+        // 撮り直しは今は仮で無効。RotashFeatureFlags.allowRetake を true にすれば
+        // このガードだけで撮り直し（ライブビュー優先表示・SHOOT/RETAKE表示含む）が復活する。
+        if slot.isFilled && !RotashFeatureFlags.allowRetake { return false }
         if freeShooting { return true }
         guard group.isMyDay(dayIndex, in: group.currentWeek) else { return false }
         // 未来の日は撮れない。当番日を逃したぶんは追いつける。

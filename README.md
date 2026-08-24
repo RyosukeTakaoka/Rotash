@@ -51,7 +51,7 @@ Rotash は「自分の担当日に写真を投稿するアプリ」ではあり�
 | 1 | Rotash 作成（名前入力 → 招待コード生成） | `Views/Portrait/CreateRotashView.swift`, `InviteCodeView.swift` |
 | 2 | 招待コードで参加 | `Views/Portrait/JoinRotashView.swift` |
 | 3 | 横向き THIS WEEK（7分割・埋まっていく） | `Views/Landscape/ThisWeekView.swift` |
-| 4 | 撮影（横向き写真を担当枠へ保存、撮り直し可） | `Services/CameraController.swift` |
+| 4 | 撮影（横向き写真を担当枠へ保存、前面/背面切替） | `Services/CameraController.swift` |
 | 5 | 完成作品表示（7枚そろうと COMPLETE） | `ThisWeekView.swift` |
 | 6 | Memories（過去作品一覧・簡易プレビュー） | `PortraitHomeView.swift`, `MemoryDetailView.swift` |
 | 7 | Share（7枚 / 7分割1枚） | `Services/WorkExporter.swift` |
@@ -73,10 +73,16 @@ Rotash は「自分の担当日に写真を投稿するアプリ」ではあり�
 **撮影権限**: その日の担当者だけが、その日の枠を撮影できる。
 他の日の枠は見えるだけで撮れない（未来の枠も、他人の日も）。
 
-**撮り直し**: MVP では撮り直し可能です。撮影済みの自分の担当枠をタップすると
-ライブビューに切り替わり（ボタン上に SHOOT / RETAKE と出ます）、もう一度撮ると上書きされます。
-撮影回数の表示・フィルター・編集・AI加工はありません。
-心理的ハードルを下げつつ、作品としては1週間かけて完成させる体験を優先しています。
+**自撮り**: ライブビューの右上に出る `FLIP` で前面 / 背面カメラを切り替えられます
+（`Services/CameraController.swift` の `switchCamera()`）。
+
+**撮り直し**: 現状は仮で **無効**（一度撮ると確定、上書きはできない）。
+撮影回数の表示・フィルター・編集・AI加工もありません。
+ただし判断が変わりやすい部分だと分かっているので、
+`App/FeatureFlags.swift` の `RotashFeatureFlags.allowRetake` を `true` にするだけで、
+撮り直し UI（撮影済みの担当枠をタップ→ライブビューに切替→ボタン上に SHOOT / RETAKE
+と表示→もう一度撮ると上書き）がコードの変更なしで復活する構成にしてあります。
+撮影可否の判定を `AppViewModel.canShoot` の1箇所に集約しているのはそのためです。
 
 写真は横長のまま保存します。縦への自動変換はしません。
 
@@ -132,10 +138,11 @@ Firebase もアカウントも使わない指定なので、保存は端末ロ�
 ```
 Rotash/
   App/          RotashApp.swift
+                FeatureFlags.swift          … 仮仕様の切り替えフラグ（撮り直し等）
   Models/       RotashModels.swift          … Member / Slot / RotashWeek / RotashGroup
   Services/     RotashStore.swift           … 保存層（protocol + ローカルJSON実装）
                 PhotoStore.swift            … 写真の実体・サムネイル
-                CameraController.swift      … AVFoundation
+                CameraController.swift      … AVFoundation（前面/背面切替対応）
                 InviteCode.swift
                 WorkExporter.swift          … 共有
                 BatonTransfer.swift         … .rotash の書き出し / 読み込み

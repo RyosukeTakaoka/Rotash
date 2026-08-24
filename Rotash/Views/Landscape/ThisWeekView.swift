@@ -147,7 +147,21 @@ struct ThisWeekView: View {
     private var liveContent: some View {
         switch camera.status {
         case .ready:
-            CameraPreview(controller: camera)
+            ZStack(alignment: .topTrailing) {
+                CameraPreview(controller: camera)
+                Button {
+                    camera.switchCamera()
+                } label: {
+                    Text("FLIP")
+                        .rotashLabel(8, color: Palette.text, tracking: 1.2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(Color.black.opacity(0.55))
+                }
+                .buttonStyle(.plain)
+                .disabled(isCapturing)
+                .padding(6)
+            }
         case .denied:
             ZStack {
                 Palette.surfaceDeep

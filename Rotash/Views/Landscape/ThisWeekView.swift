@@ -82,7 +82,8 @@ struct ThisWeekView: View {
             HStack(spacing: spacing) {
                 ForEach(week.slots.sorted(by: { $0.dayIndex < $1.dayIndex })) { slot in
                     cell(slot: slot, week: week)
-                        .frame(width: cellWidth)
+                        .frame(width: cellWidth, height: geometry.size.height)
+                        .clipped()
                 }
             }
         }
@@ -154,21 +155,7 @@ struct ThisWeekView: View {
     private var liveContent: some View {
         switch camera.status {
         case .ready:
-            ZStack(alignment: .topTrailing) {
-                CameraPreview(controller: camera)
-                Button {
-                    camera.switchCamera()
-                } label: {
-                    Text("FLIP")
-                        .rotashLabel(8, color: Palette.text, tracking: 1.2)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(Color.black.opacity(0.55))
-                }
-                .buttonStyle(.plain)
-                .disabled(isCapturing)
-                .padding(6)
-            }
+            CameraPreview(controller: camera)
         case .denied:
             ZStack {
                 Palette.surfaceDeep
@@ -199,22 +186,53 @@ struct ThisWeekView: View {
             VStack(spacing: 8) {
                 Text(isRetake ? "RETAKE" : "SHOOT")
                     .rotashLabel(9, color: Palette.live, tracking: 3)
-                Button { capture(day: activeDay ?? 0) } label: {
-                    ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.9), lineWidth: 2)
-                            .frame(width: 54, height: 54)
-                        Circle()
-                            .fill(Color.white)
-                            .frame(width: 42, height: 42)
-                            .opacity(isCapturing ? 0.35 : 1)
-                    }
+
+                // FLIP は狭い枠の隅だと押しづらいので、シャッターの横に置いて
+                // 指の届く大きさ（44pt 以上）にしている。
+                // 反対側に同じ幅の余白を入れて、シャッターは中央のままにする。
+                HStack(spacing: 20) {
+                    flipButton
+                    shutterButton
+                    Color.clear.frame(width: flipButtonWidth, height: 1)
                 }
-                .buttonStyle(.plain)
-                .disabled(isCapturing)
             }
             .padding(.bottom, 12)
         }
+    }
+
+    private var flipButtonWidth: CGFloat { 62 }
+
+    @ViewBuilder
+    private var flipButton: some View {
+        if camera.status == .ready {
+            Button { camera.switchCamera() } label: {
+                Text("FLIP")
+                    .rotashLabel(10, color: Palette.text, tracking: 1.8)
+                    .frame(width: flipButtonWidth, height: 46)
+                    .background(Color.black.opacity(0.5))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isCapturing)
+        } else {
+            Color.clear.frame(width: flipButtonWidth, height: 1)
+        }
+    }
+
+    private var shutterButton: some View {
+        Button { capture(day: activeDay ?? 0) } label: {
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.9), lineWidth: 2)
+                    .frame(width: 54, height: 54)
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 42, height: 42)
+                    .opacity(isCapturing ? 0.35 : 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isCapturing)
     }
 
     private func capture(day: Int) {

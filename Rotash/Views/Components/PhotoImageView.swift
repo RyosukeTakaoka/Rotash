@@ -12,9 +12,17 @@ struct PhotoImageView: View {
         ZStack {
             Palette.surfaceDeep
             if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+                // aspectRatio(.fill) を Image に直接かけると、画像は提案サイズより
+                // 大きく広がり、clipped() は描画だけを切ってレイアウトサイズは戻さない。
+                // その結果「写真の入った枠だけ幅を余計に要求する」ことになり 1/7 が崩れる。
+                // overlay の中身はレイアウトに影響しないので、この形なら常に枠ぴったりになる。
+                Color.clear
+                    .overlay {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    }
+                    .clipped()
             }
         }
         .clipped()

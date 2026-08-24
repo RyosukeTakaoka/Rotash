@@ -39,9 +39,21 @@ struct PortraitHomeView: View {
             }
         }
         .tint(Palette.text)
-        .sheet(isPresented: $showCreate) { CreateRotashView().environmentObject(app) }
-        .sheet(isPresented: $showJoin) { JoinRotashView().environmentObject(app) }
-        .sheet(isPresented: $showSettings) { SettingsView().environmentObject(app) }
+        .sheet(isPresented: $showCreate) {
+            CreateRotashView()
+                .environmentObject(app)
+                .interactiveDismissDisabled()
+        }
+        .sheet(isPresented: $showJoin) {
+            JoinRotashView()
+                .environmentObject(app)
+                .interactiveDismissDisabled()
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+                .environmentObject(app)
+                .interactiveDismissDisabled()
+        }
         .sheet(item: $batonPayload) { payload in ActivityView(items: payload.urls) }
         .fileImporter(isPresented: $showImporter,
                       allowedContentTypes: [BatonTransfer.fileType]) { result in

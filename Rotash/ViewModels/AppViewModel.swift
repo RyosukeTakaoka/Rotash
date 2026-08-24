@@ -34,6 +34,7 @@ final class AppViewModel: ObservableObject {
         self.store = store
         self.freeShooting = UserDefaults.standard.bool(forKey: Keys.freeShooting)
         self.group = store.load()
+        migrateAssignmentsIfNeeded()
         rollWeekIfNeeded()
     }
 
@@ -45,9 +46,18 @@ final class AppViewModel: ObservableObject {
         Calendar.dayIndex(for: Date(), weekStart: group?.currentWeek.startDate)
     }
 
+    /// 本当の担当者。撮影可否の判定など、内部の判断だけに使う。
     func assignee(forDay dayIndex: Int) -> Member? {
         guard let group else { return nil }
         return group.member(forDay: dayIndex, in: group.currentWeek)
+    }
+
+    /// 表示用の担当者。まだその日が来ていない枠は誰にも見せない。
+    /// 「次に誰が撮るのか分からない」という不確実さ自体が Rotash の体験なので、
+    /// 週の頭に全員分の担当を公開しない。
+    func revealedAssignee(forDay dayIndex: Int) -> Member? {
+        guard dayIndex <= todayIndex else { return nil }
+        return assignee(forDay: dayIndex)
     }
 
     func isMyDay(_ dayIndex: Int) -> Bool {
@@ -96,10 +106,22 @@ final class AppViewModel: ObservableObject {
             inviteCode: InviteCode.generate(),
             members: members,
             myMemberID: me.id,
-            currentWeek: .empty(startDate: Calendar.startOfWeek(), rotationOffset: 0)
+            currentWeek: Self.makeFirstWeek(memberIDs: members.map(\.id))
         )
         group = newGroup
         persist()
+    }
+
+    /// 最初の週。週の途中で始めた場合は、その日から日曜までを 1 つの作品にする。
+    /// 「作った曜日が毎週の開始曜日になる」わけではなく、これは初回だけの特殊ケース。
+    private static func makeFirstWeek(memberIDs: [UUID], now: Date = Date()) -> RotashWeek {
+        let weekStart = Calendar.startOfWeek(for: now)
+        let today = Calendar.dayIndex(for: now, weekStart: weekStart)
+        let week = RotashWeek.starting(atDayIndex: today, startDate: weekStart)
+        return WeekPlanner.planned(week: week,
+                                   memberIDs: memberIDs,
+                                   history: [:],
+                                   previousWeek: nil)
     }
 
     func joinRotash(code: String, myName: String) {
@@ -113,7 +135,7 @@ final class AppViewModel: ObservableObject {
             inviteCode: normalized,
             members: [me],
             myMemberID: me.id,
-            currentWeek: .empty(startDate: Calendar.startOfWeek(), rotationOffset: 0)
+            currentWeek: Self.makeFirstWeek(memberIDs: [me.id])
         )
         group = newGroup
         persist()
@@ -124,8 +146,36 @@ final class AppViewModel: ObservableObject {
         guard var current = group, !cleaned.isEmpty else { return }
         guard !current.members.contains(where: { $0.name.caseInsensitiveCompare(cleaned) == .orderedSame }) else { return }
         current.members.append(Member(name: cleaned))
+        replanFutureDays(&current)
         group = current
         persist()
+    }
+
+    /// メンバーが増えたときに、まだ公開していない未来の担当だけを組み替える。
+    /// 公開済み（今日まで）の担当は動かさないので、見えている情報は変わらない。
+    private func replanFutureDays(_ current: inout RotashGroup) {
+        guard !current.members.isEmpty else { return }
+        let today = Calendar.dayIndex(for: Date(), weekStart: current.currentWeek.startDate)
+        let futureDays = current.currentWeek.slots
+            .filter { $0.dayIndex > today && !$0.isFilled }
+            .map(\.dayIndex)
+        guard !futureDays.isEmpty else { return }
+
+        var history: [UUID: Int] = [:]
+        for week in current.archive {
+            for slot in week.slots {
+                if let id = slot.assigneeID { history[id, default: 0] += 1 }
+            }
+        }
+        for slot in current.currentWeek.slots where slot.dayIndex <= today {
+            if let id = slot.assigneeID { history[id, default: 0] += 1 }
+        }
+
+        current.currentWeek = WeekPlanner.planned(week: current.currentWeek,
+                                                  memberIDs: current.members.map(\.id),
+                                                  history: history,
+                                                  previousWeek: current.archive.first,
+                                                  days: futureDays)
     }
 
     func deleteRotash() {
@@ -161,18 +211,59 @@ final class AppViewModel: ObservableObject {
 
     // MARK: - Week rollover
 
+    /// 月曜になったら自動的に次の週へ。ユーザーが「新しい週を作る」操作は無い。
+    /// 終わった週はそのまま Memories（archive）へ落ちる。
     func rollWeekIfNeeded() {
         guard var current = group else { return }
         let start = Calendar.startOfWeek()
         guard current.currentWeek.startDate < start else { return }
 
-        if current.currentWeek.filledCount > 0 {
-            current.archive.insert(current.currentWeek, at: 0)
+        let finished = current.currentWeek
+        // 担当履歴は「入れ替える前」に取る（currentWeek と archive の二重計上を避ける）。
+        let history = current.cumulativeAssignmentCounts
+
+        if finished.filledCount > 0 {
+            current.archive.insert(finished, at: 0)
         }
-        let offset = current.members.isEmpty
-            ? 0
-            : (current.currentWeek.rotationOffset + 7) % current.members.count
-        current.currentWeek = .empty(startDate: start, rotationOffset: offset)
+
+        // 週途中スタートだった初回の翌週からは、通常どおり月曜〜日曜の 7 枚に戻る。
+        current.currentWeek = WeekPlanner.planned(week: .full(startDate: start),
+                                                  memberIDs: current.members.map(\.id),
+                                                  history: history,
+                                                  previousWeek: finished)
+        group = current
+        persist()
+    }
+
+    /// 担当者を持たない古い保存データを、新しい担当者モデルへ移す。
+    /// すでに撮影済みの枠は、実際に撮った人をその日の担当者として確定させるので、
+    /// 進行中の作品の見え方は変わらない。
+    private func migrateAssignmentsIfNeeded() {
+        guard var current = group, !current.members.isEmpty else { return }
+        guard current.currentWeek.slots.contains(where: { $0.assigneeID == nil }) else { return }
+
+        let memberIDs = current.members.map(\.id)
+        var week = current.currentWeek
+        var history: [UUID: Int] = [:]
+
+        for index in week.slots.indices {
+            guard week.slots[index].assigneeID == nil else { continue }
+            if let taken = week.slots[index].takenByMemberID, memberIDs.contains(taken) {
+                week.slots[index].assigneeID = taken
+                history[taken, default: 0] += 1
+            }
+        }
+
+        let openDays = week.slots.filter { $0.assigneeID == nil }.map(\.dayIndex)
+        if !openDays.isEmpty {
+            week = WeekPlanner.planned(week: week,
+                                       memberIDs: memberIDs,
+                                       history: history,
+                                       previousWeek: current.archive.first,
+                                       days: openDays)
+        }
+
+        current.currentWeek = week
         group = current
         persist()
     }
@@ -225,15 +316,19 @@ final class AppViewModel: ObservableObject {
     }
 
     /// 同じ週を別々に撮っていた場合でも写真を落とさないように合流させる。
+    /// 週途中スタートで枠数が違うこともあるので、両方の曜日をまとめて見る。
     static func merge(local: RotashWeek, incoming: RotashWeek) -> RotashWeek {
         var merged = incoming
         merged.id = local.id
-        merged.slots = (0..<7).map { dayIndex in
+        merged.firstDayIndex = min(local.firstDayIndex, incoming.firstDayIndex)
+
+        let dayIndices = Set(local.dayIndices).union(incoming.dayIndices).sorted()
+        merged.slots = dayIndices.map { dayIndex in
             let localSlot = local.slot(at: dayIndex)
             let incomingSlot = incoming.slot(at: dayIndex)
             if let localSlot, localSlot.isFilled { return localSlot }
             if let incomingSlot, incomingSlot.isFilled { return incomingSlot }
-            return localSlot ?? incomingSlot ?? Slot(dayIndex: dayIndex)
+            return incomingSlot ?? localSlot ?? Slot(dayIndex: dayIndex)
         }
         return merged
     }

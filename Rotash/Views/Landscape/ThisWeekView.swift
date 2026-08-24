@@ -77,8 +77,10 @@ struct ThisWeekView: View {
 
     private func grid(week: RotashWeek) -> some View {
         GeometryReader { geometry in
+            // 通常は 7 枠だが、週の途中で始めた初回だけ枠数が減る。
+            let count = max(week.slots.count, 1)
             let spacing: CGFloat = 1
-            let cellWidth = (geometry.size.width - spacing * 6) / 7
+            let cellWidth = (geometry.size.width - spacing * CGFloat(count - 1)) / CGFloat(count)
             HStack(spacing: spacing) {
                 ForEach(week.slots.sorted(by: { $0.dayIndex < $1.dayIndex })) { slot in
                     cell(slot: slot, week: week)
@@ -94,7 +96,8 @@ struct ThisWeekView: View {
         let day = slot.dayIndex
         let isActive = activeDay == day
         let shootable = app.canShoot(dayIndex: day)
-        let assignee = app.assignee(forDay: day)
+        // 未来の枠は担当者を出さない。空いた枠だけが見えている状態を保つ。
+        let assignee = app.revealedAssignee(forDay: day)
         let isToday = day == app.todayIndex && !week.isComplete
 
         return ZStack {

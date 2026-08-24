@@ -107,7 +107,7 @@ struct PortraitHomeView: View {
                 } else {
                     HStack(spacing: 8) {
                         Text("今日の担当").rotashLabel(9, color: Palette.faint, tracking: 1.6)
-                        Text(app.assignee(forDay: app.todayIndex)?.name.uppercased() ?? "-")
+                        Text(app.revealedAssignee(forDay: app.todayIndex)?.name.uppercased() ?? "-")
                             .rotashLabel(12, color: app.isMyDay(app.todayIndex) ? Palette.live : Palette.text, tracking: 0.6)
                     }
                 }

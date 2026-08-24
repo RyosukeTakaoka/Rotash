@@ -37,6 +37,9 @@ struct Slot: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     /// 0 = 月曜 ... 6 = 日曜
     var dayIndex: Int
+    /// この日の担当者。週の開始時にまとめて決まるが、
+    /// その日が来るまでは UI 側で伏せる（誰が次に撮るか分からない状態を保つ）。
+    var assigneeID: UUID?
     /// PhotoStore 上のファイル名。nil なら未撮影。
     var photoFilename: String?
     var capturedAt: Date?
@@ -47,23 +50,63 @@ struct Slot: Identifiable, Codable, Hashable {
 
 // MARK: - Week (= 1 作品)
 
-/// 1 週間 = 1 つの作品。7 枚そろって完成する。
+/// 1 週間 = 1 つの作品。枠がすべて埋まると完成する。
+///
+/// カレンダー上の週は常に月曜〜日曜。`startDate` はその週の月曜で、週の同一性もこれで判定する。
+/// 週の途中でグループを作った初回だけ `firstDayIndex` が 0 より大きくなり、
+/// その日から日曜までの枚数で 1 つの作品になる（例: 金曜開始なら FRI/SAT/SUN の 3 枚）。
+/// 翌週からは通常どおり月曜始まりの 7 枚に戻る。
 struct RotashWeek: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     /// その週の月曜 00:00
     var startDate: Date
-    /// 週をまたいでも当番が一巡し続けるためのオフセット
-    var rotationOffset: Int
+    /// この週が実際に始まる曜日（0 = 月曜）。通常は 0。
+    var firstDayIndex: Int = 0
     var slots: [Slot]
 
-    static func empty(startDate: Date, rotationOffset: Int) -> RotashWeek {
+    enum CodingKeys: String, CodingKey {
+        case id, startDate, firstDayIndex, slots
+    }
+
+    init(id: UUID = UUID(), startDate: Date, firstDayIndex: Int = 0, slots: [Slot]) {
+        self.id = id
+        self.startDate = startDate
+        self.firstDayIndex = firstDayIndex
+        self.slots = slots
+    }
+
+    /// 既存の保存データ（firstDayIndex を持たない・rotationOffset を持つ形）も読めるようにしておく。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        startDate = try container.decode(Date.self, forKey: .startDate)
+        firstDayIndex = try container.decodeIfPresent(Int.self, forKey: .firstDayIndex) ?? 0
+        slots = try container.decode([Slot].self, forKey: .slots)
+    }
+
+    /// 月曜から始まる通常の週。
+    static func full(startDate: Date) -> RotashWeek {
         RotashWeek(startDate: startDate,
-                   rotationOffset: rotationOffset,
+                   firstDayIndex: 0,
                    slots: (0..<7).map { Slot(dayIndex: $0) })
     }
 
+    /// 週の途中から始まる初回だけの週。
+    static func starting(atDayIndex dayIndex: Int, startDate: Date) -> RotashWeek {
+        let first = min(max(dayIndex, 0), 6)
+        return RotashWeek(startDate: startDate,
+                          firstDayIndex: first,
+                          slots: (first...6).map { Slot(dayIndex: $0) })
+    }
+
+    var dayIndices: [Int] { slots.map(\.dayIndex).sorted() }
     var filledCount: Int { slots.filter(\.isFilled).count }
-    var isComplete: Bool { filledCount == 7 }
+    var isComplete: Bool { !slots.isEmpty && filledCount == slots.count }
+
+    /// 作品としての初日（通常は月曜、週途中スタートならその日）。
+    var displayStartDate: Date {
+        Calendar.rotash.date(byAdding: .day, value: firstDayIndex, to: startDate) ?? startDate
+    }
 
     var endDate: Date {
         Calendar.rotash.date(byAdding: .day, value: 6, to: startDate) ?? startDate
@@ -73,19 +116,35 @@ struct RotashWeek: Identifiable, Codable, Hashable {
         slots.first { $0.dayIndex == dayIndex }
     }
 
+    /// 曜日 -> 担当者。担当者の決定履歴として使う（表示用ではない）。
+    var assignments: [Int: UUID] {
+        var result: [Int: UUID] = [:]
+        for slot in slots {
+            if let id = slot.assigneeID { result[slot.dayIndex] = id }
+        }
+        return result
+    }
+
+    /// この週の最終日の担当者。次の週の頭で 2 日連続を避けるために見る。
+    var lastAssignee: UUID? {
+        slots.max(by: { $0.dayIndex < $1.dayIndex })?.assigneeID
+    }
+
     var title: String {
-        "\(RotashDateFormat.day.string(from: startDate)) - \(RotashDateFormat.day.string(from: endDate))"
+        "\(RotashDateFormat.day.string(from: displayStartDate)) - \(RotashDateFormat.day.string(from: endDate))"
     }
 }
 
 // MARK: - Group
 
 /// MVP は 1 グループのみ。掛け持ちは扱わない。
+///
+/// グループは毎週続く。ユーザーが「新しい週を作る」操作はなく、
+/// 月曜になったら currentWeek が自動的に次の週へ切り替わり、前の週は archive に落ちる。
 struct RotashGroup: Identifiable, Codable {
     var id: UUID = UUID()
     var name: String
     var inviteCode: String
-    /// 配列の順番がそのまま当番の順番になる。
     var members: [Member]
     var myMemberID: UUID
     var currentWeek: RotashWeek
@@ -94,15 +153,31 @@ struct RotashGroup: Identifiable, Codable {
 
     var me: Member? { members.first { $0.id == myMemberID } }
 
-    /// その日の担当者。3 人なら 月A 火B 水C 木A ... と一巡し続ける。
+    /// その日の担当者。週の開始時に決まったものを引くだけ。
+    /// 未来の日を伏せるかどうかは表示側の責任なので、ここでは常に本当の担当者を返す。
     func member(forDay dayIndex: Int, in week: RotashWeek) -> Member? {
-        guard !members.isEmpty else { return nil }
-        let index = (week.rotationOffset + dayIndex) % members.count
-        return members[index]
+        guard let id = week.slot(at: dayIndex)?.assigneeID else { return nil }
+        return members.first { $0.id == id }
     }
 
     func isMyDay(_ dayIndex: Int, in week: RotashWeek) -> Bool {
-        member(forDay: dayIndex, in: week)?.id == myMemberID
+        guard let id = week.slot(at: dayIndex)?.assigneeID else { return false }
+        return id == myMemberID
+    }
+
+    func member(withID id: UUID) -> Member? {
+        members.first { $0.id == id }
+    }
+
+    /// 累計の担当回数。次の週の担当者を決めるときの公平性の基準になる。
+    var cumulativeAssignmentCounts: [UUID: Int] {
+        var counts: [UUID: Int] = [:]
+        for week in [currentWeek] + archive {
+            for slot in week.slots {
+                if let id = slot.assigneeID { counts[id, default: 0] += 1 }
+            }
+        }
+        return counts
     }
 }
 

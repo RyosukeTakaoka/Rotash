@@ -4,6 +4,7 @@ import SwiftUI
 struct MemoryDetailView: View {
 
     let week: RotashWeek
+    @EnvironmentObject private var app: AppViewModel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -76,9 +77,21 @@ struct MemoryDetailView: View {
                     .aspectRatio(4.0 / 3.0, contentMode: .fit)
                     .overlay(Rectangle().stroke(Palette.line, lineWidth: 1))
             }
-            Text(RotashDay.label(for: slot.dayIndex))
-                .rotashLabel(9, color: Palette.text, tracking: 1.6)
-                .padding(10)
+            // 終わった週なので担当者はすべて公開してよい。
+            HStack(spacing: 8) {
+                Text(RotashDay.label(for: slot.dayIndex))
+                    .rotashLabel(9, color: Palette.text, tracking: 1.6)
+                if let name = assigneeName(for: slot) {
+                    Text(name.uppercased())
+                        .rotashLabel(9, color: Palette.dim, tracking: 0.8)
+                }
+            }
+            .padding(10)
         }
+    }
+
+    private func assigneeName(for slot: Slot) -> String? {
+        guard let id = slot.assigneeID ?? slot.takenByMemberID else { return nil }
+        return app.group?.member(withID: id)?.name
     }
 }

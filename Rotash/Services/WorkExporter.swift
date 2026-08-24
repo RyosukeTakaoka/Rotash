@@ -1,9 +1,9 @@
 import UIKit
 
-/// 完成した作品を共有する。加工はしない。7 枚の写真そのもの。
+/// 完成した作品を共有する。加工はしない。写真そのもの。
 enum WorkExporter {
 
-    /// Instagram のカルーセル用。7 枚の横長写真をそのまま書き出す。
+    /// Instagram のカルーセル用。その週の横長写真をそのまま書き出す。
     static func photoURLs(for week: RotashWeek) -> [URL] {
         let stamp = RotashDateFormat.fileStamp.string(from: week.startDate)
         let directory = FileManager.default.temporaryDirectory
@@ -11,10 +11,10 @@ enum WorkExporter {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         var urls: [URL] = []
-        for slot in week.slots.sorted(by: { $0.dayIndex < $1.dayIndex }) {
+        for (position, slot) in week.slots.sorted(by: { $0.dayIndex < $1.dayIndex }).enumerated() {
             guard let filename = slot.photoFilename,
                   let data = PhotoStore.shared.data(for: filename) else { continue }
-            let name = "ROTASH-\(stamp)-\(slot.dayIndex + 1)-\(RotashDay.label(for: slot.dayIndex)).jpg"
+            let name = "ROTASH-\(stamp)-\(position + 1)-\(RotashDay.label(for: slot.dayIndex)).jpg"
             let url = directory.appendingPathComponent(name)
             if (try? data.write(to: url, options: .atomic)) != nil {
                 urls.append(url)
@@ -23,11 +23,15 @@ enum WorkExporter {
         return urls
     }
 
-    /// 7 分割のまま 1 枚に並べたコンタクトシート（アプリ内で見えている作品と同じ見え方）。
+    /// 分割したまま 1 枚に並べたコンタクトシート（アプリ内で見えている作品と同じ見え方）。
+    /// 週の途中で始めた初回は枚数が 7 未満になるので、枚数に合わせて割り付ける。
     static func contactSheetURL(for week: RotashWeek, height: CGFloat = 1080) -> URL? {
+        let ordered = week.slots.sorted(by: { $0.dayIndex < $1.dayIndex })
+        let count = max(ordered.count, 1)
         let gap: CGFloat = 2
-        let panelWidth = ((height * 16 / 9) - gap * 6) / 7
-        let totalWidth = panelWidth * 7 + gap * 6
+        let gapTotal = gap * CGFloat(count - 1)
+        let panelWidth = ((height * 16 / 9) - gapTotal) / CGFloat(count)
+        let totalWidth = panelWidth * CGFloat(count) + gapTotal
         let size = CGSize(width: totalWidth.rounded(), height: height)
 
         let format = UIGraphicsImageRendererFormat.default()
@@ -39,8 +43,8 @@ enum WorkExporter {
             UIColor.black.setFill()
             context.fill(CGRect(origin: .zero, size: size))
 
-            for slot in week.slots.sorted(by: { $0.dayIndex < $1.dayIndex }) {
-                let panel = CGRect(x: (panelWidth + gap) * CGFloat(slot.dayIndex),
+            for (position, slot) in ordered.enumerated() {
+                let panel = CGRect(x: (panelWidth + gap) * CGFloat(position),
                                    y: 0,
                                    width: panelWidth,
                                    height: height)

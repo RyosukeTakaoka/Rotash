@@ -27,10 +27,16 @@ struct RootView: View {
             .persistentSystemOverlays(isLandscape ? .hidden : .automatic)
         }
         .background(Palette.background)
+        // 起動直後は scenePhase が既に .active なので onChange は発火しない。
+        // ここで最初の一回を必ず走らせる（これが無いと、開いただけでは同期されない）。
+        .task {
+            app.rollWeekIfNeeded()
+            await app.sync()
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 app.rollWeekIfNeeded()
-                // 開いたときに他の人の写真を取りに行く（リアルタイム購読は使わない）。
+                // 戻ってきたときに他の人の写真を取りに行く（リアルタイム購読は使わない）。
                 Task { await app.sync() }
             }
         }

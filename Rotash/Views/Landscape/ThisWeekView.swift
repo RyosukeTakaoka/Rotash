@@ -48,6 +48,9 @@ struct ThisWeekView: View {
         .onAppear { syncCamera() }
         .onDisappear { camera.stop() }
         .onChange(of: activeDay) { _, _ in syncCamera() }
+        // 横にした時点で最新を取りに行く。作品を見る画面なので、
+        // ここに来たら必ず最新が見えている状態にしたい。
+        .task { await app.sync() }
     }
 
     // MARK: - Header

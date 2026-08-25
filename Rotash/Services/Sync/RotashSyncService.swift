@@ -14,11 +14,23 @@ enum RotashSyncService {
 
     static var isEnabled: Bool { SyncConfig.isConfigured }
 
+    /// 同期の結果。写真のアップロードに失敗しても状態の同期は続けるので、
+    /// 「何枚届かなかったか」を呼び出し側に返して知らせる。
+    struct Outcome {
+        var group: RotashGroup
+        var failedUploads: Int
+        var failureReason: String?
+    }
+
     /// 同期して、突き合わせ後のグループを返す。
-    static func sync(group: RotashGroup) async throws -> RotashGroup {
+    static func sync(group: RotashGroup) async throws -> Outcome {
         guard isEnabled else { throw SyncError.notConfigured }
 
-        var working = try await uploadPendingPhotos(in: group)
+        var failures = 0
+        var failureReason: String?
+        var working = await uploadPendingPhotos(in: group,
+                                                failures: &failures,
+                                                failureReason: &failureReason)
 
         if let remote = try await FirestoreClient.fetch(inviteCode: working.inviteCode) {
             working = RotashMerge.merge(local: working, remote: remote)
@@ -27,23 +39,31 @@ enum RotashSyncService {
         await cacheMissingPhotos(in: &working)
 
         try await FirestoreClient.push(RemoteGroupState(group: working))
-        return working
+        return Outcome(group: working, failedUploads: failures, failureReason: failureReason)
     }
 
     // MARK: - 写真
 
     /// ローカルにしか無い写真をアップロードして、URL を書き込む。
-    private static func uploadPendingPhotos(in group: RotashGroup) async throws -> RotashGroup {
+    private static func uploadPendingPhotos(in group: RotashGroup,
+                                            failures: inout Int,
+                                            failureReason: inout String?) async -> RotashGroup {
         var updated = group
 
-        updated.currentWeek = try await uploadPendingPhotos(in: updated.currentWeek)
+        updated.currentWeek = await uploadPendingPhotos(in: updated.currentWeek,
+                                                        failures: &failures,
+                                                        failureReason: &failureReason)
         for index in updated.archive.indices {
-            updated.archive[index] = try await uploadPendingPhotos(in: updated.archive[index])
+            updated.archive[index] = await uploadPendingPhotos(in: updated.archive[index],
+                                                               failures: &failures,
+                                                               failureReason: &failureReason)
         }
         return updated
     }
 
-    private static func uploadPendingPhotos(in week: RotashWeek) async throws -> RotashWeek {
+    private static func uploadPendingPhotos(in week: RotashWeek,
+                                            failures: inout Int,
+                                            failureReason: inout String?) async -> RotashWeek {
         var updated = week
         for index in updated.slots.indices {
             let slot = updated.slots[index]
@@ -53,8 +73,13 @@ enum RotashSyncService {
             else { continue }
 
             // 1枚失敗しても他の写真の同期は続ける。次回の同期で再試行される。
-            if let url = try? await CloudinaryClient.upload(data: data, filename: filename) {
-                updated.slots[index].photoURL = url
+            // ただし黙って握りつぶさず、失敗したことは呼び出し側に伝える。
+            do {
+                updated.slots[index].photoURL = try await CloudinaryClient.upload(data: data,
+                                                                                  filename: filename)
+            } catch {
+                failures += 1
+                if failureReason == nil { failureReason = error.localizedDescription }
             }
         }
         return updated

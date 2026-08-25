@@ -36,6 +36,11 @@ final class AppViewModel: ObservableObject {
 
     @Published private(set) var isSyncing = false
     @Published private(set) var lastSyncedAt: Date?
+    /// 同期でうまくいかなかったことがあれば、その内容。無言で失敗させないための表示用。
+    @Published private(set) var syncNote: String?
+
+    /// 同期中に来た次の同期要求。捨てずに終わってから走らせる。
+    private var syncAgainWhenFinished = false
 
     private let store: RotashStore
 
@@ -361,17 +366,43 @@ final class AppViewModel: ObservableObject {
     /// サーバーと突き合わせる。未設定なら何もしない（ローカルのみで動き続ける）。
     /// 失敗しても手元のデータはそのままなので、次に開いたときに再試行される。
     func sync(showingError: Bool = false) async {
-        guard RotashSyncService.isEnabled, let current = group, !isSyncing else { return }
-        isSyncing = true
-        defer { isSyncing = false }
+        guard RotashSyncService.isEnabled, group != nil else { return }
 
+        // 同期中に撮影されたときなど、重なった要求を捨てずに後から必ず走らせる。
+        if isSyncing {
+            syncAgainWhenFinished = true
+            return
+        }
+
+        isSyncing = true
+        await performSync(showingError: showingError)
+        isSyncing = false
+
+        if syncAgainWhenFinished {
+            syncAgainWhenFinished = false
+            await sync()
+        }
+    }
+
+    private func performSync(showingError: Bool) async {
+        guard let current = group else { return }
         do {
-            let merged = try await RotashSyncService.sync(group: current)
-            group = merged
+            let outcome = try await RotashSyncService.sync(group: current)
+            group = outcome.group
             lastSyncedAt = Date()
+
+            if outcome.failedUploads > 0 {
+                let reason = outcome.failureReason ?? ""
+                syncNote = "写真 \(outcome.failedUploads) 枚を送れませんでした。\(reason)"
+                if showingError { alertMessage = syncNote }
+            } else {
+                syncNote = nil
+            }
+
             rollWeekIfNeeded()
             persist()
         } catch {
+            syncNote = error.localizedDescription
             if showingError { alertMessage = error.localizedDescription }
         }
     }

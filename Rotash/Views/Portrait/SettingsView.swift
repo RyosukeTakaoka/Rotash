@@ -108,9 +108,15 @@ struct SettingsView: View {
                 .foregroundStyle(Palette.text)
                 .disabled(app.isSyncing)
             }
-            Text("開いたときと撮ったときに、みんなの写真を取りに行きます。")
+            Text("開いたとき・横にしたとき・撮ったときに、自動でみんなの写真を取りに行きます。")
                 .rotashLabel(9, color: Palette.faint, tracking: 0.4)
                 .lineSpacing(3)
+
+            if let note = app.syncNote {
+                Text(note)
+                    .rotashLabel(9, color: Palette.live, tracking: 0.4)
+                    .lineSpacing(3)
+            }
         }
     }
 

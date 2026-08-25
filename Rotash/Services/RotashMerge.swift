@@ -22,26 +22,32 @@ enum RotashMerge {
         return merged
     }
 
+    /// photoFilename はその端末の中でしか意味を持たないファイル名なので、
+    /// 相手から受け取った枠を採用するときは必ず捨てる。
+    /// （持ち込むと「ファイル名はあるのに写真が無い」枠になり、真っ暗な枠として表示されてしまう）
+    private static func adopted(_ slot: Slot) -> Slot {
+        var adopted = slot
+        adopted.photoFilename = nil
+        return adopted
+    }
+
     private static func mergeSlot(local: Slot?, remote: Slot?, dayIndex: Int) -> Slot {
         switch (local, remote) {
         case let (local?, remote?):
             // 同じ枠に両方写真があるなら、先に撮られた方をその日の1枚とする。
             if local.isFilled, remote.isFilled {
-                var winner = (local.capturedAt ?? .distantFuture) <= (remote.capturedAt ?? .distantFuture)
-                    ? local : remote
-                // ローカルのキャッシュとリモートの URL は、どちらの側の情報も拾っておく。
-                winner.photoFilename = winner.photoFilename ?? local.photoFilename ?? remote.photoFilename
-                winner.photoURL = winner.photoURL ?? local.photoURL ?? remote.photoURL
-                return winner
+                let localIsEarlier = (local.capturedAt ?? .distantFuture) <= (remote.capturedAt ?? .distantFuture)
+                // 別々の写真なので、負けた側のファイル名も URL も引き継がない。
+                return localIsEarlier ? local : adopted(remote)
             }
             if local.isFilled { return local }
-            if remote.isFilled { return remote }
+            if remote.isFilled { return adopted(remote) }
             // どちらにも写真が無ければ、担当者の決まっている方を優先する。
-            return remote.assigneeID != nil ? remote : local
+            return remote.assigneeID != nil ? adopted(remote) : local
         case let (local?, nil):
             return local
         case let (nil, remote?):
-            return remote
+            return adopted(remote)
         case (nil, nil):
             return Slot(dayIndex: dayIndex)
         }
@@ -127,7 +133,21 @@ struct RemoteGroupState: Codable {
         self.name = group.name
         self.inviteCode = group.inviteCode
         self.members = group.members
-        self.currentWeek = group.currentWeek
-        self.archive = group.archive
+        self.currentWeek = Self.shared(group.currentWeek)
+        self.archive = group.archive.map(Self.shared)
+    }
+
+    /// 端末固有の情報を落として、他の人に渡してよい形にする。
+    ///
+    /// photoFilename はその端末のローカルキャッシュのファイル名でしかないので、
+    /// これを載せると相手側で「写真がある枠」と誤認されてしまう。
+    /// 他の人に写真が届く手段は photoURL だけなので、それだけを共有する。
+    /// アップロードがまだ済んでいない枠は、相手からは「まだ写真が無い」状態に見える。
+    private static func shared(_ week: RotashWeek) -> RotashWeek {
+        var shared = week
+        for index in shared.slots.indices {
+            shared.slots[index].photoFilename = nil
+        }
+        return shared
     }
 }

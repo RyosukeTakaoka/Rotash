@@ -68,8 +68,8 @@ struct MemoryDetailView: View {
     @ViewBuilder
     private func photoRow(_ slot: Slot) -> some View {
         ZStack(alignment: .bottomLeading) {
-            if let filename = slot.photoFilename {
-                PhotoImageView(filename: filename, maxPixel: 900)
+            if slot.isFilled {
+                PhotoImageView(slot: slot, maxPixel: 900)
                     .aspectRatio(4.0 / 3.0, contentMode: .fit)
             } else {
                 // 写真がなかった日。作品の一部としてそのまま残す。

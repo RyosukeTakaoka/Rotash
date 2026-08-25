@@ -24,6 +24,9 @@ final class AppViewModel: ObservableObject {
 
     @Published var alertMessage: String?
 
+    @Published private(set) var isSyncing = false
+    @Published private(set) var lastSyncedAt: Date?
+
     private let store: RotashStore
 
     private enum Keys {
@@ -143,6 +146,25 @@ final class AppViewModel: ObservableObject {
         )
         group = newGroup
         persist()
+
+        // 同期が有効なら、招待コードだけで今週の作品とメンバーが揃う。
+        // 未設定のときはバトンを受け取るまでローカルのまま。
+        Task {
+            await sync()
+            // 参加した本人を今週の担当に入れる（未公開の未来の枠だけを組み替える）。
+            joinCurrentWeekIfPossible()
+        }
+    }
+
+    /// 同期で受け取ったメンバー一覧に自分が居なかった場合に、自分を今週へ入れる。
+    private func joinCurrentWeekIfPossible() {
+        guard var current = group, let me = current.me else { return }
+        let hasTurnThisWeek = current.currentWeek.slots.contains { $0.assigneeID == me.id }
+        guard !hasTurnThisWeek else { return }
+        replanFutureDays(&current, joining: me.id)
+        group = current
+        persist()
+        Task { await sync() }
     }
 
     func addMember(name: String) {
@@ -218,10 +240,14 @@ final class AppViewModel: ObservableObject {
             PhotoStore.shared.delete(old)
         }
         current.currentWeek.slots[index].photoFilename = filename
+        current.currentWeek.slots[index].photoURL = nil      // 撮り直したら URL も取り直す
         current.currentWeek.slots[index].capturedAt = Date()
         current.currentWeek.slots[index].takenByMemberID = current.myMemberID
         group = current
         persist()
+
+        // 撮ったらすぐ他の人に届くように同期する。失敗しても写真は手元に残る。
+        Task { await sync() }
     }
 
     // MARK: - Week rollover
@@ -292,60 +318,46 @@ final class AppViewModel: ObservableObject {
 
     func importBaton(from url: URL) throws {
         let bundle = try BatonTransfer.read(from: url)
-        guard var current = group else { throw RotashError.noGroup }
+        guard let current = group else { throw RotashError.noGroup }
         guard current.inviteCode == bundle.inviteCode else {
             throw BatonTransferError.codeMismatch(expected: current.inviteCode, found: bundle.inviteCode)
         }
 
         BatonTransfer.materializePhotos(bundle)
 
-        // メンバーは受け取った側を正とし、自分は名前で照合する。
-        let myName = current.me?.name ?? ""
-        var members = bundle.members
-        if let match = members.first(where: { $0.name.caseInsensitiveCompare(myName) == .orderedSame }) {
-            current.myMemberID = match.id
-        } else if let me = current.me {
-            members.append(me)
-        }
-        current.members = members
-        current.id = bundle.groupID
-        current.name = bundle.groupName
+        // バトンもサーバー同期も「相手の状態と突き合わせる」点は同じなので、同じ処理を使う。
+        var incoming = RemoteGroupState(group: current)
+        incoming.id = bundle.groupID
+        incoming.name = bundle.groupName
+        incoming.members = bundle.members
+        incoming.currentWeek = bundle.week
+        incoming.archive = []
 
-        let incoming = bundle.week
-        if incoming.startDate == current.currentWeek.startDate {
-            current.currentWeek = Self.merge(local: current.currentWeek, incoming: incoming)
-        } else if incoming.startDate > current.currentWeek.startDate {
-            if current.currentWeek.filledCount > 0 {
-                current.archive.insert(current.currentWeek, at: 0)
-            }
-            current.currentWeek = incoming
-        } else if incoming.filledCount > 0,
-                  !current.archive.contains(where: { $0.startDate == incoming.startDate }) {
-            current.archive.append(incoming)
-            current.archive.sort { $0.startDate > $1.startDate }
-        }
-
-        group = current
+        group = RotashMerge.merge(local: current, remote: incoming)
         rollWeekIfNeeded()
         persist()
     }
 
-    /// 同じ週を別々に撮っていた場合でも写真を落とさないように合流させる。
-    /// 週途中スタートで枠数が違うこともあるので、両方の曜日をまとめて見る。
-    static func merge(local: RotashWeek, incoming: RotashWeek) -> RotashWeek {
-        var merged = incoming
-        merged.id = local.id
-        merged.firstDayIndex = min(local.firstDayIndex, incoming.firstDayIndex)
+    // MARK: - サーバー同期
 
-        let dayIndices = Set(local.dayIndices).union(incoming.dayIndices).sorted()
-        merged.slots = dayIndices.map { dayIndex in
-            let localSlot = local.slot(at: dayIndex)
-            let incomingSlot = incoming.slot(at: dayIndex)
-            if let localSlot, localSlot.isFilled { return localSlot }
-            if let incomingSlot, incomingSlot.isFilled { return incomingSlot }
-            return incomingSlot ?? localSlot ?? Slot(dayIndex: dayIndex)
+    var isSyncEnabled: Bool { RotashSyncService.isEnabled }
+
+    /// サーバーと突き合わせる。未設定なら何もしない（ローカルのみで動き続ける）。
+    /// 失敗しても手元のデータはそのままなので、次に開いたときに再試行される。
+    func sync(showingError: Bool = false) async {
+        guard RotashSyncService.isEnabled, let current = group, !isSyncing else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+
+        do {
+            let merged = try await RotashSyncService.sync(group: current)
+            group = merged
+            lastSyncedAt = Date()
+            rollWeekIfNeeded()
+            persist()
+        } catch {
+            if showingError { alertMessage = error.localizedDescription }
         }
-        return merged
     }
 
     // MARK: -

@@ -28,7 +28,11 @@ struct RootView: View {
         }
         .background(Palette.background)
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { app.rollWeekIfNeeded() }
+            if phase == .active {
+                app.rollWeekIfNeeded()
+                // 開いたときに他の人の写真を取りに行く（リアルタイム購読は使わない）。
+                Task { await app.sync() }
+            }
         }
         .onOpenURL { url in
             do {

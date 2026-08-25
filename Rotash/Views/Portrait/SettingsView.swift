@@ -21,7 +21,12 @@ struct SettingsView: View {
                     if let group = app.group {
                         members(group)
                         HairLine()
-                        batonBlock
+                        // 同期が使えるときはそちらが主。使えないときだけバトンを出す。
+                        if app.isSyncEnabled {
+                            syncBlock
+                        } else {
+                            batonBlock
+                        }
                         HairLine()
                     }
 
@@ -85,9 +90,33 @@ struct SettingsView: View {
         }
     }
 
+    private var syncBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Text("同期").rotashLabel(9, color: Palette.faint, tracking: 2)
+                if app.isSyncing {
+                    Text("SYNCING").rotashLabel(9, color: Palette.live, tracking: 1.4)
+                } else if let date = app.lastSyncedAt {
+                    Text(RotashDateFormat.time.string(from: date))
+                        .rotashLabel(9, color: Palette.dim, tracking: 0.6)
+                }
+                Spacer()
+                Button("今すぐ") {
+                    Task { await app.sync(showingError: true) }
+                }
+                .font(Typo.label(11, weight: .semibold))
+                .foregroundStyle(Palette.text)
+                .disabled(app.isSyncing)
+            }
+            Text("開いたときと撮ったときに、みんなの写真を取りに行きます。")
+                .rotashLabel(9, color: Palette.faint, tracking: 0.4)
+                .lineSpacing(3)
+        }
+    }
+
     private var batonBlock: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("バトン（サーバーを使わないので、ファイルで手渡しします）")
+            Text("バトン（同期を使わずに、ファイルで手渡しします）")
                 .rotashLabel(9, color: Palette.faint, tracking: 0.6)
                 .lineSpacing(3)
             HStack(spacing: 20) {

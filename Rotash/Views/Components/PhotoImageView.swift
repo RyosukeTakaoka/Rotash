@@ -2,11 +2,27 @@ import SwiftUI
 import UIKit
 
 /// 保存済みの写真を枠いっぱいに表示する。写真が主役なので余計な装飾はつけない。
+///
+/// 手元にあればローカルから、無ければ URL から取ってきてキャッシュする。
+/// 他の人が撮った写真をまだ落としていない状態でも、そのまま置いておけば表示される。
 struct PhotoImageView: View {
-    let filename: String
+    var filename: String?
+    var remoteURL: String?
     var maxPixel: CGFloat?
 
     @State private var image: UIImage?
+
+    init(filename: String?, remoteURL: String? = nil, maxPixel: CGFloat? = nil) {
+        self.filename = filename
+        self.remoteURL = remoteURL
+        self.maxPixel = maxPixel
+    }
+
+    init(slot: Slot, maxPixel: CGFloat? = nil) {
+        self.filename = slot.photoFilename
+        self.remoteURL = slot.photoURL
+        self.maxPixel = maxPixel
+    }
 
     var body: some View {
         ZStack {
@@ -26,17 +42,31 @@ struct PhotoImageView: View {
             }
         }
         .clipped()
-        .task(id: filename) { await load() }
+        .task(id: taskID) { await load() }
+    }
+
+    private var taskID: String {
+        "\(filename ?? "-")|\(remoteURL ?? "-")"
     }
 
     private func load() async {
-        let name = filename
+        if let filename, let local = await loadLocal(filename) {
+            image = local
+            return
+        }
+        guard let remoteURL,
+              let data = try? await CloudinaryClient.download(from: remoteURL),
+              let cached = try? PhotoStore.shared.save(data)
+        else { return }
+        image = await loadLocal(cached)
+    }
+
+    private func loadLocal(_ name: String) async -> UIImage? {
         let pixel = maxPixel
-        let loaded: UIImage? = await withCheckedContinuation { continuation in
+        return await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 continuation.resume(returning: PhotoStore.shared.image(for: name, maxPixel: pixel))
             }
         }
-        image = loaded
     }
 }

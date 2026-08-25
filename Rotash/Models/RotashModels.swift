@@ -54,12 +54,16 @@ struct Slot: Identifiable, Codable, Hashable {
     /// この日の担当者。週の開始時にまとめて決まるが、
     /// その日が来るまでは UI 側で伏せる（誰が次に撮るか分からない状態を保つ）。
     var assigneeID: UUID?
-    /// PhotoStore 上のファイル名。nil なら未撮影。
+    /// PhotoStore 上のファイル名。この端末にまだ写真が落ちていなければ nil。
     var photoFilename: String?
+    /// Cloudinary 上の URL。同期している場合はこちらが本体で、ローカルはキャッシュ。
+    var photoURL: String?
     var capturedAt: Date?
     var takenByMemberID: UUID?
 
-    var isFilled: Bool { photoFilename != nil }
+    /// 写真がある枠かどうか。
+    /// 他の端末で撮られてまだダウンロードしていない状態も「写真がある」として扱う。
+    var isFilled: Bool { photoFilename != nil || photoURL != nil }
 }
 
 // MARK: - Week (= 1 作品)
@@ -257,6 +261,12 @@ enum RotashDateFormat {
     static let day: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy.MM.dd"
+        return formatter
+    }()
+
+    static let time: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
         return formatter
     }()
 

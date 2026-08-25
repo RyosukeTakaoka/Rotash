@@ -30,6 +30,7 @@ struct PortraitHomeView: View {
                 .padding(.bottom, 40)
             }
             .scrollIndicators(.hidden)
+            .refreshable { await app.sync(showingError: true) }
             .background(Palette.background)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: RotashWeek.self) { week in

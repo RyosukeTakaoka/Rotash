@@ -10,8 +10,8 @@ struct WeekThumbnailStrip: View {
         HStack(spacing: 2) {
             ForEach(week.slots.sorted(by: { $0.dayIndex < $1.dayIndex })) { slot in
                 Group {
-                    if let filename = slot.photoFilename {
-                        PhotoImageView(filename: filename, maxPixel: 160)
+                    if slot.isFilled {
+                        PhotoImageView(slot: slot, maxPixel: 160)
                     } else {
                         Rectangle()
                             .fill(Palette.surfaceDeep)

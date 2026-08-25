@@ -107,8 +107,8 @@ struct ThisWeekView: View {
             if isActive {
                 // 撮影中／撮り直し中は自分の写真より優先してライブビューを見せる。
                 liveContent
-            } else if let filename = slot.photoFilename {
-                PhotoImageView(filename: filename)
+            } else if slot.isFilled {
+                PhotoImageView(slot: slot)
             } else {
                 Palette.surface
             }

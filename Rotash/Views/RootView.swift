@@ -8,7 +8,10 @@ struct RootView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let isLandscape = geometry.size.width > geometry.size.height
+            // シートを開いている間は縦向きのまま扱う。
+            // 入力中に向きの判定が揺れて、画面ごと作り直されるのを防ぐ。
+            let isLandscape = app.activeSheet == nil
+                && geometry.size.width > geometry.size.height
 
             ZStack {
                 Palette.background.ignoresSafeArea()
@@ -26,6 +29,11 @@ struct RootView: View {
             .statusBarHidden(isLandscape)
             .persistentSystemOverlays(isLandscape ? .hidden : .automatic)
         }
+        // キーボードのぶんだけ高さが縮むと、背の高いキーボード（Simeji など）では
+        // width > height が一瞬成立して「横向き」と誤判定されてしまう。
+        // すると縦向きの画面ごと作り直され、入力中のシートが閉じて開き直す。
+        // 向きの判定に使う大きさはキーボードの影響を受けないようにしておく。
+        .ignoresSafeArea(.keyboard)
         .background(Palette.background)
         // 起動直後は scenePhase が既に .active なので onChange は発火しない。
         // ここで最初の一回を必ず走らせる（これが無いと、開いただけでは同期されない）。

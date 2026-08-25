@@ -21,7 +21,7 @@ struct InviteCodeView: View {
 
             HairLine()
 
-            Text("このコードを友達に渡してください。\n参加したら「バトンを渡す」でその週の作品を送れます。")
+            Text("このコードを友達に渡してください。\nコードを入れた人がそのままメンバーになります。")
                 .rotashLabel(10, color: Palette.dim, tracking: 0.4)
                 .lineSpacing(5)
                 .padding(.top, 20)

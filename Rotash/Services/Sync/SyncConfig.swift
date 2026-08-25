@@ -17,10 +17,10 @@ enum SyncConfig {
     // MARK: - Firebase (Firestore REST)
 
     /// Firebase コンソール > プロジェクトの設定 > プロジェクト ID
-    static let firebaseProjectID = ""
+    static let firebaseProjectID = "rotash-f83a4"
 
     /// Firebase コンソール > プロジェクトの設定 > ウェブ API キー
-    static let firebaseAPIKey = ""
+    static let firebaseAPIKey = "AIzaSyCSxFupls4erwflZmoSi9mferU0fNNvw-k"
 
     /// グループを置くコレクション名。
     static let collection = "rotash"
@@ -28,10 +28,10 @@ enum SyncConfig {
     // MARK: - Cloudinary
 
     /// Cloudinary ダッシュボードの Cloud name
-    static let cloudinaryCloudName = ""
+    static let cloudinaryCloudName = "dw71feikq"
 
     /// Settings > Upload > Upload presets で作った unsigned preset の名前
-    static let cloudinaryUploadPreset = ""
+    static let cloudinaryUploadPreset = "rotash_unsigned"
 
     // MARK: -
 

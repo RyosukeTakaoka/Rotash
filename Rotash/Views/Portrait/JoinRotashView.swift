@@ -23,12 +23,13 @@ struct JoinRotashView: View {
                     RotashField(title: "招待コード",
                                 placeholder: "XXXXXX",
                                 text: $code,
-                                autoUppercase: true,
-                                characterLimit: 6)
+                                isInviteCode: true)
 
-                    RotashField(title: "あなたの名前", placeholder: "NAME", text: $myName, characterLimit: 12)
+                    RotashField(title: "あなたの名前", placeholder: "NAME", text: $myName)
 
-                    Text("参加したら、誰かに「バトンを渡す」でその週の作品を送ってもらってください。\nメンバーと当番の順番は、受け取ったバトンに合わせて更新されます。")
+                    Text(app.isSyncEnabled
+                         ? "参加すると、今週の作品とメンバーがそのまま見られます。\n残りの日の当番にも今週から入ります。"
+                         : "参加したら、誰かに「バトンを渡す」でその週の作品を送ってもらってください。")
                         .rotashLabel(10, color: Palette.dim, tracking: 0.4)
                         .lineSpacing(5)
 

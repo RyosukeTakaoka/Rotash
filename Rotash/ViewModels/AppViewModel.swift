@@ -1,6 +1,11 @@
 import Foundation
 import SwiftUI
 
+enum PortraitSheet: String, Identifiable {
+    case create, join, settings
+    var id: String { rawValue }
+}
+
 enum RotashError: LocalizedError {
     case noGroup
 
@@ -23,6 +28,11 @@ final class AppViewModel: ObservableObject {
     }
 
     @Published var alertMessage: String?
+
+    /// 縦画面で開いているシート。
+    /// View の @State に持たせると、キーボードなどで View が作り直されたときに
+    /// 入力中のシートが勝手に閉じてしまうので、ここで保持する。
+    @Published var activeSheet: PortraitSheet?
 
     @Published private(set) var isSyncing = false
     @Published private(set) var lastSyncedAt: Date?
@@ -99,9 +109,15 @@ final class AppViewModel: ObservableObject {
 
     // MARK: - Create / Join
 
+    /// 名前を整える。
+    /// 入力中に切り詰めると日本語変換が壊れるので、長さを詰めるのは確定したこの時点だけにする。
+    private static func tidy(_ name: String, limit: Int = 20) -> String {
+        String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(limit))
+    }
+
     func createRotash(name: String, memberNames: [String]) {
         let cleanedNames = memberNames
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .map { Self.tidy($0) }
             .filter { !$0.isEmpty }
         guard !cleanedNames.isEmpty else { return }
 
@@ -133,7 +149,7 @@ final class AppViewModel: ObservableObject {
 
     func joinRotash(code: String, myName: String) {
         let normalized = InviteCode.normalize(code)
-        let name = myName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = Self.tidy(myName)
         guard normalized.count == 6, !name.isEmpty else { return }
 
         let me = Member(name: name)
@@ -168,7 +184,7 @@ final class AppViewModel: ObservableObject {
     }
 
     func addMember(name: String) {
-        let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleaned = Self.tidy(name)
         guard var current = group, !cleaned.isEmpty else { return }
         guard !current.members.contains(where: { $0.name.caseInsensitiveCompare(cleaned) == .orderedSame }) else { return }
 

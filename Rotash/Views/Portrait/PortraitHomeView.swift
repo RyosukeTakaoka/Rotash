@@ -9,9 +9,6 @@ struct PortraitHomeView: View {
 
     @EnvironmentObject private var app: AppViewModel
 
-    @State private var showCreate = false
-    @State private var showJoin = false
-    @State private var showSettings = false
     @State private var copied = false
 
     var body: some View {
@@ -38,20 +35,16 @@ struct PortraitHomeView: View {
             }
         }
         .tint(Palette.text)
-        .sheet(isPresented: $showCreate) {
-            CreateRotashView()
-                .environmentObject(app)
-                .interactiveDismissDisabled()
-        }
-        .sheet(isPresented: $showJoin) {
-            JoinRotashView()
-                .environmentObject(app)
-                .interactiveDismissDisabled()
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-                .environmentObject(app)
-                .interactiveDismissDisabled()
+        .sheet(item: $app.activeSheet) { sheet in
+            Group {
+                switch sheet {
+                case .create: CreateRotashView()
+                case .join: JoinRotashView()
+                case .settings: SettingsView()
+                }
+            }
+            .environmentObject(app)
+            .interactiveDismissDisabled()
         }
     }
 
@@ -65,7 +58,7 @@ struct PortraitHomeView: View {
                     .tracking(10)
                     .foregroundStyle(Palette.text)
                 Spacer()
-                Button("SETTINGS") { showSettings = true }
+                Button("SETTINGS") { app.activeSheet = .settings }
                     .font(Typo.label(9, weight: .medium))
                     .tracking(1.6)
                     .foregroundStyle(Palette.faint)
@@ -169,9 +162,9 @@ struct PortraitHomeView: View {
                 .lineSpacing(6)
                 .padding(.bottom, 26)
 
-            Button("ROTASH をつくる") { showCreate = true }
+            Button("ROTASH をつくる") { app.activeSheet = .create }
                 .buttonStyle(RotashButtonStyle(filled: true))
-            Button("招待コードで参加") { showJoin = true }
+            Button("招待コードで参加") { app.activeSheet = .join }
                 .buttonStyle(RotashButtonStyle())
         }
         .padding(.horizontal, 24)

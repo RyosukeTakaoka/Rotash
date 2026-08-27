@@ -42,8 +42,30 @@ enum RotashMerge {
             }
             if local.isFilled { return local }
             if remote.isFilled { return adopted(remote) }
-            // どちらにも写真が無ければ、担当者の決まっている方を優先する。
-            return remote.assigneeID != nil ? adopted(remote) : local
+            // どちらにも写真が無ければ、担当者がより新しく決まった方を採用する。
+            //
+            // 以前は「担当者が決まっている方（= リモート）を常に優先」していたが、
+            // これは "リモートの方が新しい" という前提が常に成り立つとは限らず、
+            // 実際には次のような競合を起こしていた:
+            //   1. A がグループ作成（全日 A で確定・push）
+            //   2. B が参加し、未来の枠を B を含めて再計算 → push しようとする
+            //   3. ちょうど同じ頃 A の端末が独自に同期（まだ B を知らない古いローカル状態）
+            //      → 古い「全日 A」を取得してマージ（変化なし）→ そのまま push し直す
+            //   4. B が直後にもう一度取得すると、A が書き戻した「全日 A」を受け取り、
+            //      "リモート常に優先" のルールで B の再計算が丸ごと巻き戻る
+            // 写真の統合が capturedAt で「先に撮った方」を比べているのと同じ考え方で、
+            // 担当者の決定にも assignedAt を持たせ、新しい決定が古い決定に必ず勝つようにする。
+            // これで同期の順序に関係なく、最終的にどちらの端末でも同じ結果に収束する。
+            switch (local.assignedAt, remote.assignedAt) {
+            case let (localAt?, remoteAt?):
+                return localAt >= remoteAt ? local : adopted(remote)
+            case (nil, .some):
+                return adopted(remote)
+            case (.some, nil):
+                return local
+            case (nil, nil):
+                return remote.assigneeID != nil ? adopted(remote) : local
+            }
         case let (local?, nil):
             return local
         case let (nil, remote?):

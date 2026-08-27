@@ -145,9 +145,11 @@ enum WeekPlanner {
                                           previousDayAssignee: previousDayAssignee,
                                           firstDayPriority: firstDayPriority)
 
+        let decidedAt = Date()
         for (day, memberID) in plan {
             if let index = updated.slots.firstIndex(where: { $0.dayIndex == day }) {
                 updated.slots[index].assigneeID = memberID
+                updated.slots[index].assignedAt = decidedAt
             }
         }
         return updated

@@ -54,6 +54,9 @@ struct Slot: Identifiable, Codable, Hashable {
     /// この日の担当者。週の開始時にまとめて決まるが、
     /// その日が来るまでは UI 側で伏せる（誰が次に撮るか分からない状態を保つ）。
     var assigneeID: UUID?
+    /// assigneeID が決まった時刻。端末間で担当が競合したときに
+    /// 「より新しく決まった方」を採用するための時刻（同期のマージで使う）。
+    var assignedAt: Date?
     /// PhotoStore 上のファイル名。この端末にまだ写真が落ちていなければ nil。
     var photoFilename: String?
     /// Cloudinary 上の URL。同期している場合はこちらが本体で、ローカルはキャッシュ。

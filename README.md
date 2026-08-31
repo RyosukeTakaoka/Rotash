@@ -14,6 +14,9 @@ App Store 公開版ではなく、実際に友人と使って体験価値を検�
 >
 > リリース直後、まだ誰も使っていない状態から最初の20グループをどう作るかは
 > [`docs/GO_TO_MARKET.md`](docs/GO_TO_MARKET.md) を参照。
+>
+> 「今どこが律速で、90日で何をやるか」の診断は
+> [`docs/GROWTH_DIAGNOSIS.md`](docs/GROWTH_DIAGNOSIS.md)。まずここから読むのが早い。
 
 ---
 

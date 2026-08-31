@@ -11,6 +11,9 @@ App Store 公開版ではなく、実際に友人と使って体験価値を検�
 > 「使うこと自体が次のユーザーを生む構造」をどう作るかは
 > [`docs/GROWTH_STRATEGY.md`](docs/GROWTH_STRATEGY.md) を参照。
 > 招待・共有・通知まわりの仕様を触る前に読むこと。
+>
+> リリース直後、まだ誰も使っていない状態から最初の20グループをどう作るかは
+> [`docs/GO_TO_MARKET.md`](docs/GO_TO_MARKET.md) を参照。
 
 ---
 

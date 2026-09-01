@@ -24,11 +24,25 @@ struct MemoryDetailView: View {
                     .padding(.top, 22)
                     .padding(.bottom, 20)
 
-                    Text(week.title)
-                        .font(Typo.title(19))
-                        .tracking(1.5)
-                        .foregroundStyle(Palette.text)
-                        .padding(.bottom, 18)
+                    // その週に名前が付いていれば、日付より先に読ませる。
+                    // 曜日も日付も担当者名もシステムが出したものなので、
+                    // ここだけが人の言葉になる。
+                    if let title = week.title, !title.isEmpty {
+                        Text(title)
+                            .font(Typo.title(21))
+                            .tracking(0.5)
+                            .foregroundStyle(Palette.text)
+                            .padding(.bottom, 6)
+                        Text(week.dateRange)
+                            .rotashLabel(10, color: Palette.faint, tracking: 1.2)
+                            .padding(.bottom, 18)
+                    } else {
+                        Text(week.dateRange)
+                            .font(Typo.title(19))
+                            .tracking(1.5)
+                            .foregroundStyle(Palette.text)
+                            .padding(.bottom, 18)
+                    }
 
                     WeekThumbnailStrip(week: week, height: 78)
                         .padding(.bottom, 26)
@@ -53,7 +67,7 @@ struct MemoryDetailView: View {
                             .background(Palette.text)
                     }
 
-                    Text("加工はしません。7枚の写真そのものを書き出します。")
+                    Text("加工はしません。画面のまま1枚にして書き出します。")
                         .rotashLabel(9, color: Palette.faint, tracking: 0.4)
                         .padding(.top, 12)
                 }

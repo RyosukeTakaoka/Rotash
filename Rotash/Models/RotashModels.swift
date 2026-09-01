@@ -84,25 +84,40 @@ struct RotashWeek: Identifiable, Codable, Hashable {
     /// この週が実際に始まる曜日（0 = 月曜）。通常は 0。
     var firstDayIndex: Int = 0
     var slots: [Slot]
+    /// その週につけられた一行のタイトル。
+    ///
+    /// 7枚目を撮った人だけが、完成したときに一度だけ付けられる。あとから編集しない。
+    /// コメント欄ではなく作品の署名なので、書けるのは常にひとりだけにする。
+    /// 空のままでも作品は成立する。
+    var title: String?
+
+    /// タイトルの上限。長文の欄になった瞬間にキャプション機能になるので、短く抑える。
+    static let titleLimit = 20
 
     enum CodingKeys: String, CodingKey {
-        case id, startDate, firstDayIndex, slots
+        case id, startDate, firstDayIndex, slots, title
     }
 
-    init(id: UUID = UUID(), startDate: Date, firstDayIndex: Int = 0, slots: [Slot]) {
+    init(id: UUID = UUID(),
+         startDate: Date,
+         firstDayIndex: Int = 0,
+         slots: [Slot],
+         title: String? = nil) {
         self.id = id
         self.startDate = startDate
         self.firstDayIndex = firstDayIndex
         self.slots = slots
+        self.title = title
     }
 
-    /// 既存の保存データ（firstDayIndex を持たない・rotationOffset を持つ形）も読めるようにしておく。
+    /// 既存の保存データ（firstDayIndex や title を持たない形）も読めるようにしておく。
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         startDate = try container.decode(Date.self, forKey: .startDate)
         firstDayIndex = try container.decodeIfPresent(Int.self, forKey: .firstDayIndex) ?? 0
         slots = try container.decode([Slot].self, forKey: .slots)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
     }
 
     /// 月曜から始まる通常の週。
@@ -179,8 +194,15 @@ struct RotashWeek: Identifiable, Codable, Hashable {
         slots.max(by: { $0.dayIndex < $1.dayIndex })?.assigneeID
     }
 
-    var title: String {
+    /// 表示用の期間ラベル。ユーザーが付ける `title` とは別物。
+    var dateRange: String {
         "\(RotashDateFormat.day.string(from: displayStartDate)) - \(RotashDateFormat.day.string(from: endDate))"
+    }
+
+    /// 最後に写真が入った枠。タイトルを付けられるのはこの枠を撮った人。
+    var lastCapturedSlot: Slot? {
+        slots.filter { $0.capturedAt != nil }
+            .max { ($0.capturedAt ?? .distantPast) < ($1.capturedAt ?? .distantPast) }
     }
 }
 
@@ -199,6 +221,12 @@ struct RotashGroup: Identifiable, Codable {
     var currentWeek: RotashWeek
     /// 過去の作品（Memories）。新しいものが先頭。
     var archive: [RotashWeek] = []
+    /// このグループを作るきっかけになった作品の、発行元グループ ID。
+    ///
+    /// 共有された作品のリンクから作られたときだけ入る。
+    /// K（作品ひとつから生まれた新しいグループの数）を測るための唯一の手がかりで、
+    /// これが無いと「シェアが効いたのか」が原理的に分からない。
+    var originGroupID: UUID?
 
     var me: Member? { members.first { $0.id == myMemberID } }
 

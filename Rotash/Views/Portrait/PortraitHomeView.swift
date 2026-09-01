@@ -77,20 +77,27 @@ struct PortraitHomeView: View {
                 .tracking(2)
                 .foregroundStyle(Palette.text)
 
-            Button {
-                UIPasteboard.general.string = group.inviteCode
-                copied = true
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-            } label: {
+            // 招待で送るのは6桁のコードではなく、いまの作品そのもの。
+            // 受け取った側は、見ただけで何のアプリか分かる。
+            InviteShareButton {
                 HStack(spacing: 10) {
                     Text("INVITE").rotashLabel(9, color: Palette.faint, tracking: 2)
                     Text(group.inviteCode)
                         .font(Typo.label(15, weight: .semibold))
                         .tracking(4)
                         .foregroundStyle(Palette.text)
-                    Text(copied ? "COPIED" : "TAP TO COPY")
-                        .rotashLabel(8, color: Palette.faint, tracking: 1.2)
+                    Text("SEND").rotashLabel(8, color: Palette.live, tracking: 1.6)
                 }
+            }
+
+            // 対面でそのまま伝えたいときのために、コピーも残しておく。
+            Button {
+                UIPasteboard.general.string = group.inviteCode
+                copied = true
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            } label: {
+                Text(copied ? "コードをコピーしました" : "コードをコピー")
+                    .rotashLabel(9, color: Palette.faint, tracking: 0.8)
             }
             .buttonStyle(.plain)
 
@@ -131,18 +138,26 @@ struct PortraitHomeView: View {
                     .rotashLabel(10, color: Palette.faint, tracking: 0.4)
                     .padding(.bottom, 24)
             } else {
-                VStack(spacing: 18) {
+                // リストではなく積層。日付ラベルを各行から外して帯を密着させると、
+                // 続いていることが「項目数」ではなく「厚み」として見える。
+                //
+                // 連続週数のような数字は出さない。数字は途切れた瞬間にゼロへ戻り、
+                // 7人のうち誰か1人がコケるだけで壊れる（毎週およそ3割）。
+                // 壊れたときに「お前のせいで切れた」が起きると、共同制作が相互監視に変わる。
+                // 積み上がる一方で減らないものだけを、継続の報酬にする。
+                VStack(spacing: 2) {
                     ForEach(group.archive) { week in
                         NavigationLink(value: week) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(week.title).rotashLabel(10, color: Palette.text, tracking: 1.2)
-                                WeekThumbnailStrip(week: week)
-                            }
+                            WeekThumbnailStrip(week: week)
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.bottom, 26)
+                .padding(.bottom, 22)
+
+                Text("タップすると、その週を見られます。")
+                    .rotashLabel(9, color: Palette.faint, tracking: 0.4)
+                    .padding(.bottom, 24)
             }
         }
         .padding(.horizontal, 24)

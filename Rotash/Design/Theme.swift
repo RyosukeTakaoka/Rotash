@@ -1,16 +1,31 @@
 import SwiftUI
+import UIKit
 
 /// 写真が主役。装飾はしない。黒地・細い罫・等幅の小さなラベルだけ。
+///
+/// 共有画像は UIKit で描くので、色は UIColor 側を唯一の定義とし、
+/// SwiftUI 側はそこから作る。画面と書き出しで色がずれないようにするため。
 enum Palette {
-    static let background = Color(white: 0.04)
-    static let surface = Color(white: 0.10)
-    static let surfaceDeep = Color(white: 0.07)
-    static let line = Color(white: 0.24)
-    static let text = Color(white: 0.94)
-    static let dim = Color(white: 0.46)
-    static let faint = Color(white: 0.30)
+    static let background = Color(uiColor: .rotashBackground)
+    static let surface = Color(uiColor: .rotashSurface)
+    static let surfaceDeep = Color(uiColor: .rotashSurfaceDeep)
+    static let line = Color(uiColor: .rotashLine)
+    static let text = Color(uiColor: .rotashText)
+    static let dim = Color(uiColor: .rotashDim)
+    static let faint = Color(uiColor: .rotashFaint)
     /// 当番であることを示すためだけに使う。
-    static let live = Color(red: 0.90, green: 0.29, blue: 0.16)
+    static let live = Color(uiColor: .rotashLive)
+}
+
+extension UIColor {
+    static let rotashBackground = UIColor(white: 0.04, alpha: 1)
+    static let rotashSurface = UIColor(white: 0.10, alpha: 1)
+    static let rotashSurfaceDeep = UIColor(white: 0.07, alpha: 1)
+    static let rotashLine = UIColor(white: 0.24, alpha: 1)
+    static let rotashText = UIColor(white: 0.94, alpha: 1)
+    static let rotashDim = UIColor(white: 0.46, alpha: 1)
+    static let rotashFaint = UIColor(white: 0.30, alpha: 1)
+    static let rotashLive = UIColor(red: 0.90, green: 0.29, blue: 0.16, alpha: 1)
 }
 
 enum Typo {

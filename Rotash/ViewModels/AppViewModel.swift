@@ -34,6 +34,13 @@ final class AppViewModel: ObservableObject {
     /// 入力中のシートが勝手に閉じてしまうので、ここで保持する。
     @Published var activeSheet: PortraitSheet?
 
+    /// リンクから来たときに、参加画面へ先に渡しておく招待コード。
+    @Published var pendingJoinCode: String?
+
+    /// 共有された作品から来たときの、発行元グループ ID。
+    /// グループを作る瞬間まで持っておき、作られた時点で記録する。
+    private var pendingOriginGroupID: UUID?
+
     @Published private(set) var isSyncing = false
     @Published private(set) var lastSyncedAt: Date?
     /// 同期でうまくいかなかったことがあれば、その内容。無言で失敗させないための表示用。
@@ -129,15 +136,18 @@ final class AppViewModel: ObservableObject {
         let members = cleanedNames.map { Member(name: $0) }
         let me = members[0]
 
-        let newGroup = RotashGroup(
+        var newGroup = RotashGroup(
             name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "ROTASH" : name,
             inviteCode: InviteCode.generate(),
             members: members,
             myMemberID: me.id,
             currentWeek: Self.makeFirstWeek(memberIDs: members.map(\.id))
         )
+        newGroup.originGroupID = pendingOriginGroupID
+        pendingOriginGroupID = nil
         group = newGroup
         persist()
+        prepareNotifications()
     }
 
     /// 最初の週。週の途中で始めた場合は、その日から日曜までを 1 つの作品にする。
@@ -167,6 +177,8 @@ final class AppViewModel: ObservableObject {
         )
         group = newGroup
         persist()
+        pendingJoinCode = nil
+        prepareNotifications()
 
         // 同期が有効なら、招待コードだけで今週の作品とメンバーが揃う。
         // 未設定のときはバトンを受け取るまでローカルのまま。
@@ -247,6 +259,81 @@ final class AppViewModel: ObservableObject {
         }
         group = nil
         store.save(nil)
+    }
+
+    // MARK: - リンクから入ってくる
+
+    /// `rotash://` で開かれたときの入口。
+    ///
+    /// 2種類あり、意味がまったく違う。
+    ///   join   … 誰かの空き枠に呼ばれた（個別に送られたリンク）
+    ///   new    … 公開された作品を見て来た。自分たちのグループを作る側
+    func handle(_ url: URL) {
+        guard let destination = RotashLink.destination(for: url) else { return }
+
+        switch destination {
+        case let .join(code):
+            guard group == nil else {
+                alertMessage = "すでに Rotash に参加しています。"
+                return
+            }
+            pendingJoinCode = code
+            activeSheet = .join
+
+        case let .create(origin):
+            // 発行元は、まだグループを持っていなくても覚えておく。
+            // 実際に作られたときに記録され、K を測る手がかりになる。
+            pendingOriginGroupID = origin
+            guard group == nil else { return }
+            activeSheet = .create
+        }
+    }
+
+    // MARK: - 通知
+
+    /// 通知の許可を求める。起動直後ではなく、グループができてから聞く
+    /// （まだ何も通知するものが無いうちに聞いても断られるだけなので）。
+    private func prepareNotifications() {
+        Task {
+            _ = await NotificationScheduler.requestAuthorizationIfNeeded()
+            NotificationScheduler.reschedule(for: group)
+        }
+    }
+
+    // MARK: - 週のタイトル
+
+    /// タイトルを付けられる週。
+    ///
+    /// 付けられるのは **7枚目を撮った本人だけ**。全員が書けるようにするとコメント欄になる。
+    /// 対象は今週と、直近の1本（日曜の夜に決着してそのまま月曜をまたいだ場合）。
+    var titlableWeek: RotashWeek? {
+        guard let group else { return nil }
+        let candidates = [group.currentWeek] + Array(group.archive.prefix(1))
+        return candidates.first { week in
+            week.isFinished
+                && (week.title ?? "").isEmpty
+                && week.lastCapturedSlot?.takenByMemberID == group.myMemberID
+        }
+    }
+
+    /// タイトルを一度だけ書き込む。あとから編集はしない。その週の記録なので。
+    func setTitle(_ raw: String, for week: RotashWeek) {
+        guard var current = group, titlableWeek?.id == week.id else { return }
+        let cleaned = String(raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .prefix(RotashWeek.titleLimit))
+        guard !cleaned.isEmpty else { return }
+
+        if current.currentWeek.id == week.id {
+            current.currentWeek.title = cleaned
+        } else if let index = current.archive.firstIndex(where: { $0.id == week.id }) {
+            current.archive[index].title = cleaned
+        } else {
+            return
+        }
+
+        group = current
+        persist()
+        Task { await sync() }
     }
 
     // MARK: - Shooting
@@ -411,5 +498,8 @@ final class AppViewModel: ObservableObject {
 
     private func persist() {
         store.save(group)
+        // 担当が変わりうる操作はすべてここを通る（作成・参加・途中参加・週送り・同期）。
+        // 差分で消そうとすると消し忘れた古い名前が朝に届くので、毎回まとめて組み直す。
+        NotificationScheduler.reschedule(for: group)
     }
 }

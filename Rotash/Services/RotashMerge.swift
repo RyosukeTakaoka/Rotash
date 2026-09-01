@@ -12,6 +12,9 @@ enum RotashMerge {
         var merged = remote
         merged.id = local.id
         merged.firstDayIndex = min(local.firstDayIndex, remote.firstDayIndex)
+        // タイトルは片方にしか無いことがある（付けた直後で、まだ push していない等）。
+        // 一度サーバーに載ったものを正とし、まだ載っていないローカルの分は落とさない。
+        merged.title = remote.title ?? local.title
 
         let dayIndices = Set(local.dayIndices).union(remote.dayIndices).sorted()
         merged.slots = dayIndices.map { dayIndex in
@@ -81,6 +84,8 @@ enum RotashMerge {
         var merged = local
         merged.id = remote.id
         merged.name = remote.name
+        // 発行元は一度決まったら変わらない。どちらかが知っていれば、それを残す。
+        merged.originGroupID = local.originGroupID ?? remote.originGroupID
 
         // メンバー: リモートに自分と同じ名前の人がいればその ID を採用し、いなければ自分を足す。
         var members = remote.members
@@ -149,6 +154,9 @@ struct RemoteGroupState: Codable {
     var members: [Member]
     var currentWeek: RotashWeek
     var archive: [RotashWeek]
+    /// K を測るための発行元グループ ID。集計はサーバー側の payload を舐めて出すので、
+    /// 端末のローカルだけでなくここにも載せる。
+    var originGroupID: UUID?
 
     init(group: RotashGroup) {
         self.id = group.id
@@ -157,6 +165,7 @@ struct RemoteGroupState: Codable {
         self.members = group.members
         self.currentWeek = Self.shared(group.currentWeek)
         self.archive = group.archive.map(Self.shared)
+        self.originGroupID = group.originGroupID
     }
 
     /// 端末固有の情報を落として、他の人に渡してよい形にする。

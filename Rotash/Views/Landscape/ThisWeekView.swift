@@ -11,6 +11,7 @@ struct ThisWeekView: View {
     @State private var manualSelection: Int?
     @State private var isCapturing = false
     @State private var flashOpacity: Double = 0
+    @State private var draftTitle = ""
 
     private var week: RotashWeek? { app.group?.currentWeek }
 
@@ -35,7 +36,11 @@ struct ThisWeekView: View {
                 VStack(spacing: 0) {
                     header(week: week)
                     HairLine()
-                    grid(week: week)
+                    if week.isFinished {
+                        finished(week: week)
+                    } else {
+                        grid(week: week)
+                    }
                 }
                 .overlay(alignment: .bottom) { bottomControl(week: week) }
             }
@@ -59,18 +64,96 @@ struct ThisWeekView: View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
             Text("THIS WEEK")
                 .rotashLabel(12, color: Palette.text, tracking: 3.4)
-            Text(week.title)
+            Text(week.dateRange)
                 .rotashLabel(10, color: Palette.faint)
+            Text("\(week.filledCount) / \(week.slots.count)")
+                .rotashLabel(10, color: Palette.dim, tracking: 1.4)
             Spacer(minLength: 8)
-            // 撮られなかった日があっても作品は成立するので、全枠が決着したら共有できる。
-            if week.isFinished {
-                WorkShareButton(week: week) {
-                    Text("SHARE").rotashLabel(11, color: Palette.live, tracking: 2.4)
-                }
+            // 完成を待たずに共有できる。3/7 は「これ何？」を生むが、7/7 は答えなので、
+            // 途中のほうがむしろ強い。押し付けはしない — ここに静かに置いておくだけ。
+            WorkShareButton(week: week) {
+                Text("SHARE")
+                    .rotashLabel(11,
+                                 color: week.isFinished ? Palette.live : Palette.dim,
+                                 tracking: 2.4)
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
+    }
+
+    // MARK: - 決着した週
+
+    /// 進行中は画面を埋め尽くし、完成形は余白の中に置く。
+    /// 見え方が変わることそのもので「終わった」が伝わるので、
+    /// 「完成しました！」とは書かない。
+    ///
+    /// ただし、終わったことを伝えすぎてもいけない。
+    /// 初期のグループは「◯◯までの7日間」という出来事を理由に立ち上がり、
+    /// その出来事は7日目に終わる。出来事の終わりと作品の完成が同じ日に重なると
+    /// 二重の終止符になり、翌週に戻ってこなくなる。
+    /// だから作品を単独では見せず、**これまでの積み重ねの上に1本載った**形にする。
+    @ViewBuilder
+    private func finished(week: RotashWeek) -> some View {
+        VStack(spacing: 12) {
+            if let archive = app.group?.archive, !archive.isEmpty {
+                VStack(spacing: 2) {
+                    ForEach(Array(archive.prefix(4))) { past in
+                        WeekThumbnailStrip(week: past, height: 9)
+                            .opacity(0.45)
+                    }
+                }
+                .padding(.horizontal, 40)
+            }
+
+            grid(week: week)
+                .padding(.horizontal, 28)
+
+            titleArea(week: week)
+        }
+        .padding(.vertical, 12)
+    }
+
+    /// その週の一行。
+    ///
+    /// 書けるのは **7枚目を撮った本人だけ**。全員が書けるようにすると、
+    /// それはタイトルではなくコメント欄になる。
+    /// 空のままでも作品は成立するので、催促はしない。
+    @ViewBuilder
+    private func titleArea(week: RotashWeek) -> some View {
+        if let title = week.title, !title.isEmpty {
+            Text(title)
+                .font(Typo.title(16))
+                .foregroundStyle(Palette.text)
+                .lineLimit(1)
+                .padding(.horizontal, 28)
+
+        } else if app.titlableWeek?.id == week.id {
+            HStack(spacing: 12) {
+                TextField("", text: $draftTitle,
+                          prompt: Text("この1週間に名前をつける"))
+                    .textFieldStyle(.plain)
+                    .font(Typo.title(15))
+                    .foregroundStyle(Palette.text)
+                    .submitLabel(.done)
+                    .onSubmit { commitTitle(for: week) }
+
+                Button("つける") { commitTitle(for: week) }
+                    .font(Typo.label(11, weight: .semibold))
+                    .tracking(1.6)
+                    .foregroundStyle(draftTitle.trimmingCharacters(in: .whitespaces).isEmpty
+                                     ? Palette.faint : Palette.live)
+                    .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 28)
+        }
+    }
+
+    /// 長さを詰めるのは確定したこの時点だけにする。
+    /// 入力中に書き換えると日本語変換が壊れる（README「日本語入力について」）。
+    private func commitTitle(for week: RotashWeek) {
+        app.setTitle(draftTitle, for: week)
+        draftTitle = ""
     }
 
     // MARK: - 7 分割

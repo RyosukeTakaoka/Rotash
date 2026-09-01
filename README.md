@@ -17,6 +17,10 @@ App Store 公開版ではなく、実際に友人と使って体験価値を検�
 >
 > 「今どこが律速で、90日で何をやるか」の診断は
 > [`docs/GROWTH_DIAGNOSIS.md`](docs/GROWTH_DIAGNOSIS.md)。まずここから読むのが早い。
+>
+> **どのファイルを今すぐ触り、何を後回しにし、何を絶対に入れないか**は
+> [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md)。
+> 機能を足す前に、そこの NEVER を確認すること。
 
 ---
 

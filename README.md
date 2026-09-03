@@ -21,6 +21,10 @@ App Store 公開版ではなく、実際に友人と使って体験価値を検�
 > **どのファイルを今すぐ触り、何を後回しにし、何を絶対に入れないか**は
 > [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md)。
 > 機能を足す前に、そこの NEVER を確認すること。
+>
+> 「若者のこういう欲求に応えたい」と思ったときは
+> [`docs/YOUTH_NEEDS.md`](docs/YOUTH_NEEDS.md)。
+> 空いている層は2つしかなく、他は既に埋まっている。
 
 ---
 

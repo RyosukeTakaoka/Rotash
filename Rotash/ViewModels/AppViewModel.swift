@@ -61,6 +61,7 @@ final class AppViewModel: ObservableObject {
         self.group = store.load()
         migrateAssignmentsIfNeeded()
         rollWeekIfNeeded()
+        applyAudit()
     }
 
     // MARK: - Derived
@@ -99,6 +100,10 @@ final class AppViewModel: ObservableObject {
         if slot.isFilled && !RotashFeatureFlags.allowRetake { return false }
         if freeShooting { return true }
         guard group.isMyDay(dayIndex, in: group.currentWeek) else { return false }
+        // 仮の担当（決定時刻を持たない = まだ誰とも突き合わせていない）では撮らせない。
+        // 他にメンバーが居ると分かっているのに自分の判断だけで撮ると、
+        // 同じ日を二人が撮ってしまい、あとの突き合わせで片方の写真が消える。
+        if slot.assignedAt == nil && group.members.count > 1 { return false }
         // 未来の日は撮れない。
         // 過ぎた日も撮れない — 撮られなかった日は No Shot として確定する。
         if RotashFeatureFlags.allowCatchUpShooting {
@@ -182,11 +187,8 @@ final class AppViewModel: ObservableObject {
 
         // 同期が有効なら、招待コードだけで今週の作品とメンバーが揃う。
         // 未設定のときはバトンを受け取るまでローカルのまま。
-        Task {
-            await sync()
-            // 参加した本人を今週の担当に入れる（未公開の未来の枠だけを組み替える）。
-            joinCurrentWeekIfPossible()
-        }
+        // 参加した本人を今週の担当に入れるのは同期のあとの検査（applyAudit）の仕事。
+        Task { await sync() }
     }
 
     /// 参加した直後の、まだ誰とも突き合わせていない週。
@@ -212,28 +214,29 @@ final class AppViewModel: ObservableObject {
         return week
     }
 
-    /// 受け取ったメンバー一覧に自分が居なかった場合に、自分を今週へ入れる。
-    /// 同期のあと、バトンを受け取ったあとに呼ぶ。
-    private func joinCurrentWeekIfPossible() {
-        guard var current = group, let me = current.me else { return }
-
-        // まだ自分ひとりしか知らない = 相手の状態を一度も受け取れていない
-        // （同期が未設定、通信に失敗した、招待コードのデータがまだ無い）。
-        // この状態で担当を確定させると、あとから届いた本物の担当を
-        // 「こちらの方が新しい」という理由で上書きしてしまう。仮のまま待つ。
-        guard current.members.count > 1 else { return }
-
-        // 仮の担当（assignedAt が無い）は自分の枠として数えない。
-        // 数えてしまうと、参加した瞬間に自分で置いた仮の担当のせいで
-        // 「もう今週の担当を持っている」と誤判定し、本当の割り当てが一度も走らなくなる。
-        let hasTurnThisWeek = current.currentWeek.slots.contains {
-            $0.assigneeID == me.id && $0.assignedAt != nil
-        }
-        guard !hasTurnThisWeek else { return }
-        replanFutureDays(&current, joining: me.id)
-        group = current
+    /// 担当表を検査して、直せるところを直す。
+    ///
+    /// 端末ごとに担当を計算する以上ズレは起きうるので、状態が変わったところでは必ず通す。
+    /// 途中参加した人が今週の残りに入るのも、ここが引き受ける
+    /// （「参加した端末が自分の枠を取りにいく」形をやめ、
+    ///   「いまのメンバーで組み直したらこうなる」という計算だけにした。
+    ///   誰が引き金を引いたかで結果が変わらないので、全端末が同じ表に行き着く）。
+    ///
+    /// - Returns: 直したところがあれば true。
+    @discardableResult
+    private func applyAudit() -> Bool {
+        guard let current = group else { return false }
+        let repaired = AssignmentAudit.repaired(current)
+        guard repaired.currentWeek != current.currentWeek else { return false }
+        group = repaired
         persist()
-        Task { await sync() }
+        return true
+    }
+
+    /// いま自分の端末が見ている担当表の照合コード。
+    /// 同じ担当表ならどの端末でも同じ文字列になるので、見くらべれば食い違いに気づける。
+    var assignmentFingerprint: String? {
+        group.map { AssignmentAudit.fingerprint($0.currentWeek) }
     }
 
     func addMember(name: String) {
@@ -243,51 +246,11 @@ final class AppViewModel: ObservableObject {
 
         let newMember = Member(name: cleaned)
         current.members.append(newMember)
-        // 途中参加でも今週から作品づくりに参加してもらう。
-        replanFutureDays(&current, joining: newMember.id)
         group = current
+        // 途中参加でも今週から作品づくりに参加してもらう。未来の枠の組み直しは検査が行う。
+        applyAudit()
         persist()
-    }
-
-    /// メンバーが増えたときに、まだ公開していない未来の担当だけを組み替える。
-    ///
-    /// 未来の担当者はそもそも誰にも見せていないので、内部で組み替えても
-    /// 「予定が変更された」という見え方にはならない。この性質を使って途中参加者を今週に入れる。
-    /// 過去と今日の担当・写真には絶対に触らない。
-    ///
-    /// - Parameter joining: 途中参加した人。参加後の最初の枠を優先的に割り当てる。
-    private func replanFutureDays(_ current: inout RotashGroup, joining newMemberID: UUID? = nil) {
-        guard !current.members.isEmpty else { return }
-        let today = Calendar.dayIndex(for: Date(), weekStart: current.currentWeek.startDate)
-
-        // 再計算してよいのは「今日より後」の枠だけ。
-        let futureDays = current.currentWeek.slots
-            .filter { $0.dayIndex > today && !$0.isFilled }
-            .map(\.dayIndex)
-        guard !futureDays.isEmpty else { return }
-
-        var history: [UUID: Int] = [:]
-        for week in current.archive {
-            for slot in week.slots {
-                if let id = slot.assigneeID { history[id, default: 0] += 1 }
-            }
-        }
-        for slot in current.currentWeek.slots where slot.dayIndex <= today {
-            if let id = slot.assigneeID { history[id, default: 0] += 1 }
-        }
-
-        let memberIDs = current.members.map(\.id)
-        current.currentWeek = WeekPlanner.planned(week: current.currentWeek,
-                                                  memberIDs: memberIDs,
-                                                  history: history,
-                                                  previousWeek: current.archive.first,
-                                                  days: futureDays,
-                                                  firstDayPriority: newMemberID,
-                                                  seed: AssignmentPlanner.seed(
-                                                      groupID: current.id,
-                                                      weekStart: current.currentWeek.startDate,
-                                                      memberIDs: memberIDs,
-                                                      salt: "join.\(newMemberID?.uuidString ?? "-")"))
+        Task { await sync() }
     }
 
     func deleteRotash() {
@@ -440,16 +403,31 @@ final class AppViewModel: ObservableObject {
     /// 進行中の作品の見え方は変わらない。
     private func migrateAssignmentsIfNeeded() {
         guard var current = group, !current.members.isEmpty else { return }
-        guard current.currentWeek.slots.contains(where: { $0.assigneeID == nil }) else { return }
+
+        let needsAssignee = current.currentWeek.slots.contains { $0.assigneeID == nil }
+        // 決定時刻を持たない担当は「まだ誰とも合意していない仮のもの」という印として扱う。
+        // 決定時刻そのものが無かった頃の保存データはその印と見分けがつかないので、
+        // ここで埋めておく。入れる値は週の開始日 — 実際の決定より必ず古く、
+        // どの端末で開いても同じ値になるので、これで新旧の判定が狂わない。
+        let needsTimestamp = current.currentWeek.slots.contains {
+            $0.assigneeID != nil && $0.assignedAt == nil
+        }
+        guard needsAssignee || needsTimestamp else { return }
 
         let memberIDs = current.members.map(\.id)
         var week = current.currentWeek
         var history: [UUID: Int] = [:]
 
         for index in week.slots.indices {
-            guard week.slots[index].assigneeID == nil else { continue }
+            guard week.slots[index].assigneeID == nil else {
+                if week.slots[index].assignedAt == nil {
+                    week.slots[index].assignedAt = week.startDate
+                }
+                continue
+            }
             if let taken = week.slots[index].takenByMemberID, memberIDs.contains(taken) {
                 week.slots[index].assigneeID = taken
+                week.slots[index].assignedAt = week.startDate
                 history[taken, default: 0] += 1
             }
         }
@@ -498,11 +476,10 @@ final class AppViewModel: ObservableObject {
 
         group = RotashMerge.merge(local: current, remote: incoming)
         rollWeekIfNeeded()
+        // バトンで初めて相手を知った場合も、検査を通して今週の残りに入れる。
+        // 同期で参加したときと同じ扱いにしないと、バトンで来た人だけ取り残される。
+        applyAudit()
         persist()
-        // バトンで初めて相手を知った場合も、参加者として今週の残りに入れる。
-        // 同期で参加したときと同じ扱いにしておかないと、
-        // バトンで来た人だけ仮の担当のまま取り残される。
-        joinCurrentWeekIfPossible()
     }
 
     // MARK: - サーバー同期
@@ -546,6 +523,13 @@ final class AppViewModel: ObservableObject {
             }
 
             rollWeekIfNeeded()
+
+            // 突き合わせた直後に必ず検査する。ここが「食い違ったまま固定されない」
+            // ことの担保で、途中参加した人が今週の残りに入るのもここ。
+            // 直したなら、その結果をもう一度みんなに共有する必要がある。
+            // 検査は同じ状態に何度かけても結果が変わらないので、これで堂々巡りにはならない。
+            if applyAudit() { syncAgainWhenFinished = true }
+
             persist()
         } catch {
             syncNote = error.localizedDescription

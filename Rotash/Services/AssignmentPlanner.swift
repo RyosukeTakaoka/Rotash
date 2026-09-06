@@ -42,29 +42,32 @@ enum AssignmentPlanner {
                      dayIndices: [Int],
                      history: [UUID: Int] = [:],
                      previousPattern: [Int: UUID] = [:],
-                     previousDayAssignee: UUID? = nil,
-                     firstDayPriority: UUID? = nil) -> [Int: UUID] {
+                     previousDayAssignee: UUID? = nil) -> [Int: UUID] {
         var generator = SystemRandomNumberGenerator()
         return plan(memberIDs: memberIDs,
                     dayIndices: dayIndices,
                     history: history,
                     previousPattern: previousPattern,
                     previousDayAssignee: previousDayAssignee,
-                    firstDayPriority: firstDayPriority,
                     using: &generator)
     }
 
     /// 乱数を差し替えられる形。テストではここに固定シードの生成器を渡す。
     ///
-    /// - Parameter firstDayPriority: 最初の1日を必ずこの人に割り当てる。
-    ///   途中参加した人が「参加したのに来週まで何もできない」状態にならないようにするため。
-    ///   残りの日は通常どおり全員を対象に公平性ルールで決める。
+    /// 以前は「途中参加した人に最初の1日を無条件で渡す」指定を持っていたが、外した。
+    /// 同じ日に二人が参加すると、後から入った人が同じ日を無条件に奪い、
+    /// **先に参加した人の当番が今週から丸ごと消える**という壊れ方をしていた
+    /// （＝この指定が防ごうとしていた「参加したのに何もできない」状態そのもの）。
+    ///
+    /// 外しても目的は達せられる。Priority 1 が累計担当回数の少ない人を優先するので、
+    /// 累計 0 回の新しい人が、放っておいても最初の空き日に入る。
+    /// 無条件の指定と違って「誰が引き金を引いたか」に結果が左右されないため、
+    /// どの端末で計算しても同じ表になる。
     static func plan<G: RandomNumberGenerator>(memberIDs: [UUID],
                                                dayIndices: [Int],
                                                history: [UUID: Int] = [:],
                                                previousPattern: [Int: UUID] = [:],
                                                previousDayAssignee: UUID? = nil,
-                                               firstDayPriority: UUID? = nil,
                                                using generator: inout G) -> [Int: UUID] {
         guard !memberIDs.isEmpty else { return [:] }
         let days = dayIndices.sorted()
@@ -85,18 +88,6 @@ enum AssignmentPlanner {
         var previous = previousDayAssignee
 
         for day in days {
-            // 途中参加した人は、最初の1日だけ無条件で優先する。
-            if day == days.first,
-               let priority = firstDayPriority,
-               memberIDs.contains(priority) {
-                result[day] = priority
-                weekCount[priority] = 1
-                if hasCeil && base + 1 == 1 { membersAtCeil += 1 }
-                total[priority, default: 0] += 1
-                previous = priority
-                continue
-            }
-
             // Priority 2: 週の担当回数の上限に達していない人だけを候補にする。
             var candidates = memberIDs.filter { id in
                 let count = weekCount[id, default: 0]
@@ -148,8 +139,14 @@ enum AssignmentPlanner {
         text += "|\(Int(weekStart.timeIntervalSince1970))"
         for id in memberIDs.map(\.uuidString).sorted() { text += "|\(id)" }
         if !salt.isEmpty { text += "|\(salt)" }
+        return RotashHash.fnv1a(text)
+    }
+}
 
-        // FNV-1a。暗号用途ではないので、端末をまたいで同じ値になれば足りる。
+/// 端末をまたいで同じ値になる、軽いハッシュ。
+/// 担当決めの種と、担当表の照合コードで使う。暗号用途ではない。
+enum RotashHash {
+    static func fnv1a(_ text: String) -> UInt64 {
         var hash: UInt64 = 0xCBF2_9CE4_8422_2325
         for byte in text.utf8 {
             hash ^= UInt64(byte)
@@ -172,7 +169,6 @@ enum WeekPlanner {
                         history: [UUID: Int],
                         previousWeek: RotashWeek?,
                         days: [Int]? = nil,
-                        firstDayPriority: UUID? = nil,
                         seed: UInt64? = nil) -> RotashWeek {
         var updated = week
         let targetDays = (days ?? week.dayIndices).sorted()
@@ -199,15 +195,13 @@ enum WeekPlanner {
                                           history: history,
                                           previousPattern: previousWeek?.assignments ?? [:],
                                           previousDayAssignee: previousDayAssignee,
-                                          firstDayPriority: firstDayPriority,
                                           using: &generator)
         } else {
             plan = AssignmentPlanner.plan(memberIDs: orderedIDs,
                                           dayIndices: targetDays,
                                           history: history,
                                           previousPattern: previousWeek?.assignments ?? [:],
-                                          previousDayAssignee: previousDayAssignee,
-                                          firstDayPriority: firstDayPriority)
+                                          previousDayAssignee: previousDayAssignee)
         }
 
         let decidedAt = Date()

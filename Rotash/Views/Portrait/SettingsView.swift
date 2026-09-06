@@ -117,6 +117,23 @@ struct SettingsView: View {
                     .rotashLabel(9, color: Palette.live, tracking: 0.4)
                     .lineSpacing(3)
             }
+
+            // 担当表の照合コード。
+            // 同じ担当表ならどの端末でも同じ6文字になるので、
+            // みんなで見くらべれば「全員が同じ当番表を見ているか」がその場で分かる。
+            if let code = app.assignmentFingerprint {
+                HStack(spacing: 8) {
+                    Text("担当表").rotashLabel(9, color: Palette.faint, tracking: 2)
+                    Text(code)
+                        .font(Typo.label(11, weight: .semibold))
+                        .tracking(2)
+                        .foregroundStyle(Palette.text)
+                }
+                .padding(.top, 2)
+                Text("みんなで見くらべて、同じなら同じ当番表です。ちがうときは「今すぐ」で揃います。")
+                    .rotashLabel(9, color: Palette.faint, tracking: 0.4)
+                    .lineSpacing(3)
+            }
         }
     }
 

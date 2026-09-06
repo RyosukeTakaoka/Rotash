@@ -30,20 +30,25 @@ struct SettingsView: View {
                         HairLine()
                     }
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Toggle(isOn: $app.freeShooting) {
-                            Text("自由撮影モード")
-                                .rotashLabel(11, color: Palette.text, tracking: 1)
+                    // 自由撮影モードは当番の判定そのものを飛ばすので、
+                    // 二人が同じ枠を撮れてしまう＝競合を自分から作り出す。
+                    // 検証中のビルドだけに置き、公開するアプリには出さない。
+                    if RotashFeatureFlags.isTestBuild {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Toggle(isOn: $app.freeShooting) {
+                                Text("自由撮影モード")
+                                    .rotashLabel(11, color: Palette.text, tracking: 1)
+                            }
+                            .toggleStyle(.switch)
+                            .tint(Palette.live)
+
+                            Text("当番日でなくても好きな枠を撮れます。体験を試すとき用。")
+                                .rotashLabel(9, color: Palette.faint, tracking: 0.4)
+                                .lineSpacing(4)
                         }
-                        .toggleStyle(.switch)
-                        .tint(Palette.live)
 
-                        Text("当番日でなくても好きな枠を撮れます。体験を試すとき用。")
-                            .rotashLabel(9, color: Palette.faint, tracking: 0.4)
-                            .lineSpacing(4)
+                        HairLine()
                     }
-
-                    HairLine()
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("ROTASH について").rotashLabel(9, color: Palette.faint, tracking: 2)
@@ -118,10 +123,13 @@ struct SettingsView: View {
                     .lineSpacing(3)
             }
 
-            // 担当表の照合コード。
-            // 同じ担当表ならどの端末でも同じ6文字になるので、
-            // みんなで見くらべれば「全員が同じ当番表を見ているか」がその場で分かる。
-            if let code = app.assignmentFingerprint {
+            // 担当表の照合コード。**検証中のビルドだけに出す。**
+            //
+            // 同じ担当表ならどの端末でも同じ6文字になるので、複数台で見くらべれば
+            // 食い違いにその場で気づける。ただしこれは「疑いながら使う」ための道具で、
+            // 公開するアプリに置くものではない。担当が食い違わないこと自体は
+            // AssignmentAudit が受け持っていて、そちらは本番でも常に動いている。
+            if RotashFeatureFlags.isTestBuild, let code = app.assignmentFingerprint {
                 HStack(spacing: 8) {
                     Text("担当表").rotashLabel(9, color: Palette.faint, tracking: 2)
                     Text(code)

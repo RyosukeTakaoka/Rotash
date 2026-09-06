@@ -14,4 +14,20 @@ enum RotashFeatureFlags {
     /// （「その日には写真がなかった」という状態そのものを作品の一部として扱う）。
     /// true にすると、過去の自分の当番日をあとから撮って埋められるようになる。
     static let allowCatchUpShooting = false
+
+    /// 検証中のビルドかどうか。TestFlight と開発ビルドで true、App Store 版では false。
+    ///
+    /// 「動きを確かめるための仕掛け」は、確かめている間しか要らない。
+    /// 出したまま公開すると、説明の要るものが増えるだけでなく、
+    /// 自由撮影モードのように **競合を自分から作り出す** ものまで届いてしまう。
+    ///
+    /// TestFlight のアプリは Sandbox のレシートを持つので、それで見分ける。
+    /// 判定に失敗したときは「本番」に倒す（検証用の仕掛けを誤って出さない方に倒す）。
+    static var isTestBuild: Bool {
+        #if DEBUG
+        return true
+        #else
+        return Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+        #endif
+    }
 }

@@ -98,7 +98,10 @@ final class AppViewModel: ObservableObject {
         // 撮り直しは今は仮で無効。RotashFeatureFlags.allowRetake を true にすれば
         // このガードだけで撮り直し（ライブビュー優先表示・SHOOT/RETAKE表示含む）が復活する。
         if slot.isFilled && !RotashFeatureFlags.allowRetake { return false }
-        if freeShooting { return true }
+        // 自由撮影は当番の判定そのものを飛ばす＝競合を自分から作る仕掛けなので、
+        // 検証中のビルドでしか効かせない。設定から隠すだけでは、
+        // 以前に入れた値が残っている端末で効き続けてしまう。
+        if freeShooting && RotashFeatureFlags.isTestBuild { return true }
         guard group.isMyDay(dayIndex, in: group.currentWeek) else { return false }
         // 仮の担当（決定時刻を持たない = まだ誰とも突き合わせていない）では撮らせない。
         // 他にメンバーが居ると分かっているのに自分の判断だけで撮ると、
@@ -382,9 +385,14 @@ final class AppViewModel: ObservableObject {
 
         // 週途中スタートだった初回の翌週からは、通常どおり月曜〜日曜の 7 枚に戻る。
         //
-        // 種を渡して端末に依存しない計算にする。週送りは各端末がそれぞれ勝手に走らせるので、
-        // ランダムだと端末ごとに違う担当表ができ、同期が届くまでのあいだ
-        // 全員が「今日は自分の担当」と表示されてしまう（そして同じ日を2人で撮る）。
+        // 週送りは各端末がそれぞれ勝手に走らせる（月曜に最初に開いた瞬間に走る）ので、
+        // ここを端末まかせにすると端末ごとに違う担当表ができる。同期が届くまでのあいだ
+        // 全員が「今日は自分の担当」と表示され、同じ月曜を何人もが撮ってしまう。
+        //
+        //   種      … 同じメンバー・同じ週なら、どの端末でも同じ担当表になる
+        //   決定時刻 … その週の開始日。どの端末で走らせても同じ値になるので、
+        //             メンバーの把握がズレて違う表ができた場合でも「同着」になり、
+        //             マージの同着処理で全端末が同じ側を選ぶ
         let memberIDs = current.members.map(\.id)
         current.currentWeek = WeekPlanner.planned(week: .full(startDate: start),
                                                   memberIDs: memberIDs,
@@ -393,7 +401,8 @@ final class AppViewModel: ObservableObject {
                                                   seed: AssignmentPlanner.seed(
                                                       groupID: current.id,
                                                       weekStart: start,
-                                                      memberIDs: memberIDs))
+                                                      memberIDs: memberIDs),
+                                                  decidedAt: start)
         group = current
         persist()
     }
@@ -442,7 +451,9 @@ final class AppViewModel: ObservableObject {
                                        seed: AssignmentPlanner.seed(groupID: current.id,
                                                                     weekStart: week.startDate,
                                                                     memberIDs: memberIDs,
-                                                                    salt: "migrate"))
+                                                                    salt: "migrate"),
+                                       // 移行も端末ごとに走るので、決定時刻を端末共通にする。
+                                       decidedAt: week.startDate)
         }
 
         current.currentWeek = week

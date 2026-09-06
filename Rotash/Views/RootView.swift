@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// 縦は「準備するところ」、横は「Rotash 体験そのもの」。
@@ -47,6 +48,19 @@ struct RootView: View {
                 // 戻ってきたときに他の人の写真を取りに行く（リアルタイム購読は使わない）。
                 Task { await app.sync() }
             }
+        }
+        // 開いたまま日付をまたいだとき。
+        //
+        // .task は起動の一度きり、scenePhase は行き来したときしか動かないので、
+        // 画面を開いたまま 0 時を越えると、どちらも動かないまま日だけが変わる。
+        // 日曜の夜に開きっぱなしだと月曜になっても週が切り替わらず、
+        // しかも「今日が何日目か」は 6（日曜）に丸められるため、
+        // アプリは月曜を日曜だと思い込んだまま動き続ける。
+        .onReceive(NotificationCenter.default
+            .publisher(for: .NSCalendarDayChanged)
+            .receive(on: RunLoop.main)) { _ in
+            app.rollWeekIfNeeded()
+            Task { await app.sync() }
         }
         .onOpenURL { url in
             do {

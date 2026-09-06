@@ -164,12 +164,20 @@ enum WeekPlanner {
     ///           メンバーが増えたときに「まだ公開していない未来の日」だけ組み替える用途で使う。
     ///   - seed: 渡すと、同じ入力からは必ず同じ担当表が出る（端末をまたいでも一致する）。
     ///           nil なら従来どおり毎回ランダム。
+    ///   - decidedAt: 担当が決まった時刻として記録する値。既定は「いま」。
+    ///           週送りのように **各端末がそれぞれ勝手に走らせる計算** では、
+    ///           ここに端末共通の値（その週の開始日）を渡す。
+    ///           そうすると同じ計算をした端末どうしが同着になり、
+    ///           マージの同着処理で必ず同じ側が選ばれる。
+    ///           「いま」を入れると、あとから走らせた端末が常に勝ってしまい、
+    ///           先に決まっていた担当を意味もなく押しのけることになる。
     static func planned(week: RotashWeek,
                         memberIDs: [UUID],
                         history: [UUID: Int],
                         previousWeek: RotashWeek?,
                         days: [Int]? = nil,
-                        seed: UInt64? = nil) -> RotashWeek {
+                        seed: UInt64? = nil,
+                        decidedAt: Date = Date()) -> RotashWeek {
         var updated = week
         let targetDays = (days ?? week.dayIndices).sorted()
 
@@ -204,7 +212,6 @@ enum WeekPlanner {
                                           previousDayAssignee: previousDayAssignee)
         }
 
-        let decidedAt = Date()
         for (day, memberID) in plan {
             if let index = updated.slots.firstIndex(where: { $0.dayIndex == day }) {
                 updated.slots[index].assigneeID = memberID

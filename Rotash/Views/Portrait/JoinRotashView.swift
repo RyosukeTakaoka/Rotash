@@ -40,8 +40,11 @@ struct JoinRotashView: View {
 
                     RotashField(title: "あなたの名前", placeholder: "NAME", text: $myName)
 
+                    // 「必ず今週の当番に入る」とは書かない。
+                    // すでに決まっている担当は動かさないので、週の終わり近くに参加すると
+                    // 今週は当番が回ってこないことがある。できない約束はしない。
                     Text(app.isSyncEnabled
-                         ? "参加すると、今週の作品とメンバーがそのまま見られます。\n残りの日の当番にも今週から入ります。"
+                         ? "参加すると、今週の作品とメンバーがそのまま見られます。\nまだ来ていない日が残っていれば、その当番にも入ります。"
                          : "参加したら、誰かに「バトンを渡す」でその週の作品を送ってもらってください。")
                         .rotashLabel(10, color: Palette.dim, tracking: 0.4)
                         .lineSpacing(5)

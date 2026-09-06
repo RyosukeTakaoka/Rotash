@@ -34,6 +34,18 @@ enum RotashMerge {
         return adopted
     }
 
+    /// 決定時刻が同着だったときの決め方。
+    ///
+    /// サーバーに載せる日付は秒までしか持たないので、ほぼ同時に決まった担当は実際に並ぶ。
+    /// ここで「自分の方」を採ると、端末ごとに違う担当が残ったまま、
+    /// お互いに自分の結果を押し返し続けて永久に食い違う。
+    /// 中身だけで決まる基準（担当者 ID の順）で機械的に選べば、どの端末でも同じ答えになる。
+    private static func tieBreak(local: Slot, remote: Slot) -> Slot {
+        let localKey = local.assigneeID?.uuidString ?? ""
+        let remoteKey = remote.assigneeID?.uuidString ?? ""
+        return localKey <= remoteKey ? local : adopted(remote)
+    }
+
     private static func mergeSlot(local: Slot?, remote: Slot?, dayIndex: Int) -> Slot {
         switch (local, remote) {
         case let (local?, remote?):
@@ -59,9 +71,13 @@ enum RotashMerge {
             // 写真の統合が capturedAt で「先に撮った方」を比べているのと同じ考え方で、
             // 担当者の決定にも assignedAt を持たせ、新しい決定が古い決定に必ず勝つようにする。
             // これで同期の順序に関係なく、最終的にどちらの端末でも同じ結果に収束する。
+            //
+            // assignedAt を持たない担当は「仮」の印。参加した直後の端末が、まだ誰も
+            // 知らないまま自分に置いただけの担当なので、本物（assignedAt つき）に必ず負ける。
             switch (local.assignedAt, remote.assignedAt) {
             case let (localAt?, remoteAt?):
-                return localAt >= remoteAt ? local : adopted(remote)
+                if localAt == remoteAt { return tieBreak(local: local, remote: remote) }
+                return localAt > remoteAt ? local : adopted(remote)
             case (nil, .some):
                 return adopted(remote)
             case (.some, nil):
@@ -87,10 +103,18 @@ enum RotashMerge {
         // 発行元は一度決まったら変わらない。どちらかが知っていれば、それを残す。
         merged.originGroupID = local.originGroupID ?? remote.originGroupID
 
-        // メンバー: リモートに自分と同じ名前の人がいればその ID を採用し、いなければ自分を足す。
+        // メンバー: 自分が誰かを見失わないようにする。
+        //
+        // ID で照合できるならそれが最優先。名前は変えられるし、同じ名前の人も居るので、
+        // 一度サーバーに載った自分の ID があるなら名前で判断してはいけない
+        // （名前で判断すると、同名の人が居たときに二人が同一人物に潰れ、
+        //   どちらの端末でも「今日は自分の担当」に見えてしまう）。
+        // まだ載っていないときだけ、名前で「先に登録しておいてもらった枠」と結びつける。
         var members = remote.members
         let myName = local.me?.name ?? ""
-        if let match = members.first(where: { $0.name.caseInsensitiveCompare(myName) == .orderedSame }) {
+        if members.contains(where: { $0.id == local.myMemberID }) {
+            merged.myMemberID = local.myMemberID
+        } else if let match = members.first(where: { $0.name.caseInsensitiveCompare(myName) == .orderedSame }) {
             merged.myMemberID = match.id
         } else if let me = local.me {
             members.append(me)

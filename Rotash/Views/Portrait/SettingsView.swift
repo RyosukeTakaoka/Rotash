@@ -77,7 +77,7 @@ struct SettingsView: View {
             .scrollIndicators(.hidden)
         }
         .presentationBackground(Palette.background)
-        .sheet(item: $batonPayload) { payload in ActivityView(items: payload.urls) }
+        .sheet(item: $batonPayload) { payload in ActivityView(items: payload.items) }
         .fileImporter(isPresented: $showImporter,
                       allowedContentTypes: [BatonTransfer.fileType]) { result in
             switch result {
@@ -139,7 +139,7 @@ struct SettingsView: View {
     private func exportBaton() {
         do {
             let url = try app.exportBaton()
-            batonPayload = SharePayload(urls: [url])
+            batonPayload = SharePayload(items: [url])
         } catch {
             app.alertMessage = error.localizedDescription
         }

@@ -2,28 +2,36 @@ import UIKit
 
 /// 共有画像の形。まだ確定していないので、フラグ1つで入れ替えられるようにしておく。
 enum ShareCardFormat {
-    /// 撮影画面とほぼ同じ、横長の7分割。1920 × 1080。
+    /// 撮影画面そのもの。横長 1920 × 1080 に組んだものを、
+    /// **中身は一切変えずに反時計まわりへ90度倒して** 1080 × 1920 で書き出す。
     ///
-    /// 撮った本人が画面で見ているものと、配られる画像が同じ形になる。
-    /// 「これ何？」と聞かれて画面を見せたときに、同じものが出てくる。
+    /// 画面で見ているものと配られる画像が、字の向きまで含めて同じ絵になる。
+    /// 「これ何？」と聞かれて端末を横にすれば、そのままの並びが出てくる。
+    /// 受け取る側は縦のフィードで大きく見られるので、9:16 の器も無駄にならない。
     case screen
 
-    /// Stories / TikTok 向けの縦。1080 × 1920。7枚を横帯に積む。
+    /// Stories / TikTok 向けの縦。1080 × 1920。7枚を横帯に積み直す。
     ///
-    /// 縦のフィードでは大きく表示され、1枠あたりの写真も横幅が丸ごと残る
-    /// （画面の縦長の枠は、元の写真の横幅を8割方捨てている）。
-    /// ただし7分割の並びは画面と別物になるので、見せられた側は同じ絵を想像できない。
+    /// 1枠あたりの写真は横幅が丸ごと残る（画面の縦長の枠は、元の写真の
+    /// 横幅を8割方捨てている）。ただし7分割の並びは画面と別物になるので、
+    /// 見せられた側は同じ絵を想像できない。
     case story
 }
 
 /// 作品を1枚の画像として書き出す。加工はしない。写真そのもの。
 ///
-/// # いまは横長（撮影画面と同じ形）
+/// # いまは「撮影画面をそのまま倒したもの」
 ///
-/// 縦（9:16）にすると1枠あたりの写真は多く見えるが、7分割の並びが画面と別物になる。
-/// 受け取った人が画像とアプリを結びつけられないので、まずは
-/// **画面に出ているものがそのまま出てくる**ことを優先する。
-/// 縦のほうがよいと分かったら `RotashFeatureFlags.shareCardFormat` を `.story` に変える。
+/// 組むのは横長 1920 × 1080 の7分割 —— 撮影画面と同じ並び。
+/// それを**中身に一切手を入れず、反時計まわりに90度倒して** 1080 × 1920 で書き出す。
+///
+/// 7枚を積み直して縦組みにすると1枠あたりの写真は多く見えるが、並びが画面と別物になり、
+/// 受け取った人が画像とアプリを結びつけられない。倒すだけなら並びは画面のままで、
+/// しかも縦のフィードで大きく表示される。器と中身を別々に決められる。
+///
+/// 積み直した縦のほうがよいと分かったら
+/// `RotashFeatureFlags.shareCardFormat` を `.story` に変える。
+/// 倒さず横長のまま出したくなったら、`Layout.rotates` を false にする。
 ///
 /// # 何を足して、何を足さないか
 ///
@@ -70,9 +78,17 @@ enum WorkExporter {
 
         let layout = Layout(format: RotashFeatureFlags.shareCardFormat)
 
-        return UIGraphicsImageRenderer(size: layout.size, format: format).image { _ in
+        return UIGraphicsImageRenderer(size: layout.output, format: format).image { context in
+            // 倒すのは座標系だけ。以降の描画は、横長のときと1ピクセルも変わらない。
+            // 出来上がった画像を回すのではなく最初から回した座標系に描くので、
+            // 文字も写真も倒したあとの解像度で描かれる（描き直しによる劣化が無い）。
+            if layout.rotates {
+                context.cgContext.translateBy(x: 0, y: layout.output.height)
+                context.cgContext.rotate(by: -.pi / 2)
+            }
+
             UIColor.rotashBackground.setFill()
-            UIRectFill(CGRect(origin: .zero, size: layout.size))
+            UIRectFill(CGRect(origin: .zero, size: layout.canvas))
             drawHeader(week: week, layout: layout)
             drawFrames(week: week, group: group, now: now, layout: layout)
             drawFooter(week: week, layout: layout)
@@ -85,7 +101,15 @@ enum WorkExporter {
     /// 描画の手続きは横でも縦でも同じで、違うのは「枠をどう並べるか」だけにする。
     private struct Layout {
         let format: ShareCardFormat
-        let size: CGSize
+        /// 組み立てるときの座標系の大きさ。描画のコードはすべてこの中で考える。
+        let canvas: CGSize
+        /// 描いたものを反時計まわりに90度倒すか。
+        /// false にすれば、組んだままの横長で書き出される。
+        let rotates: Bool
+        /// 書き出される画像の大きさ。倒す場合は縦横が入れ替わる。
+        var output: CGSize {
+            rotates ? CGSize(width: canvas.height, height: canvas.width) : canvas
+        }
         /// 枠の並ぶ領域。
         let frames: CGRect
         /// 文字まわりの余白。
@@ -107,7 +131,9 @@ enum WorkExporter {
             switch format {
             case .screen:
                 // 画面と同じく、7分割は左右いっぱいまで使う（端の余白を作らない）。
-                size = CGSize(width: 1920, height: 1080)
+                // 組むのは横長。書き出しはこれを倒した 1080 × 1920 になる。
+                canvas = CGSize(width: 1920, height: 1080)
+                rotates = true
                 frames = CGRect(x: 0, y: 96, width: 1920, height: 876)
                 margin = 36
                 gap = 3
@@ -118,7 +144,8 @@ enum WorkExporter {
                 labelInset = 26
                 liveBar = 5
             case .story:
-                size = CGSize(width: 1080, height: 1920)
+                canvas = CGSize(width: 1080, height: 1920)
+                rotates = false
                 frames = CGRect(x: 24, y: 160, width: 1032, height: 1579)
                 margin = 24
                 gap = 3
@@ -168,14 +195,14 @@ enum WorkExporter {
 
             // 画面ではヘッダーと7分割のあいだに細い線が1本ある。
             UIColor.rotashLine.setFill()
-            UIRectFill(CGRect(x: 0, y: layout.frames.minY - 1, width: layout.size.width, height: 1))
+            UIRectFill(CGRect(x: 0, y: layout.frames.minY - 1, width: layout.canvas.width, height: 1))
 
         case .story:
             draw("THIS WEEK", at: CGPoint(x: layout.margin, y: 52),
                  size: layout.headline, weight: .semibold, color: .rotashText, tracking: 6)
             draw(week.dateRange, at: CGPoint(x: layout.margin, y: 100),
                  size: layout.caption, color: .rotashFaint, tracking: 3)
-            drawRightAligned(counter(week), rightEdge: layout.size.width - layout.margin, y: 100,
+            drawRightAligned(counter(week), rightEdge: layout.canvas.width - layout.margin, y: 100,
                              size: layout.caption, color: .rotashDim, tracking: 3)
         }
     }
@@ -318,7 +345,7 @@ enum WorkExporter {
                      tracking: 1, monospaced: false)
             }
             // 画面に唯一足りないもの。「THIS WEEK」は検索できない。
-            drawRightAligned("ROTASH", rightEdge: layout.size.width - layout.margin, y: baseline + 4,
+            drawRightAligned("ROTASH", rightEdge: layout.canvas.width - layout.margin, y: baseline + 4,
                              size: 26, weight: .bold, color: .rotashText, tracking: 9)
 
         case .story:

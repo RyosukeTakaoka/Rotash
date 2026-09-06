@@ -1,5 +1,27 @@
 import Foundation
 
+/// 種を渡すと、どの端末で回しても同じ並びを返す乱数生成器（SplitMix64）。
+///
+/// 担当決めに `SystemRandomNumberGenerator` を使うと、同じメンバー・同じ週でも
+/// 端末ごとに違う並びが出る。各端末が「自分の考えた並び」を持ったまま同期を待つので、
+/// そのあいだ全員が「今日は自分の担当だ」と思い込み、同じ日を2人で撮ってしまう。
+/// 担当は「みんなで1つ」でなければならないので、計算そのものを端末非依存にする。
+struct RotashSeededGenerator: RandomNumberGenerator {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        self.state = seed
+    }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
+    }
+}
+
 /// 担当者の決め方。
 ///
 /// 完全ランダムでも単純ローテーションでもなく、「公平性を保証した上でランダム」にする。
@@ -111,6 +133,30 @@ enum AssignmentPlanner {
 
         return result
     }
+
+    /// 担当決めの種。
+    ///
+    /// 同じグループ・同じ週・同じメンバーであれば、どの端末で作っても必ず同じ値になる。
+    /// これを `RotashSeededGenerator` に渡すことで、担当の決定が端末に依存しなくなる。
+    ///
+    /// - Parameter salt: 同じ週の中で別の計算をしたいときの区別（途中参加の組み替えなど）。
+    static func seed(groupID: UUID,
+                     weekStart: Date,
+                     memberIDs: [UUID],
+                     salt: String = "") -> UInt64 {
+        var text = groupID.uuidString
+        text += "|\(Int(weekStart.timeIntervalSince1970))"
+        for id in memberIDs.map(\.uuidString).sorted() { text += "|\(id)" }
+        if !salt.isEmpty { text += "|\(salt)" }
+
+        // FNV-1a。暗号用途ではないので、端末をまたいで同じ値になれば足りる。
+        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+        for byte in text.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01B3
+        }
+        return hash
+    }
 }
 
 /// 週そのものに担当者を書き込む係。AssignmentPlanner を Rotash の型に橋渡しするだけ。
@@ -119,15 +165,22 @@ enum WeekPlanner {
     /// - Parameters:
     ///   - days: 割り当て直したい曜日。nil ならその週の全部。
     ///           メンバーが増えたときに「まだ公開していない未来の日」だけ組み替える用途で使う。
+    ///   - seed: 渡すと、同じ入力からは必ず同じ担当表が出る（端末をまたいでも一致する）。
+    ///           nil なら従来どおり毎回ランダム。
     static func planned(week: RotashWeek,
                         memberIDs: [UUID],
                         history: [UUID: Int],
                         previousWeek: RotashWeek?,
                         days: [Int]? = nil,
-                        firstDayPriority: UUID? = nil) -> RotashWeek {
+                        firstDayPriority: UUID? = nil,
+                        seed: UInt64? = nil) -> RotashWeek {
         var updated = week
         let targetDays = (days ?? week.dayIndices).sorted()
-        guard !memberIDs.isEmpty, !targetDays.isEmpty else { return updated }
+
+        // メンバーの並び順は端末ごとに違う（同期のマージで足された順が違うため）。
+        // 並び順で結果が変わってしまうと種を揃えても一致しないので、必ず整列してから計算する。
+        let orderedIDs = memberIDs.sorted { $0.uuidString < $1.uuidString }
+        guard !orderedIDs.isEmpty, !targetDays.isEmpty else { return updated }
 
         // 連続担当を避けるための「前の日の担当者」。
         // 同じ週の中に前日があればそれを、週の頭なら前週の最終日を見る。
@@ -138,12 +191,24 @@ enum WeekPlanner {
             previousDayAssignee = previousWeek?.lastAssignee
         }
 
-        let plan = AssignmentPlanner.plan(memberIDs: memberIDs,
+        let plan: [Int: UUID]
+        if let seed {
+            var generator = RotashSeededGenerator(seed: seed)
+            plan = AssignmentPlanner.plan(memberIDs: orderedIDs,
+                                          dayIndices: targetDays,
+                                          history: history,
+                                          previousPattern: previousWeek?.assignments ?? [:],
+                                          previousDayAssignee: previousDayAssignee,
+                                          firstDayPriority: firstDayPriority,
+                                          using: &generator)
+        } else {
+            plan = AssignmentPlanner.plan(memberIDs: orderedIDs,
                                           dayIndices: targetDays,
                                           history: history,
                                           previousPattern: previousWeek?.assignments ?? [:],
                                           previousDayAssignee: previousDayAssignee,
                                           firstDayPriority: firstDayPriority)
+        }
 
         let decidedAt = Date()
         for (day, memberID) in plan {

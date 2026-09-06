@@ -173,7 +173,7 @@ final class AppViewModel: ObservableObject {
             inviteCode: normalized,
             members: [me],
             myMemberID: me.id,
-            currentWeek: Self.makeFirstWeek(memberIDs: [me.id])
+            currentWeek: Self.makeJoiningWeek(memberID: me.id)
         )
         group = newGroup
         persist()
@@ -189,10 +189,46 @@ final class AppViewModel: ObservableObject {
         }
     }
 
-    /// 同期で受け取ったメンバー一覧に自分が居なかった場合に、自分を今週へ入れる。
+    /// 参加した直後の、まだ誰とも突き合わせていない週。
+    ///
+    /// ここで担当を「確定」させてはいけない。
+    /// 参加した端末はまだ他のメンバーを一人も知らないので、素直に計算すると
+    /// 「今日から日曜まで全部自分の担当」という週ができあがる。
+    /// それを確定した担当（= assignedAt を持つ）として作ってしまうと、同期のマージが
+    /// 「あとから決まった方が勝つ」ルールなので、サーバー上の本当の担当を上書きしてしまう。
+    /// 参加した人数だけ上書きが起きるため、全員が「今日は自分の担当」と表示される。
+    ///
+    /// そこで assignedAt を付けない = **仮の担当**という印にする。
+    /// 仮の担当は、本物の担当（assignedAt を持つ）にマージで必ず負ける。
+    /// まだ誰とも繋がれていないあいだ（同期未設定・通信失敗）だけ、この仮の担当で撮れる。
+    private static func makeJoiningWeek(memberID: UUID, now: Date = Date()) -> RotashWeek {
+        let weekStart = Calendar.startOfWeek(for: now)
+        let today = Calendar.dayIndex(for: now, weekStart: weekStart)
+        var week = RotashWeek.starting(atDayIndex: today, startDate: weekStart)
+        for index in week.slots.indices {
+            week.slots[index].assigneeID = memberID
+            week.slots[index].assignedAt = nil
+        }
+        return week
+    }
+
+    /// 受け取ったメンバー一覧に自分が居なかった場合に、自分を今週へ入れる。
+    /// 同期のあと、バトンを受け取ったあとに呼ぶ。
     private func joinCurrentWeekIfPossible() {
         guard var current = group, let me = current.me else { return }
-        let hasTurnThisWeek = current.currentWeek.slots.contains { $0.assigneeID == me.id }
+
+        // まだ自分ひとりしか知らない = 相手の状態を一度も受け取れていない
+        // （同期が未設定、通信に失敗した、招待コードのデータがまだ無い）。
+        // この状態で担当を確定させると、あとから届いた本物の担当を
+        // 「こちらの方が新しい」という理由で上書きしてしまう。仮のまま待つ。
+        guard current.members.count > 1 else { return }
+
+        // 仮の担当（assignedAt が無い）は自分の枠として数えない。
+        // 数えてしまうと、参加した瞬間に自分で置いた仮の担当のせいで
+        // 「もう今週の担当を持っている」と誤判定し、本当の割り当てが一度も走らなくなる。
+        let hasTurnThisWeek = current.currentWeek.slots.contains {
+            $0.assigneeID == me.id && $0.assignedAt != nil
+        }
         guard !hasTurnThisWeek else { return }
         replanFutureDays(&current, joining: me.id)
         group = current
@@ -240,12 +276,18 @@ final class AppViewModel: ObservableObject {
             if let id = slot.assigneeID { history[id, default: 0] += 1 }
         }
 
+        let memberIDs = current.members.map(\.id)
         current.currentWeek = WeekPlanner.planned(week: current.currentWeek,
-                                                  memberIDs: current.members.map(\.id),
+                                                  memberIDs: memberIDs,
                                                   history: history,
                                                   previousWeek: current.archive.first,
                                                   days: futureDays,
-                                                  firstDayPriority: newMemberID)
+                                                  firstDayPriority: newMemberID,
+                                                  seed: AssignmentPlanner.seed(
+                                                      groupID: current.id,
+                                                      weekStart: current.currentWeek.startDate,
+                                                      memberIDs: memberIDs,
+                                                      salt: "join.\(newMemberID?.uuidString ?? "-")"))
     }
 
     func deleteRotash() {
@@ -376,10 +418,19 @@ final class AppViewModel: ObservableObject {
         }
 
         // 週途中スタートだった初回の翌週からは、通常どおり月曜〜日曜の 7 枚に戻る。
+        //
+        // 種を渡して端末に依存しない計算にする。週送りは各端末がそれぞれ勝手に走らせるので、
+        // ランダムだと端末ごとに違う担当表ができ、同期が届くまでのあいだ
+        // 全員が「今日は自分の担当」と表示されてしまう（そして同じ日を2人で撮る）。
+        let memberIDs = current.members.map(\.id)
         current.currentWeek = WeekPlanner.planned(week: .full(startDate: start),
-                                                  memberIDs: current.members.map(\.id),
+                                                  memberIDs: memberIDs,
                                                   history: history,
-                                                  previousWeek: finished)
+                                                  previousWeek: finished,
+                                                  seed: AssignmentPlanner.seed(
+                                                      groupID: current.id,
+                                                      weekStart: start,
+                                                      memberIDs: memberIDs))
         group = current
         persist()
     }
@@ -409,7 +460,11 @@ final class AppViewModel: ObservableObject {
                                        memberIDs: memberIDs,
                                        history: history,
                                        previousWeek: current.archive.first,
-                                       days: openDays)
+                                       days: openDays,
+                                       seed: AssignmentPlanner.seed(groupID: current.id,
+                                                                    weekStart: week.startDate,
+                                                                    memberIDs: memberIDs,
+                                                                    salt: "migrate"))
         }
 
         current.currentWeek = week
@@ -444,6 +499,10 @@ final class AppViewModel: ObservableObject {
         group = RotashMerge.merge(local: current, remote: incoming)
         rollWeekIfNeeded()
         persist()
+        // バトンで初めて相手を知った場合も、参加者として今週の残りに入れる。
+        // 同期で参加したときと同じ扱いにしておかないと、
+        // バトンで来た人だけ仮の担当のまま取り残される。
+        joinCurrentWeekIfPossible()
     }
 
     // MARK: - サーバー同期

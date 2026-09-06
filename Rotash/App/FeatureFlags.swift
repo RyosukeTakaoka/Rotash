@@ -15,6 +15,15 @@ enum RotashFeatureFlags {
     /// true にすると、過去の自分の当番日をあとから撮って埋められるようになる。
     static let allowCatchUpShooting = false
 
+    /// 共有画像の形。
+    ///
+    /// いまは `.screen`（撮影画面と同じ横長の7分割）。
+    /// 受け取った人が画像とアプリを結びつけられることを、写真の写る量より優先している。
+    ///
+    /// 「縦長の枠に撮るより横長7分割のほうがよい」というフィードバックが固まったら、
+    /// `.story`（9:16 の縦）に変える。描画はどちらも同じ手続きなので、この1行で入れ替わる。
+    static let shareCardFormat: ShareCardFormat = .screen
+
     /// 検証中のビルドかどうか。TestFlight と開発ビルドで true、App Store 版では false。
     ///
     /// 「動きを確かめるための仕掛け」は、確かめている間しか要らない。

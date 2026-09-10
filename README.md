@@ -34,6 +34,11 @@ App Store 公開版ではなく、実際に友人と使って体験価値を検�
 > 世界7,000万人の共有カレンダー「TimeTree」——Rotashに最も構造が近い事例——
 > との比較は [`docs/TIMETREE_GROWTH_CASE_STUDY.md`](docs/TIMETREE_GROWTH_CASE_STUDY.md)。
 > 「なぜRotashは人数上限を外さないのか」を他社事例で説明できるようになる。
+>
+> B2B SaaS「Miro」のProduct-Led Growth戦略との比較は
+> [`docs/MIRO_GROWTH_CASE_STUDY.md`](docs/MIRO_GROWTH_CASE_STUDY.md)。
+> 法人・団体への展開は「代表者を口説く」より先に「言い出しっぺ経由で自然発生させる」
+> べき理由がここにある。
 
 ---
 

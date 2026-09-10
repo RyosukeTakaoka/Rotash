@@ -25,6 +25,11 @@ App Store 公開版ではなく、実際に友人と使って体験価値を検�
 > 「若者のこういう欲求に応えたい」と思ったときは
 > [`docs/YOUTH_NEEDS.md`](docs/YOUTH_NEEDS.md)。
 > 空いている層は2つしかなく、他は既に埋まっている。
+>
+> 累計1,400万人のヘルスケアアプリ「あすけん」の成長施策から、
+> Rotashにそのまま使えるもの・使えないものを切り分けた資料は
+> [`docs/ASKEN_GROWTH_CASE_STUDY.md`](docs/ASKEN_GROWTH_CASE_STUDY.md)。
+> `GROWTH_STRATEGY.md` セクションHの追補。
 
 ---
 

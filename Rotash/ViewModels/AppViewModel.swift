@@ -156,6 +156,7 @@ final class AppViewModel: ObservableObject {
         group = newGroup
         persist()
         prepareNotifications()
+        AnalyticsService.groupCreated(fromOriginGroup: newGroup.originGroupID != nil)
     }
 
     /// 最初の週。週の途中で始めた場合は、その日から日曜までを 1 つの作品にする。
@@ -187,6 +188,7 @@ final class AppViewModel: ObservableObject {
         persist()
         pendingJoinCode = nil
         prepareNotifications()
+        AnalyticsService.groupJoined()
 
         // 同期が有効なら、招待コードだけで今週の作品とメンバーが揃う。
         // 未設定のときはバトンを受け取るまでローカルのまま。
@@ -253,6 +255,7 @@ final class AppViewModel: ObservableObject {
         // 途中参加でも今週から作品づくりに参加してもらう。未来の枠の組み直しは検査が行う。
         applyAudit()
         persist()
+        AnalyticsService.memberAdded(memberCount: current.members.count)
         Task { await sync() }
     }
 
@@ -361,6 +364,7 @@ final class AppViewModel: ObservableObject {
         current.currentWeek.slots[index].takenByMemberID = current.myMemberID
         group = current
         persist()
+        AnalyticsService.photoCaptured(filledCount: current.currentWeek.filledCount)
 
         // 撮ったらすぐ他の人に届くように同期する。失敗しても写真は手元に残る。
         Task { await sync() }
@@ -381,6 +385,12 @@ final class AppViewModel: ObservableObject {
 
         if finished.filledCount > 0 {
             current.archive.insert(finished, at: 0)
+        }
+        if finished.isComplete {
+            AnalyticsService.weekCompleted(
+                memberCount: current.members.count,
+                isFirstWeek: current.archive.count == 1
+            )
         }
 
         // 週途中スタートだった初回の翌週からは、通常どおり月曜〜日曜の 7 枚に戻る。

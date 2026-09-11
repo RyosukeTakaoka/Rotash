@@ -1,17 +1,31 @@
 # Xcode 16 未満などで Rotash.xcodeproj が開けない場合の予備。
 #   brew install xcodegen && xcodegen generate
+#
+# Firebase SDK（Analytics）は、通常は Xcode の File > Add Package Dependencies
+# から追加する運用を想定している（docs/ANALYTICS_SETUP.md 参照）。
+# ここに書いてあるのは、xcodegen generate で作り直した場合にも
+# 同じ依存関係が再現されるようにするための記録。
 name: Rotash
 options:
   bundleIdPrefix: com.rotash
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
+packages:
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    from: 11.0.0
 targets:
   Rotash:
     type: application
     platform: iOS
     sources:
       - path: Rotash
+    dependencies:
+      - package: Firebase
+        product: FirebaseCore
+      - package: Firebase
+        product: FirebaseAnalytics
     settings:
       base:
         INFOPLIST_FILE: Supporting/Info.plist

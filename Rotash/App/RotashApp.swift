@@ -1,9 +1,14 @@
+import FirebaseCore
 import SwiftUI
 
 @main
 struct RotashApp: App {
 
     @StateObject private var app = AppViewModel()
+
+    init() {
+        FirebaseApp.configure()
+    }
 
     var body: some Scene {
         WindowGroup {

@@ -53,6 +53,9 @@ App Store 公開版ではなく、実際に友人と使って体験価値を検�
 > 「現金掛け値なし」（単体の発明ではなく相互依存する仕組み）から逆算した資料は
 > [`docs/DEFENSIBILITY.md`](docs/DEFENSIBILITY.md)。5つの防御層と、
 > 20グループ実験を「市場発見」に組み替える提案を扱う。
+>
+> Firebase Analyticsを導入した（無料）。イベント名の一覧とFirebaseコンソール側の
+> セットアップ手順は [`docs/ANALYTICS_SETUP.md`](docs/ANALYTICS_SETUP.md)。
 
 ---
 

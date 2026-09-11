@@ -8,9 +8,14 @@ struct SharePayload: Identifiable {
 
 struct ActivityView: UIViewControllerRepresentable {
     let items: [Any]
+    var onComplete: ((Bool) -> Void)? = nil
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, completed, _, _ in
+            onComplete?(completed)
+        }
+        return controller
     }
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
@@ -81,13 +86,18 @@ struct WorkShareButton<Label: View>: View {
             guard let group = app.group,
                   let image = WorkExporter.shareCardURL(for: week, in: group)
             else { return }
+            AnalyticsService.workShareTapped(filledCount: week.filledCount, isComplete: week.isComplete)
             payload = SharePayload(items: [image])
         } label: {
             label()
         }
         .buttonStyle(.plain)
         .sheet(item: $payload) { payload in
-            ActivityView(items: payload.items)
+            ActivityView(items: payload.items) { completed in
+                if completed {
+                    AnalyticsService.workShareCompleted(isComplete: week.isComplete)
+                }
+            }
         }
     }
 }
@@ -110,6 +120,7 @@ struct InviteShareButton<Label: View>: View {
     var body: some View {
         Button {
             guard let group = app.group else { return }
+            AnalyticsService.inviteShareTapped()
             // 招待コードは文章の中に入れる。リンクが押せない相手（アプリ未導入・
             // 独自スキームを繋がない LINE など）でも、これなら手で入力して入れる。
             var items: [Any] = ["この1週間、一緒に1枚にしない？\n招待コード \(group.inviteCode)"]

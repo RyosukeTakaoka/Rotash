@@ -44,6 +44,10 @@ App Store 公開版ではなく、実際に友人と使って体験価値を検�
 > [`docs/LOCKET_GROWTH_CASE_STUDY.md`](docs/LOCKET_GROWTH_CASE_STUDY.md)。
 > ウィジェット配信・TikTok種まき・友達上限の可変性——**真似るべきでない理由**を
 > 具体的に説明している。
+>
+> Uber・Slack・BeRealのような「フレームチェンジ（前提の再定義）」をRotash自身の
+> 獲得導線に当てはめた提案は [`docs/FRAME_CHANGE_STRATEGY.md`](docs/FRAME_CHANGE_STRATEGY.md)。
+> 「7人全員がアプリをインストールする」という前提をゼロにできないか、を扱う。
 
 ---
 

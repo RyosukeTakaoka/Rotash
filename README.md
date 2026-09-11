@@ -34,6 +34,20 @@ App Store 公開版ではなく、実際に友人と使って体験価値を検�
 > 世界7,000万人の共有カレンダー「TimeTree」——Rotashに最も構造が近い事例——
 > との比較は [`docs/TIMETREE_GROWTH_CASE_STUDY.md`](docs/TIMETREE_GROWTH_CASE_STUDY.md)。
 > 「なぜRotashは人数上限を外さないのか」を他社事例で説明できるようになる。
+>
+> B2B SaaS「Miro」のProduct-Led Growth戦略との比較は
+> [`docs/MIRO_GROWTH_CASE_STUDY.md`](docs/MIRO_GROWTH_CASE_STUDY.md)。
+> 法人・団体への展開は「代表者を口説く」より先に「言い出しっぺ経由で自然発生させる」
+> べき理由がここにある。
+>
+> 8,000万DLの「Locket Widget」の深掘り（`GROWTH_STRATEGY.md` H-2の続き）は
+> [`docs/LOCKET_GROWTH_CASE_STUDY.md`](docs/LOCKET_GROWTH_CASE_STUDY.md)。
+> ウィジェット配信・TikTok種まき・友達上限の可変性——**真似るべきでない理由**を
+> 具体的に説明している。
+>
+> Uber・Slack・BeRealのような「フレームチェンジ（前提の再定義）」をRotash自身の
+> 獲得導線に当てはめた提案は [`docs/FRAME_CHANGE_STRATEGY.md`](docs/FRAME_CHANGE_STRATEGY.md)。
+> 「7人全員がアプリをインストールする」という前提をゼロにできないか、を扱う。
 
 ---
 

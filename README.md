@@ -48,6 +48,11 @@ App Store 公開版ではなく、実際に友人と使って体験価値を検�
 > Uber・Slack・BeRealのような「フレームチェンジ（前提の再定義）」をRotash自身の
 > 獲得導線に当てはめた提案は [`docs/FRAME_CHANGE_STRATEGY.md`](docs/FRAME_CHANGE_STRATEGY.md)。
 > 「7人全員がアプリをインストールする」という前提をゼロにできないか、を扱う。
+>
+> 「競合に完全コピーされても、それでも勝てる構造」を三井越後屋の
+> 「現金掛け値なし」（単体の発明ではなく相互依存する仕組み）から逆算した資料は
+> [`docs/DEFENSIBILITY.md`](docs/DEFENSIBILITY.md)。5つの防御層と、
+> 20グループ実験を「市場発見」に組み替える提案を扱う。
 
 ---
 

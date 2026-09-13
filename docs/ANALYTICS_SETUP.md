@@ -105,13 +105,68 @@ DebugViewを使う。
 
 ---
 
-## 5. 今後の運用について
+## 5. App Store Connect側で必要になる設定
+
+Firebase Analyticsを追加すると、**2つの別々の仕組み**でプライバシー対応が必要になる。
+混同しやすいので分けて説明する。
+
+### 5-1. Privacy Manifest（`PrivacyInfo.xcprivacy`）— コードレベルの申告
+
+Appleは2024年5月以降、`UserDefaults`のような「Required Reason API」を使うアプリに、
+その理由をアプリ自身の`PrivacyInfo.xcprivacy`で申告するよう義務付けている。
+
+**Firebase SDK自身が使うAPIは、Firebase側が自分のマニフェストを既に同梱しているため
+対応不要。** ただし、**Rotash自身のコード**（`AppViewModel.swift`が
+`UserDefaults.standard.set`を直接呼んでいる）は対象で、これはFirebase追加とは無関係に
+以前から必要だった申告である。今回、`Rotash/Resources/PrivacyInfo.xcprivacy`を
+新規作成し、理由コード**`CA92.1`**（自分のアプリだけがアクセスする設定値の読み書き）を
+申告済み。新しいファイルなのでXcodeでの追加作業は不要（`Rotash/`配下はファイルシステム
+同期グループのため、追加するだけで自動的にターゲットに含まれる）。
+
+### 5-2. App Store Connectの「App Privacy」（プライバシー"栄養成分表示"）— 手動の申告
+
+これは`.xcprivacy`ファイルとは別物で、**App Store Connectの管理画面で手作業で
+回答するアンケート**。App Store公開ページに表示される、あの表のことである。
+
+Firebase Analyticsを追加すると、一般的に次のような申告が必要になる
+（Google公式ガイド[Prepare for Apple's App Store data disclosure requirements](https://firebase.google.com/docs/ios/app-store-data-collection)に
+最新の対応表がある。**このページを直接確認してから回答すること**。この文書を書いた
+時点ではネットワーク制限により当該ページを直接開けなかったため、正確な最新表現は
+必ず公式ページで確認してほしい）：
+
+| データ種別 | 目的 | 備考 |
+|---|---|---|
+| 識別子（デバイスID相当） | 分析（Analytics） | Firebaseの「App Instance ID」がこれに該当 |
+| 使用状況データ（製品とのやり取り） | 分析（Analytics） | どの画面・操作が行われたか |
+
+**トラッキング（Appleが定義する意味でのTracking）には該当しない。**
+Rotashは広告SDK（Google Mobile Ads等）を導入しておらず、広告IDを収集する設定もしていない。
+Apple ATT（App Tracking Transparencyのポップアップ）は、**他社アプリ・Webサイトを
+横断してユーザーを追跡する場合**にのみ必要で、自社アプリの利用状況を見るだけの
+Firebase Analyticsは対象外である。**`NSUserTrackingUsageDescription`の追加や
+ATT許諾ダイアログの実装は不要。**
+
+### 5-3. プライバシーポリシーのURL
+
+App Store Connectでアプリ情報を登録する際、データを収集するアプリには
+**プライバシーポリシーのURL**の入力が必須になる。現時点（TestFlight配布前）では
+急ぎではないが、実際に配布する段階では必要になる。
+
+### 5-4. 今すぐやる必要があるか
+
+**いいえ。** これらはすべて「App Store Connectで審査に出す・TestFlightで
+社外の人に配布する」段階で必要になるものであり、**今のように自分の端末で
+ビルド・実行して試すだけの段階では一切関係ない。**
+
+---
+
+## 6. 今後の運用について
 
 - 追加したイベントと、それが`docs/DEFENSIBILITY.md` §4のどの指標に対応するかは
   `Services/Analytics/AnalyticsService.swift`のコメントを参照
 - 新しいイベントを増やしたくなったら、**まず「それがK-3のどの指標に効くか」を
   先に言葉にしてから追加する**（`AnalyticsService.swift`冒頭のコメントの通り）。
   目的のないイベントを増やすと、後で何を見ればいいか分からなくなる
-- App Store提出前に、Firebase Analyticsが要求するプライバシー関連の申告
-  （トラッキングの有無等）を`PrivacyInfo.xcprivacy`に反映する必要があるかもしれない。
-  現時点（TestFlight配布前）では対応不要
+- 配布段階が近づいたら、§5-2の申告内容をGoogle公式ページで再確認し、
+  `PrivacyInfo.xcprivacy`の`NSPrivacyCollectedDataTypes`（現在は空のまま）も
+  合わせて埋める

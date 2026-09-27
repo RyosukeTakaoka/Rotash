@@ -106,7 +106,8 @@ Rotash は「自分の担当日に写真を投稿するアプリ」ではあり�
 | 1 | Rotash 作成（自分の名前 → 招待コード生成） | `Views/Portrait/CreateRotashView.swift`, `InviteCodeView.swift` |
 | 2 | 招待コードで参加（入れた人がそのままメンバーになる） | `Views/Portrait/JoinRotashView.swift` |
 | 3 | 横向き THIS WEEK（7分割・埋まっていく） | `Views/Landscape/ThisWeekView.swift` |
-| 4 | 撮影（横向き写真を担当枠へ保存、前面/背面切替） | `Services/CameraController.swift` |
+| 4 | 撮影（横向き写真を担当枠へ保存、前面/背面切替、外カメは超広角） | `Services/CameraController.swift` |
+| 4b | Rotash レンズ（細い枠に広い範囲を収める表示。実験中） | `Services/RotashLens.swift`, `Views/Components/LensView.swift` |
 | 5 | 完成作品表示（7枚そろうと SHARE が出る） | `ThisWeekView.swift` |
 | 6 | Memories（過去作品の積層・詳細） | `PortraitHomeView.swift`, `MemoryDetailView.swift` |
 | 7 | Share（9:16 の1枚） | `Services/WorkExporter.swift` |
@@ -134,6 +135,22 @@ Rotash は「自分の担当日に写真を投稿するアプリ」ではあり�
 （`Services/CameraController.swift` の `switchCamera()`）。
 7分割の枠は横に狭く、隅に小さなボタンを置くと押しづらいので、
 シャッターと同じ列に 44pt 以上のタップ領域で置いています。
+
+**超広角（外カメ）**: 外カメは 0.5倍の超広角レンズがあればそちらを使います
+（`CameraController.device(for:)`）。超広角の無い機種と内カメは従来どおりの広角です。
+`RotashFeatureFlags.prefersUltraWideBackCamera` を `false` にすると元に戻ります。
+
+**Rotash レンズ（実験中）**: 7分割の細い枠は、4:3 の写真の横幅を約8割捨てています。
+そこで写真を細い短冊に切り、**真ん中はそのまま・端ほど横に縮めて**並べ直し、
+同じ枠により広い範囲を収めます（`Services/RotashLens.swift`）。縦方向には手を入れないので、
+縦の線はまっすぐのままです。
+
+- **写真ファイルは加工しません。** かけるのは表示のときだけ（ライブビュー・7分割・共有画像 `.screen`）。
+  Memories の 4:3 表示では、撮った写真の全体が自然なまま見えます
+- 広げ具合は `RotashFeatureFlags.lensWidening`（既定 2.0 = 枠に2倍の横幅）。1.0 で従来どおり
+- 検証用ビルドでは、設定画面の「レンズ」で **普通 / 弱 / 中 / 強** を端末ごとに切り替えて見くらべられます
+- ライブビューは普通のプレビューレイヤーではなく、映像を1コマずつ受け取って
+  短冊状のレイヤー（`Views/Components/LensView.swift`）に並べています
 
 **撮り直し**: 現状は仮で **無効**（一度撮ると確定、上書きはできない）。
 撮影回数の表示・フィルター・編集・AI加工もありません。

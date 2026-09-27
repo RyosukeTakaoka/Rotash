@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var confirmDelete = false
     @State private var showImporter = false
     @State private var batonPayload: SharePayload?
+    @AppStorage(RotashLens.storageKey) private var lensWidening = RotashFeatureFlags.lensWidening
 
     var body: some View {
         ZStack {
@@ -46,6 +47,10 @@ struct SettingsView: View {
                                 .rotashLabel(9, color: Palette.faint, tracking: 0.4)
                                 .lineSpacing(4)
                         }
+
+                        HairLine()
+
+                        lensBlock
 
                         HairLine()
                     }
@@ -142,6 +147,25 @@ struct SettingsView: View {
                     .rotashLabel(9, color: Palette.faint, tracking: 0.4)
                     .lineSpacing(3)
             }
+        }
+    }
+
+    /// Rotash レンズの広げ具合を見くらべるための切り替え。検証用ビルドだけに出す。
+    /// 写真ファイルは加工していないので、切り替えるとこれまでの写真の見え方も一緒に変わる。
+    private var lensBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("レンズ").rotashLabel(11, color: Palette.text, tracking: 1)
+
+            Picker("レンズ", selection: $lensWidening) {
+                ForEach(RotashLens.presets, id: \.self) { preset in
+                    Text(preset.label).tag(preset.widening)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Text("細い枠に、どれだけ横に広く写すか。真ん中はそのまま、端ほど横に縮みます。「普通」はこれまでと同じ見え方です。")
+                .rotashLabel(9, color: Palette.faint, tracking: 0.4)
+                .lineSpacing(4)
         }
     }
 

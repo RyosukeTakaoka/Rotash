@@ -12,6 +12,10 @@ struct ThisWeekView: View {
     @State private var isCapturing = false
     @State private var flashOpacity: Double = 0
     @State private var draftTitle = ""
+    /// 検証用ビルドで設定画面から変えた Rotash レンズの広げ具合。
+    @AppStorage(RotashLens.storageKey) private var storedLensWidening = RotashFeatureFlags.lensWidening
+
+    private var lensWidening: Double { RotashLens.resolve(stored: storedLensWidening) }
 
     private var week: RotashWeek? { app.group?.currentWeek }
 
@@ -194,7 +198,8 @@ struct ThisWeekView: View {
                 // 撮影中／撮り直し中は自分の写真より優先してライブビューを見せる。
                 liveContent
             } else if slot.isFilled {
-                PhotoImageView(slot: slot)
+                // ライブビューと同じレンズをかける。撮るときに見えた絵のまま枠に残る。
+                PhotoImageView(slot: slot, lensWidening: lensWidening)
             } else {
                 Palette.surface
             }
@@ -254,7 +259,11 @@ struct ThisWeekView: View {
     private var liveContent: some View {
         switch camera.status {
         case .ready:
-            CameraPreview(controller: camera)
+            if lensWidening > 1 {
+                LensCameraPreview(controller: camera, widening: lensWidening)
+            } else {
+                CameraPreview(controller: camera)
+            }
         case .denied:
             ZStack {
                 Palette.surfaceDeep

@@ -249,11 +249,17 @@ enum WorkExporter {
 
         // 写真は枠いっぱいに収める（画面の PhotoImageView と同じ scaledToFill）。
         // 横長の枠は画面とほぼ同じ比率なので、切れ方も画面で見たときと同じになる。
+        // 画面と同じ並び（.screen）のときは、画面と同じ Rotash レンズもかける。
         if let image = photo(for: slot),
            let context = UIGraphicsGetCurrentContext() {
             context.saveGState()
             context.clip(to: rect)
-            image.draw(in: aspectFillRect(imageSize: image.size, in: rect))
+            let widening = RotashLens.widening
+            let drewWithLens = layout.format == .screen && widening > 1
+                && RotashLens.draw(image, in: rect, widening: widening)
+            if !drewWithLens {
+                image.draw(in: aspectFillRect(imageSize: image.size, in: rect))
+            }
             context.restoreGState()
         } else if week.state(of: slot, now: now) == .noShot {
             // 撮られないまま終わった日。失敗ではなく作品上の状態なので、静かに置く。

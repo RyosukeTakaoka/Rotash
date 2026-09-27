@@ -1,5 +1,6 @@
 import AVFoundation
 import UIKit
+import VideoToolbox
 
 /// 7 分割の枠の中だけにプレビューを出すためのカメラ。
 /// 通常のカメラ UI（全画面プレビュー＋確認画面）は意図的に作らない。
@@ -20,10 +21,15 @@ final class CameraController: NSObject, ObservableObject {
 
     private let sessionQueue = DispatchQueue(label: "com.rotash.camera.session")
     private let output = AVCapturePhotoOutput()
+    /// Rotash レンズのライブビュー用に、映像を1コマずつ受け取る出口。
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private let videoQueue = DispatchQueue(label: "com.rotash.camera.video")
     private var device: AVCaptureDevice?
     private var currentInput: AVCaptureDeviceInput?
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
     private var rotationObservation: NSKeyValueObservation?
+    /// レンズ表示では普通のプレビューレイヤーを使わないので、撮影側の向きも直接見張る。
+    private var captureRotationObservation: NSKeyValueObservation?
     private var isConfigured = false
     private var captureCompletion: ((Data?) -> Void)?
 
@@ -31,6 +37,18 @@ final class CameraController: NSObject, ObservableObject {
     weak var previewLayer: AVCaptureVideoPreviewLayer? {
         didSet { bindRotationCoordinator() }
     }
+
+    /// Rotash レンズのライブビュー。ここに View があるときだけ映像を渡す。
+    weak var lensView: LensView? {
+        didSet {
+            frameGate.setWantsFrames(lensView != nil)
+            applyVideoOutputRotation()
+        }
+    }
+
+    /// 映像を受け取るスレッドと画面のスレッドのあいだで、
+    /// 「View があるか」「前のコマをまだ表示していないか」を安全にやり取りする。
+    private let frameGate = FrameGate()
 
     // MARK: - Lifecycle
 
@@ -87,6 +105,14 @@ final class CameraController: NSObject, ObservableObject {
 
         session.addInput(input)
         session.addOutput(output)
+
+        // レンズ用の出口は無くても撮影はできるので、追加できなければそのまま進む。
+        videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        videoOutput.alwaysDiscardsLateVideoFrames = true
+        videoOutput.setSampleBufferDelegate(self, queue: videoQueue)
+        if session.canAddOutput(videoOutput) {
+            session.addOutput(videoOutput)
+        }
         session.commitConfiguration()
 
         device = camera
@@ -99,8 +125,16 @@ final class CameraController: NSObject, ObservableObject {
         }
     }
 
+    /// 外カメは超広角（0.5倍）があればそちらを使う。枠が細いので、
+    /// レンズそのものが広いほうが「撮るものがない」が起きにくい。
+    /// 超広角の無い機種（SE など）と内カメは、これまでどおりの広角。
     private func device(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
-        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position)
+        if position == .back,
+           RotashFeatureFlags.prefersUltraWideBackCamera,
+           let ultraWide = AVCaptureDevice.default(.builtInUltraWideCamera, for: .video, position: .back) {
+            return ultraWide
+        }
+        return AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position)
     }
 
     // MARK: - 前面 / 背面切り替え（自撮り対応）
@@ -143,8 +177,12 @@ final class CameraController: NSObject, ObservableObject {
         let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
         rotationCoordinator = coordinator
         applyPreviewRotation()
+        applyVideoOutputRotation()
         rotationObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelPreview, options: [.new]) { [weak self] _, _ in
             DispatchQueue.main.async { self?.applyPreviewRotation() }
+        }
+        captureRotationObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelCapture, options: [.new]) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.applyVideoOutputRotation() }
         }
     }
 
@@ -154,6 +192,22 @@ final class CameraController: NSObject, ObservableObject {
               connection.isVideoRotationAngleSupported(angle)
         else { return }
         connection.videoRotationAngle = angle
+    }
+
+    /// レンズ用の映像を、撮る写真と同じ向き（水平基準）で受け取れるようにする。
+    /// 内カメは普通のプレビューと同じく鏡写しにする（自撮りで右手を上げたら右側が動く）。
+    private func applyVideoOutputRotation() {
+        let angle = rotationCoordinator?.videoRotationAngleForHorizonLevelCapture
+        sessionQueue.async { [weak self] in
+            guard let self, let connection = self.videoOutput.connection(with: .video) else { return }
+            if let angle, connection.isVideoRotationAngleSupported(angle) {
+                connection.videoRotationAngle = angle
+            }
+            if connection.isVideoMirroringSupported {
+                connection.automaticallyAdjustsVideoMirroring = false
+                connection.isVideoMirrored = self.device?.position == .front
+            }
+        }
     }
 
     // MARK: - Capture
@@ -205,6 +259,59 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
             return
         }
         finish(with: jpeg)
+    }
+}
+
+// MARK: - AVCaptureVideoDataOutputSampleBufferDelegate（Rotash レンズのライブビュー）
+
+extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
+    func captureOutput(_ output: AVCaptureOutput,
+                       didOutput sampleBuffer: CMSampleBuffer,
+                       from connection: AVCaptureConnection) {
+        // 前のコマをまだ画面に出していなければ、このコマは捨てる（遅れを溜めない）。
+        guard frameGate.beginFrame() else { return }
+
+        var image: CGImage?
+        if let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+            _ = VTCreateCGImageFromCVPixelBuffer(pixelBuffer, options: nil, imageOut: &image)
+        }
+        guard let image else {
+            frameGate.endFrame()
+            return
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            self?.lensView?.display(image)
+            self?.frameGate.endFrame()
+        }
+    }
+}
+
+/// 映像のスレッドと画面のスレッドで共有する小さな状態。
+private final class FrameGate {
+    private let lock = NSLock()
+    private var wantsFrames = false
+    private var isFramePending = false
+
+    func setWantsFrames(_ wants: Bool) {
+        lock.lock()
+        wantsFrames = wants
+        lock.unlock()
+    }
+
+    /// このコマを表示しに行ってよいか。よければ「表示中」にする。
+    func beginFrame() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard wantsFrames, !isFramePending else { return false }
+        isFramePending = true
+        return true
+    }
+
+    func endFrame() {
+        lock.lock()
+        isFramePending = false
+        lock.unlock()
     }
 }
 

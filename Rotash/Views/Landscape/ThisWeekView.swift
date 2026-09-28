@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import UIKit
 
@@ -12,6 +13,11 @@ struct ThisWeekView: View {
     @State private var isCapturing = false
     @State private var flashOpacity: Double = 0
     @State private var draftTitle = ""
+    /// 撮り直せる残り時間を数えるための「いま」。撮り直せるあいだだけ進める。
+    /// 表示を描き直すきっかけとして使う。撮れるかどうかの判定そのものは常に本物の現在時刻で行う。
+    @State private var now = Date()
+    /// 画面を描き直すたびに作り直すと刻まなくなるので、View の外で1つだけ持つ。
+    private let clock = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
     /// 検証用ビルドで設定画面から変えた Rotash レンズの広げ具合。
     @AppStorage(RotashLens.storageKey) private var storedLensWidening = RotashFeatureFlags.lensWidening
 
@@ -57,6 +63,10 @@ struct ThisWeekView: View {
         .onAppear { syncCamera() }
         .onDisappear { camera.stop() }
         .onChange(of: activeDay) { _, _ in syncCamera() }
+        // 撮り直せる時間のあいだだけ時計を進め、残り秒数と「時間切れでカメラを閉じる」を画面に反映する。
+        .onReceive(clock) { date in
+            if app.todayRetakeDeadline(now: now) != nil { now = date }
+        }
         // 横にした時点で最新を取りに行く。作品を見る画面なので、
         // ここに来たら必ず最新が見えている状態にしたい。
         .task { await app.sync() }
@@ -292,7 +302,7 @@ struct ThisWeekView: View {
     private func bottomControl(week: RotashWeek) -> some View {
         if !week.isFinished, activeDay != nil {
             VStack(spacing: 8) {
-                Text(isRetake ? "RETAKE" : "SHOOT")
+                Text(isRetake ? "RETAKE\(retakeCountdown)" : "SHOOT")
                     .rotashLabel(9, color: Palette.live, tracking: 3)
 
                 // FLIP は狭い枠の隅だと押しづらいので、シャッターの横に置いて
@@ -305,7 +315,26 @@ struct ThisWeekView: View {
                 }
             }
             .padding(.bottom, 12)
+        } else if !week.isFinished, app.todayRetakeDeadline(now: now) != nil {
+            // 撮った直後。写真を見て「事故った」と思ったら、ここから撮り直せる。
+            // 押すとその枠にライブビューが戻る。時間が切れたら黙って消える。
+            Button { manualSelection = app.todayIndex } label: {
+                Text("RETAKE\(retakeCountdown)")
+                    .rotashLabel(10, color: Palette.text, tracking: 2.4)
+                    .frame(height: 46)
+                    .padding(.horizontal, 18)
+                    .background(Color.black.opacity(0.5))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 12)
         }
+    }
+
+    /// 撮り直せる残り秒数（「  24」のような形）。撮り直しの対象でなければ空。
+    private var retakeCountdown: String {
+        guard let deadline = app.todayRetakeDeadline(now: now) else { return "" }
+        return "  \(max(0, Int(deadline.timeIntervalSince(now).rounded(.up))))"
     }
 
     private var flipButtonWidth: CGFloat { 62 }
@@ -350,6 +379,8 @@ struct ThisWeekView: View {
 
         camera.capture(fallbackSeed: day) { data in
             Task { @MainActor in
+                // 撮り直しの残り秒数をここから数え始める。
+                self.now = Date()
                 self.flashOpacity = 0.85
                 withAnimation(.easeOut(duration: 0.28)) { self.flashOpacity = 0 }
                 if let data {

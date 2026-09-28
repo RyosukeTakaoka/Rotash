@@ -46,11 +46,29 @@ enum RotashMerge {
         return localKey <= remoteKey ? local : adopted(remote)
     }
 
+    /// 同じ人が同じ時刻に撮り始めた1枚か（撮り直しの前後を同じ1枚として扱うため）。
+    /// サーバーの日付は秒までしか持たないので、1秒未満のずれは同じとみなす。
+    private static func isSameShot(_ a: Slot, _ b: Slot) -> Bool {
+        guard let taker = a.takenByMemberID, taker == b.takenByMemberID,
+              let aAt = a.capturedAt, let bAt = b.capturedAt
+        else { return false }
+        return abs(aAt.timeIntervalSince(bAt)) < 1
+    }
+
     private static func mergeSlot(local: Slot?, remote: Slot?, dayIndex: Int) -> Slot {
         switch (local, remote) {
         case let (local?, remote?):
             // 同じ枠に両方写真があるなら、先に撮られた方をその日の1枚とする。
             if local.isFilled, remote.isFilled {
+                // ただし同じ人の同じ1枚（撮った直後の撮り直し）なら、新しい版を採る。
+                // 撮り直しても capturedAt は最初の1枚のままなので、ここで見分けないと
+                // 先にサーバーへ上がった撮り直し前の写真が勝ち、撮り直しが消えてしまう。
+                if isSameShot(local, remote) {
+                    let localVersion = local.retakenAt ?? local.capturedAt ?? .distantPast
+                    let remoteVersion = remote.retakenAt ?? remote.capturedAt ?? .distantPast
+                    // サーバーの日付は秒までなので、1秒未満の差は同じ版とみなして手元を残す。
+                    return remoteVersion.timeIntervalSince(localVersion) >= 1 ? adopted(remote) : local
+                }
                 let localIsEarlier = (local.capturedAt ?? .distantFuture) <= (remote.capturedAt ?? .distantFuture)
                 // 別々の写真なので、負けた側のファイル名も URL も引き継がない。
                 return localIsEarlier ? local : adopted(remote)

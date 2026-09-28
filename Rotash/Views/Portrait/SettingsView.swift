@@ -163,7 +163,7 @@ struct SettingsView: View {
             }
             .pickerStyle(.segmented)
 
-            Text("細い枠に、どれだけ横に広く写すか。真ん中はそのまま、端ほど横に縮みます。「普通」はこれまでと同じ見え方です。")
+            Text("細い枠に、どれだけ広く写すか。真ん中は形を変えずに縮め、足りない上下の端だけを縦に伸ばします。「普通」はこれまでと同じ見え方です。")
                 .rotashLabel(9, color: Palette.faint, tracking: 0.4)
                 .lineSpacing(4)
         }

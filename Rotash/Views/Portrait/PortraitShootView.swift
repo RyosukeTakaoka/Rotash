@@ -9,7 +9,7 @@ import UIKit
 /// 7分割の枠は縦に細長い。スマホを横にして撮ると、カメラの写す範囲は横長なので、
 /// 枠に入るのは写真の横幅の2割ほどしかない。撮る瞬間だけ縦にすれば、
 /// カメラの向きと枠の向きがそろい、**曲げずに**横も縦も約1.3倍広く写る。
-/// 画像処理で広げると端が曲がって見えるので、向きそのものを合わせる。
+/// さらに横向きの7分割と同じ疑似広角（`RotashLens`）をかけるので、見え方は横で撮った写真とそろう。
 ///
 /// # 何を見せるか
 ///
@@ -29,6 +29,9 @@ struct PortraitShootView: View {
     @State private var retaking = false
     /// 撮り直しの残り秒数を数えるための「いま」。ThisWeekView と同じ考え方。
     @State private var now = Date()
+    /// 横向きの7分割と同じ疑似広角をかける。ここで見えた絵が、横にしたときの枠にそのまま入るように。
+    @AppStorage(RotashLens.storageKey) private var storedLensWidening = RotashFeatureFlags.lensWidening
+    private var lensWidening: Double { RotashLens.resolve(stored: storedLensWidening) }
     private let clock = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     private var day: Int { app.todayIndex }
@@ -133,7 +136,7 @@ struct PortraitShootView: View {
             if showsLive {
                 liveContent
             } else if let slot, slot.isFilled {
-                PhotoImageView(slot: slot, maxPixel: 720)
+                PhotoImageView(slot: slot, maxPixel: 720, lensWidening: lensWidening)
             } else {
                 Palette.surface
             }
@@ -148,7 +151,11 @@ struct PortraitShootView: View {
     private var liveContent: some View {
         switch camera.status {
         case .ready:
-            CameraPreview(controller: camera)
+            if lensWidening > 1, camera.supportsLensPreview {
+                LensCameraPreview(controller: camera, widening: lensWidening)
+            } else {
+                CameraPreview(controller: camera)
+            }
         case .denied:
             ZStack {
                 Palette.surfaceDeep
@@ -175,7 +182,7 @@ struct PortraitShootView: View {
         if let week = app.group?.currentWeek, let slot = week.slot(at: index) {
             ZStack {
                 if slot.isFilled {
-                    PhotoImageView(slot: slot, maxPixel: 480)
+                    PhotoImageView(slot: slot, maxPixel: 480, lensWidening: lensWidening)
                         .opacity(0.8)
                 } else {
                     Palette.surface

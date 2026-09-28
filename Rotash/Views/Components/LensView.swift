@@ -125,4 +125,18 @@ struct LensCameraPreview: UIViewRepresentable {
             controller.lensView = uiView
         }
     }
+
+    /// SwiftUI がこの表示を捨てるとき、カメラからの映像の送り先から外す。
+    /// （別の表示に作り直された直後に、古い表示へ映像を送り続けないように）
+    static func dismantleUIView(_ uiView: LensView, coordinator: Coordinator) {
+        coordinator.controller.detachLensView(uiView)
+        uiView.display(nil)
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(controller: controller) }
+
+    final class Coordinator {
+        let controller: CameraController
+        init(controller: CameraController) { self.controller = controller }
+    }
 }

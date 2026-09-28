@@ -1,22 +1,25 @@
 import UIKit
 
-/// 7分割の細い枠に、写真の横幅をもっと多く収めるための「Rotash レンズ」。
+/// 7分割の細い枠に、もっと広い範囲を収めるための「Rotash レンズ」（疑似広角）。
 ///
 /// # なぜ要るか
 ///
 /// 枠は 1 : 3.2 ほどの縦長で、4:3 の写真を普通に収める（aspectFill）と
-/// 横幅の約8割を切り捨てている。自撮りなら顔が入るが、それ以外は撮るものが無くなる。
+/// 横幅の約8割を切り捨てている。しかも枠が縦に長すぎて、頭の上に余りができやすい。
 ///
 /// # 何をするか
 ///
-/// 写真を細い短冊に切り、**真ん中はそのまま、端にいくほど横に縮めて** 並べ直す。
-/// 縦方向には一切手を入れないので、縦の線は縦のまま、水平線も曲がらない。
-/// 端の人や物が少し細くなる代わりに、同じ枠に `widening` 倍の横幅が入る。
+/// **真ん中は縦も横も同じ割合で縮める**（ズームアウト）。形は曲がらないまま、
+/// 横にも縦にも `widening` 倍の範囲が入る。建物の縦線もまっすぐのまま。
+///
+/// ただし横持ちのカメラは、写せる高さをもう全部枠に使っている。縦も縮めると上下が足りなくなるので、
+/// **写真のいちばん上と下（空・天井・床など）だけを縦に引き伸ばして** 枠を埋める。
+/// 以前は横方向の端を縮めていたが（魚眼風）、「写る範囲が増えたのではなく曲がっただけ」に見えたので、
+/// 崩れても目立ちにくい上下の端に歪みを寄せた。
 ///
 /// - 写真ファイルそのものは加工しない。表示するときにだけかける。
-///   だから Memories の 4:3 表示では、撮った写真の全体が自然なまま見える
-///   （IMPLEMENTATION_PLAN L1「撮影は広く / 表示は7分割のまま」をそのまま満たす）。
-/// - ライブビュー・7分割の表示・共有画像（`.screen`）の3か所で同じ計算を使うので、
+///   だから Memories の 4:3 表示では、撮った写真の全体が自然なまま見える。
+/// - ライブビュー・7分割の表示・共有画像（`.screen`）・縦持ちの撮影画面で同じ計算を使うので、
 ///   撮るときに見えた絵と、あとで見える絵は同じになる。
 enum RotashLens {
 
@@ -31,10 +34,13 @@ enum RotashLens {
     /// 設定画面で選べる広げ具合。1.0 が従来どおり（中央を切り出すだけ）。
     static let presets: [Preset] = [
         Preset(label: "普通", widening: 1.0),
-        Preset(label: "弱", widening: 1.5),
-        Preset(label: "中", widening: 2.0),
-        Preset(label: "強", widening: 2.6)
+        Preset(label: "1.2", widening: 1.2),
+        Preset(label: "1.3", widening: 1.3),
+        Preset(label: "1.4", widening: 1.4)
     ]
+
+    /// 縦の引き伸ばしが破綻しない上限（真ん中の縮尺がこれを超えると、端で上下が折り返す）。
+    static let maxVerticalZoom: CGFloat = 1.45
 
     /// いまの広げ具合。
     ///
@@ -54,6 +60,7 @@ enum RotashLens {
 
     /// 1本の短冊。`destination` は枠の中の位置（pt）、
     /// `source` は写真のどこを持ってくるか（写真全体を 0〜1 とした割合）。
+    /// 疑似広角では横は均一なので、短冊は **横長の帯**（枠の上から下へ積む）になる。
     struct Band: Equatable {
         let destination: CGRect
         let source: CGRect
@@ -61,8 +68,7 @@ enum RotashLens {
 
     /// `imageSize` の写真を `size` の枠に置くときの短冊の並びを返す。
     ///
-    /// `widening` が 1 以下のとき、または枠が横長で写真の横幅がもう全部入っているときは、
-    /// 1本だけ（= 普通の aspectFill と同じ切り出し）になる。
+    /// `widening` が 1 以下のときは1本だけ（= 普通の aspectFill と同じ切り出し）になる。
     ///
     /// - Parameter pixelScale: 短冊の境目を画面のピクセルに揃えるための倍率。
     ///   揃えないと、短冊のあいだに髪の毛ほどのすき間が見えることがある。
@@ -78,49 +84,48 @@ enum RotashLens {
         let fillScale = max(size.width / imageSize.width, size.height / imageSize.height)
         let visibleX = min(1, size.width / (fillScale * imageSize.width))
         let visibleY = min(1, size.height / (fillScale * imageSize.height))
-        let sourceY = (1 - visibleY) / 2
 
-        // 広げたあとに見える横幅。写真の外までは広げられないので 1 で止める。
-        let widenedX = min(1, visibleX * CGFloat(max(1, widening)))
-        let k = widenedX / visibleX
+        // どれだけズームアウトするか。横は写真の外まで広げられないので 1 / visibleX で止め、
+        // 縦は引き伸ばしが破綻しない範囲（maxVerticalZoom / visibleY）で止める。
+        let zoom = min(CGFloat(max(1, widening)), 1 / visibleX, maxVerticalZoom / visibleY)
 
-        guard k > 1.001 else {
-            return [Band(destination: CGRect(origin: .zero, size: size),
-                         source: CGRect(x: (1 - visibleX) / 2, y: sourceY,
-                                        width: visibleX, height: visibleY))]
-        }
+        let plain = Band(destination: CGRect(origin: .zero, size: size),
+                         source: CGRect(x: (1 - visibleX) / 2, y: (1 - visibleY) / 2,
+                                        width: visibleX, height: visibleY))
+        guard zoom > 1.001 else { return [plain] }
 
-        // 枠の横位置 v（左端 -1 … 右端 +1）を、写真の横位置へ移す関数。
-        //   G(v) = v + (k - 1) v³
-        // 真ん中の傾きが 1（= 顔などは普通の幅のまま）で、端の v = ±1 でちょうど k 倍の範囲に届く。
-        // 端の傾きは 1 + 3(k - 1) で、そこがいちばん強く縮む。
-        let bend = k - 1
-        func sourceX(atCell v: CGFloat) -> CGFloat {
-            let g = v + bend * v * v * v
-            return 0.5 + 0.5 * visibleX * g
+        // 横: 均一に zoom 倍の範囲。
+        let widthX = visibleX * zoom
+        let sourceX = (1 - widthX) / 2
+
+        // 縦: 真ん中の縮尺は横と同じ（= 形が曲がらない）。枠の縦位置 v（上端 -1 … 下端 +1）を
+        // 写真の縦位置 u へ移す。写真の高さに余裕があるうちは均一、足りなければ上下の端を伸ばす。
+        //   u(v) = s·v + (1 − s)·v³    （s = 真ん中の傾き。u(±1) = ±1、s < 1.5 なら単調）
+        let s = visibleY * zoom
+        func sourceY(atCell v: CGFloat) -> CGFloat {
+            let u = s <= 1 ? s * v : s * v + (1 - s) * v * v * v
+            return 0.5 + 0.5 * u
         }
 
         let scale = max(pixelScale, 1)
-        let widthInPixels = size.width * scale
-        // 1本あたり 3px 前後。細かいほど滑らかだが、層（レイヤー）の数が増える。
-        let count = min(64, max(8, Int((widthInPixels / 3).rounded(.up))))
+        let heightInPixels = size.height * scale
+        // 1本あたり 8px 前後。縦の引き伸ばしはゆるやかなので、この細かさで継ぎ目は見えない。
+        let count = min(96, max(8, Int((heightInPixels / 8).rounded(.up))))
 
         var result: [Band] = []
         result.reserveCapacity(count)
         for index in 0..<count {
-            let left = (widthInPixels * CGFloat(index) / CGFloat(count)).rounded()
-            let right = (widthInPixels * CGFloat(index + 1) / CGFloat(count)).rounded()
-            guard right > left else { continue }
+            let top = (heightInPixels * CGFloat(index) / CGFloat(count)).rounded()
+            let bottom = (heightInPixels * CGFloat(index + 1) / CGFloat(count)).rounded()
+            guard bottom > top else { continue }
 
-            let v0 = 2 * left / widthInPixels - 1
-            let v1 = 2 * right / widthInPixels - 1
-            let x0 = sourceX(atCell: v0)
-            let x1 = sourceX(atCell: v1)
+            let y0 = sourceY(atCell: 2 * top / heightInPixels - 1)
+            let y1 = sourceY(atCell: 2 * bottom / heightInPixels - 1)
 
             result.append(Band(
-                destination: CGRect(x: left / scale, y: 0,
-                                    width: (right - left) / scale, height: size.height),
-                source: CGRect(x: x0, y: sourceY, width: x1 - x0, height: visibleY)
+                destination: CGRect(x: 0, y: top / scale,
+                                    width: size.width, height: (bottom - top) / scale),
+                source: CGRect(x: sourceX, y: y0, width: widthX, height: y1 - y0)
             ))
         }
         return result

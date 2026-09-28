@@ -31,6 +31,12 @@ enum AnalyticsService {
         log("photo_captured", params: ["filled_count": filledCount])
     }
 
+    /// 撮った直後の撮り直し。`secondsAfterFirst` は最初の1枚から何秒後か。
+    /// 「事故を救う」ために使われているのか、「撮り比べ」に使われているのかを見る。
+    static func photoRetaken(secondsAfterFirst: Int) {
+        log("photo_retaken", params: ["seconds_after_first": secondsAfterFirst])
+    }
+
     /// 週が完成した（7/7）。完成率・Rの分子になる。
     static func weekCompleted(memberCount: Int, isFirstWeek: Bool) {
         log("week_completed", params: [

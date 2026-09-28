@@ -93,11 +93,11 @@ final class AppViewModel: ObservableObject {
 
     /// 撮影できるかどうか。閲覧には一切関係しない — 7分割は誰でも常に全部見える。
     /// 撮れるのはその日の担当者だけ。
-    func canShoot(dayIndex: Int) -> Bool {
+    func canShoot(dayIndex: Int, now: Date = Date()) -> Bool {
         guard let group, let slot = group.currentWeek.slot(at: dayIndex) else { return false }
-        // 撮り直しは今は仮で無効。RotashFeatureFlags.allowRetake を true にすれば
-        // このガードだけで撮り直し（ライブビュー優先表示・SHOOT/RETAKE表示含む）が復活する。
-        if slot.isFilled && !RotashFeatureFlags.allowRetake { return false }
+        // 撮り直しは、撮った直後の短い時間だけ（RotashFeatureFlags.retakeWindowSeconds）。
+        // RotashFeatureFlags.allowRetake を true にすれば、時間に関係なく撮り直せる。
+        if slot.isFilled && !RotashFeatureFlags.allowRetake && !canRetake(slot, now: now) { return false }
         // 自由撮影は当番の判定そのものを飛ばす＝競合を自分から作る仕掛けなので、
         // 検証中のビルドでしか効かせない。設定から隠すだけでは、
         // 以前に入れた値が残っている端末で効き続けてしまう。
@@ -113,6 +113,32 @@ final class AppViewModel: ObservableObject {
             return dayIndex <= todayIndex
         }
         return dayIndex == todayIndex
+    }
+
+    /// 撮った直後の撮り直しができる枠か。撮った本人で、最初の1枚から規定の秒数以内。
+    func canRetake(_ slot: Slot, now: Date = Date()) -> Bool {
+        retakeDeadline(for: slot).map { now < $0 } ?? false
+    }
+
+    /// 撮り直しの締め切り。撮り直しの対象でなければ nil。
+    func retakeDeadline(for slot: Slot) -> Date? {
+        let window = RotashFeatureFlags.retakeWindowSeconds
+        guard window > 0,
+              let group,
+              slot.photoFilename != nil,
+              let taker = slot.takenByMemberID, taker == group.myMemberID,
+              let first = slot.capturedAt
+        else { return nil }
+        return first.addingTimeInterval(window)
+    }
+
+    /// 今日の枠で、いま撮り直せるなら、その締め切り。画面の残り秒数の表示に使う。
+    func todayRetakeDeadline(now: Date = Date()) -> Date? {
+        guard let slot = group?.currentWeek.slot(at: todayIndex),
+              canShoot(dayIndex: todayIndex, now: now),
+              let deadline = retakeDeadline(for: slot)
+        else { return nil }
+        return deadline
     }
 
     /// タップしなくても最初からカメラが開いている枠。
@@ -355,16 +381,33 @@ final class AppViewModel: ObservableObject {
               let filename = try? PhotoStore.shared.save(data)
         else { return }
 
-        if let old = current.currentWeek.slots[index].photoFilename {
+        let previous = current.currentWeek.slots[index]
+        let now = Date()
+        // 自分が撮った直後の撮り直しなら「同じ1枚の新しい版」として扱い、
+        // 最初に撮った時刻は変えない（撮り直せる時間が延びないように）。
+        let isRetake = previous.isFilled
+            && previous.takenByMemberID == current.myMemberID
+            && previous.capturedAt != nil
+
+        if let old = previous.photoFilename {
             PhotoStore.shared.delete(old)
         }
         current.currentWeek.slots[index].photoFilename = filename
         current.currentWeek.slots[index].photoURL = nil      // 撮り直したら URL も取り直す
-        current.currentWeek.slots[index].capturedAt = Date()
+        if isRetake {
+            current.currentWeek.slots[index].retakenAt = now
+        } else {
+            current.currentWeek.slots[index].capturedAt = now
+            current.currentWeek.slots[index].retakenAt = nil
+        }
         current.currentWeek.slots[index].takenByMemberID = current.myMemberID
         group = current
         persist()
-        AnalyticsService.photoCaptured(filledCount: current.currentWeek.filledCount)
+        if isRetake, let first = previous.capturedAt {
+            AnalyticsService.photoRetaken(secondsAfterFirst: Int(now.timeIntervalSince(first)))
+        } else {
+            AnalyticsService.photoCaptured(filledCount: current.currentWeek.filledCount)
+        }
 
         // 撮ったらすぐ他の人に届くように同期する。失敗しても写真は手元に残る。
         Task { await sync() }
@@ -532,7 +575,7 @@ final class AppViewModel: ObservableObject {
         guard let current = group else { return }
         do {
             let outcome = try await RotashSyncService.sync(group: current)
-            group = outcome.group
+            group = keepingPhotosTakenDuringSync(outcome.group, sent: current)
             lastSyncedAt = Date()
 
             if outcome.failedUploads > 0 {
@@ -556,6 +599,28 @@ final class AppViewModel: ObservableObject {
             syncNote = error.localizedDescription
             if showingError { alertMessage = error.localizedDescription }
         }
+    }
+
+    /// 同期は数秒かかる。そのあいだに撮った（撮り直した）写真は、同期に送った状態には入っていない。
+    /// 結果をそのまま採ると撮ったばかりの写真が巻き戻るので、その枠だけ手元の今の状態を残し、
+    /// もう一度同期してみんなに届ける。撮った直後の撮り直しでは、これがよく起きる。
+    private func keepingPhotosTakenDuringSync(_ synced: RotashGroup, sent: RotashGroup) -> RotashGroup {
+        guard let latest = group,
+              latest.currentWeek.id == sent.currentWeek.id,
+              synced.currentWeek.startDate == latest.currentWeek.startDate
+        else { return synced }
+
+        var result = synced
+        for slot in latest.currentWeek.slots {
+            let before = sent.currentWeek.slot(at: slot.dayIndex)
+            guard slot.photoFilename != nil,
+                  slot.photoFilename != before?.photoFilename,
+                  let index = result.currentWeek.slots.firstIndex(where: { $0.dayIndex == slot.dayIndex })
+            else { continue }
+            result.currentWeek.slots[index] = slot
+            syncAgainWhenFinished = true
+        }
+        return result
     }
 
     // MARK: -

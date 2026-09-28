@@ -61,7 +61,11 @@ struct Slot: Identifiable, Codable, Hashable {
     var photoFilename: String?
     /// Cloudinary 上の URL。同期している場合はこちらが本体で、ローカルはキャッシュ。
     var photoURL: String?
+    /// その日の最初の1枚を撮った時刻。撮り直しても変えない（撮り直せる30秒の起点）。
     var capturedAt: Date?
+    /// 撮り直した時刻（最後に撮り直したとき）。撮り直していなければ nil。
+    /// 同期で「同じ人の同じ1枚の、新しい版」を見分けるために使う（`RotashMerge`）。
+    var retakenAt: Date?
     var takenByMemberID: UUID?
 
     /// 写真がある枠かどうか。

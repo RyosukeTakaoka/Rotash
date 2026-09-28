@@ -44,6 +44,12 @@ enum RotashFeatureFlags {
     /// false に戻すと、これまでどおりの 1倍カメラになる。
     static let prefersUltraWideBackCamera = true
 
+    /// 内カメを、いちばん広く写る状態で使うか。
+    /// - センターフレーム対応の iPad などは、内カメそのものが超広角なのでそれを使う
+    /// - iPhone の内カメは、センサーを最も広く読むモード（純正カメラの矢印ボタンで広がる状態）にする
+    /// false に戻すと、これまでどおり既定の読み出し（`.photo` プリセットまかせ）になる。
+    static let prefersWidestFrontCamera = true
+
     /// Rotash レンズ（疑似広角）の広げ具合（`RotashLens`）。枠に、普通の何倍の範囲を収めるか。
     ///
     /// 1.0 で従来どおり（写真の中央を切り出すだけ）。1.3 なら縦にも横にも 1.3 倍の範囲が入り、

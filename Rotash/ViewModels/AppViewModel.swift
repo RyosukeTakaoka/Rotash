@@ -132,6 +132,12 @@ final class AppViewModel: ObservableObject {
         return first.addingTimeInterval(window)
     }
 
+    /// 今週のうち、いちばん遅い撮り直しの締め切り（撮れるかどうかは問わない）。
+    /// 画面の時計を「締め切りが過ぎるまで」進めるために使う。
+    var latestRetakeDeadline: Date? {
+        group?.currentWeek.slots.compactMap { retakeDeadline(for: $0) }.max()
+    }
+
     /// いま撮り直せる枠と、その締め切り。画面の残り秒数と RETAKE ボタンに使う。
     ///
     /// 今日の枠に限らず今週の枠から探すのは、自由撮影モードで他の日を撮った直後にも

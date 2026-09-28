@@ -131,23 +131,36 @@ enum RotashLens {
     /// 現在の UIKit の描画先に、レンズをかけた写真を `rect` いっぱいに描く。
     /// 画面の7分割と同じ見え方を、書き出す画像でも再現するために使う。
     ///
+    /// 短冊を描き先へ直接並べると、枠の位置が半端な座標（例: 幅 271.7px）のとき
+    /// 短冊の境目がピクセルの途中に来て、暗い縦すじが透けて見える。
+    /// そこで、いったんピクセルにぴったり合った1枚の画像に組み立ててから、一度だけ描く。
+    ///
     /// - Returns: 描けなかったとき（CGImage を持たない画像など）は false。呼び出し側で普通に描くこと。
     @discardableResult
     static func draw(_ image: UIImage, in rect: CGRect, widening: Double) -> Bool {
         guard let cgImage = image.cgImage, image.imageOrientation == .up else { return false }
 
+        // 組み立てる画像はピクセル単位の整数の大きさにする（倍率1）。
+        let canvasSize = CGSize(width: max(1, rect.width.rounded(.up)),
+                                height: max(1, rect.height.rounded(.up)))
         let pixelSize = CGSize(width: cgImage.width, height: cgImage.height)
-        let bands = bands(imageSize: pixelSize, in: rect.size, widening: widening, pixelScale: 2)
-        guard !bands.isEmpty else { return false }
+        let pieces = Self.bands(imageSize: pixelSize, in: canvasSize, widening: widening, pixelScale: 1)
+        guard !pieces.isEmpty else { return false }
 
-        for band in bands {
-            let crop = CGRect(x: band.source.minX * pixelSize.width,
-                              y: band.source.minY * pixelSize.height,
-                              width: band.source.width * pixelSize.width,
-                              height: band.source.height * pixelSize.height).integral
-            guard let piece = cgImage.cropping(to: crop) else { continue }
-            UIImage(cgImage: piece).draw(in: band.destination.offsetBy(dx: rect.minX, dy: rect.minY))
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let assembled = UIGraphicsImageRenderer(size: canvasSize, format: format).image { _ in
+            for band in pieces {
+                let crop = CGRect(x: band.source.minX * pixelSize.width,
+                                  y: band.source.minY * pixelSize.height,
+                                  width: band.source.width * pixelSize.width,
+                                  height: band.source.height * pixelSize.height).integral
+                guard let piece = cgImage.cropping(to: crop) else { continue }
+                UIImage(cgImage: piece).draw(in: band.destination)
+            }
         }
+        assembled.draw(in: CGRect(origin: rect.origin, size: canvasSize))
         return true
     }
 }

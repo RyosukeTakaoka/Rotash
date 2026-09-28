@@ -16,7 +16,8 @@ struct ThisWeekView: View {
     /// 撮り直せる残り時間を数えるための「いま」。撮り直せるあいだだけ進める。
     /// 表示を描き直すきっかけとして使う。撮れるかどうかの判定そのものは常に本物の現在時刻で行う。
     @State private var now = Date()
-    /// 画面を描き直すたびに作り直すと刻まなくなるので、View の外で1つだけ持つ。
+    /// 撮り直しの残り秒数を数える時計。`body` の中で作ると描き直すたびに作り直されて刻まなくなるので、
+    /// プロパティとして持つ（ThisWeekView 自体が作り直されたときだけ新しくなる）。
     private let clock = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
     /// 検証用ビルドで設定画面から変えた Rotash レンズの広げ具合。
     @AppStorage(RotashLens.storageKey) private var storedLensWidening = RotashFeatureFlags.lensWidening
@@ -69,7 +70,10 @@ struct ThisWeekView: View {
         .onChange(of: activeDay) { _, _ in syncCamera() }
         // 撮り直せる時間のあいだだけ時計を進め、残り秒数と「時間切れでカメラを閉じる」を画面に反映する。
         .onReceive(clock) { date in
-            if app.retakeWindow(now: now) != nil { now = date }
+            // 「いま撮り直せるか」ではなく「締め切りがまだ来ていないか」で進める。
+            // 前者で判定すると、撮り直しの途中で日付が変わって撮れなくなった瞬間に時計が止まり、
+            // 描き直しも起きないので RETAKE ボタンや残り秒数が画面に残ったままになる。
+            if let deadline = app.latestRetakeDeadline, now <= deadline { now = date }
         }
         // 横にした時点で最新を取りに行く。作品を見る画面なので、
         // ここに来たら必ず最新が見えている状態にしたい。
@@ -342,8 +346,13 @@ struct ThisWeekView: View {
     /// 撮り直せる残り秒数（「  24」のような形）。撮り直しの対象でなければ空。
     /// 1桁になっても幅が変わらないよう2桁ぶんに揃える（等幅フォントなので文字が揺れない）。
     private func retakeCountdown(for day: Int) -> String {
-        guard let window = app.retakeWindow(now: now), window.dayIndex == day else { return "" }
-        let seconds = min(99, max(0, Int(window.deadline.timeIntervalSince(now).rounded(.up))))
+        guard let slot = week?.slot(at: day),
+              app.canShoot(dayIndex: day, now: now),
+              let deadline = app.retakeDeadline(for: slot),
+              now < deadline
+        else { return "" }
+        let window = Int(RotashFeatureFlags.retakeWindowSeconds)
+        let seconds = min(window, max(0, Int(deadline.timeIntervalSince(now).rounded(.up))))
         return seconds < 10 ? "   \(seconds)" : "  \(seconds)"
     }
 
@@ -389,14 +398,15 @@ struct ThisWeekView: View {
 
         camera.capture(fallbackSeed: day) { data in
             Task { @MainActor in
-                // 撮り直しの残り秒数をここから数え始める。
-                self.now = Date()
                 self.flashOpacity = 0.85
                 withAnimation(.easeOut(duration: 0.28)) { self.flashOpacity = 0 }
                 if let data {
                     self.app.attachPhoto(data, toDay: day)
                     self.manualSelection = nil
                 }
+                // 撮り直しの残り秒数をここから数え始める。撮った時刻（attachPhoto の中で決まる）より
+                // 前に合わせると、残りが一瞬 31 秒に見えるので、保存が終わってから合わせる。
+                self.now = Date()
                 self.isCapturing = false
             }
         }

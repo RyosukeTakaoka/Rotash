@@ -27,9 +27,13 @@ struct ThisWeekView: View {
 
     /// いま撮影対象になっている枠（= ライブビューが出ている枠）。
     /// タップで選ぶと、撮影済みの枠でも撮り直しとして選択できる。
+    ///
+    /// 週の最後の1枚を撮ると週は「完成」になるが、撮った直後の撮り直しだけは
+    /// 他の日と同じようにできるようにする（最後の1枚だけ事故を救えないのは不公平なので）。
     private var activeDay: Int? {
-        guard let week, !week.isFinished else { return nil }
+        guard let week else { return nil }
         if let manualSelection, app.canShoot(dayIndex: manualSelection) { return manualSelection }
+        guard !week.isFinished else { return nil }
         return app.autoActiveDay
     }
 
@@ -65,7 +69,7 @@ struct ThisWeekView: View {
         .onChange(of: activeDay) { _, _ in syncCamera() }
         // 撮り直せる時間のあいだだけ時計を進め、残り秒数と「時間切れでカメラを閉じる」を画面に反映する。
         .onReceive(clock) { date in
-            if app.todayRetakeDeadline(now: now) != nil { now = date }
+            if app.retakeWindow(now: now) != nil { now = date }
         }
         // 横にした時点で最新を取りに行く。作品を見る画面なので、
         // ここに来たら必ず最新が見えている状態にしたい。
@@ -142,7 +146,9 @@ struct ThisWeekView: View {
                 .lineLimit(1)
                 .padding(.horizontal, 28)
 
-        } else if app.titlableWeek?.id == week.id {
+        } else if app.titlableWeek?.id == week.id, app.retakeWindow(now: now) == nil {
+            // 撮り直せるあいだは写真がまだ確定していないので、名前をつける欄は出さない
+            // （画面下の RETAKE ボタンと重なるのも避けられる）。
             HStack(spacing: 12) {
                 TextField("", text: $draftTitle,
                           prompt: Text("この1週間に名前をつける"))
@@ -209,7 +215,9 @@ struct ThisWeekView: View {
                 liveContent
             } else if slot.isFilled {
                 // ライブビューと同じレンズをかける。撮るときに見えた絵のまま枠に残る。
-                PhotoImageView(slot: slot, lensWidening: lensWidening)
+                // 元の写真（約1200万画素）をそのまま7枚読むとメモリを大きく使うので、
+                // 枠の高さに足りる大きさに縮めて読む（720pt → 3倍の画面で 2160px）。
+                PhotoImageView(slot: slot, maxPixel: 720, lensWidening: lensWidening)
             } else {
                 Palette.surface
             }
@@ -269,7 +277,7 @@ struct ThisWeekView: View {
     private var liveContent: some View {
         switch camera.status {
         case .ready:
-            if lensWidening > 1 {
+            if lensWidening > 1, camera.supportsLensPreview {
                 LensCameraPreview(controller: camera, widening: lensWidening)
             } else {
                 CameraPreview(controller: camera)
@@ -300,9 +308,9 @@ struct ThisWeekView: View {
     // 今日の担当が誰かも、各枠に既に名前が出ているので改めて言葉にしない。
     @ViewBuilder
     private func bottomControl(week: RotashWeek) -> some View {
-        if !week.isFinished, activeDay != nil {
+        if let activeDay {
             VStack(spacing: 8) {
-                Text(isRetake ? "RETAKE\(retakeCountdown)" : "SHOOT")
+                Text(isRetake ? "RETAKE\(retakeCountdown(for: activeDay))" : "SHOOT")
                     .rotashLabel(9, color: Palette.live, tracking: 3)
 
                 // FLIP は狭い枠の隅だと押しづらいので、シャッターの横に置いて
@@ -315,11 +323,11 @@ struct ThisWeekView: View {
                 }
             }
             .padding(.bottom, 12)
-        } else if !week.isFinished, app.todayRetakeDeadline(now: now) != nil {
+        } else if let window = app.retakeWindow(now: now) {
             // 撮った直後。写真を見て「事故った」と思ったら、ここから撮り直せる。
             // 押すとその枠にライブビューが戻る。時間が切れたら黙って消える。
-            Button { manualSelection = app.todayIndex } label: {
-                Text("RETAKE\(retakeCountdown)")
+            Button { manualSelection = window.dayIndex } label: {
+                Text("RETAKE\(retakeCountdown(for: window.dayIndex))")
                     .rotashLabel(10, color: Palette.text, tracking: 2.4)
                     .frame(height: 46)
                     .padding(.horizontal, 18)
@@ -332,9 +340,11 @@ struct ThisWeekView: View {
     }
 
     /// 撮り直せる残り秒数（「  24」のような形）。撮り直しの対象でなければ空。
-    private var retakeCountdown: String {
-        guard let deadline = app.todayRetakeDeadline(now: now) else { return "" }
-        return "  \(max(0, Int(deadline.timeIntervalSince(now).rounded(.up))))"
+    /// 1桁になっても幅が変わらないよう2桁ぶんに揃える（等幅フォントなので文字が揺れない）。
+    private func retakeCountdown(for day: Int) -> String {
+        guard let window = app.retakeWindow(now: now), window.dayIndex == day else { return "" }
+        let seconds = min(99, max(0, Int(window.deadline.timeIntervalSince(now).rounded(.up))))
+        return seconds < 10 ? "   \(seconds)" : "  \(seconds)"
     }
 
     private var flipButtonWidth: CGFloat { 62 }

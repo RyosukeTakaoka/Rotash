@@ -35,17 +35,35 @@ struct PortraitHomeView: View {
             }
         }
         .tint(Palette.text)
-        .sheet(item: $app.activeSheet) { sheet in
+        .sheet(item: sheetBinding) { sheet in
             Group {
                 switch sheet {
                 case .create: CreateRotashView()
                 case .join: JoinRotashView()
                 case .settings: SettingsView()
+                case .shoot: EmptyView()   // 全画面の方で出す
                 }
             }
             .environmentObject(app)
             .interactiveDismissDisabled()
         }
+        // 縦で撮る画面はカメラなので、シートではなく全画面で出す。
+        // activeSheet を使うのは、開いているあいだ RootView が向きで画面を切り替えないようにするため。
+        .fullScreenCover(isPresented: shootBinding) {
+            PortraitShootView()
+                .environmentObject(app)
+        }
+    }
+
+    /// 撮影画面以外のシート。
+    private var sheetBinding: Binding<PortraitSheet?> {
+        Binding(get: { app.activeSheet == .shoot ? nil : app.activeSheet },
+                set: { app.activeSheet = $0 })
+    }
+
+    private var shootBinding: Binding<Bool> {
+        Binding(get: { app.activeSheet == .shoot },
+                set: { if !$0, app.activeSheet == .shoot { app.activeSheet = nil } })
     }
 
     // MARK: - Blocks
@@ -114,6 +132,18 @@ struct PortraitHomeView: View {
                 }
                 Text("→ 横にして見る")
                     .rotashLabel(9, color: Palette.faint, tracking: 1.2)
+
+                // 担当日だけ。縦のまま撮ると、枠とカメラの向きがそろって広く写る。
+                if app.canShootTodayInPortrait {
+                    Button { app.activeSheet = .shoot } label: {
+                        Text("縦のまま撮る（広く写る）")
+                            .rotashLabel(11, color: Palette.live, tracking: 1)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 6)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -2,7 +2,8 @@ import Foundation
 import SwiftUI
 
 enum PortraitSheet: String, Identifiable {
-    case create, join, settings
+    /// shoot は縦持ちで撮る画面（全画面で出す。ほかはシート）。
+    case create, join, settings, shoot
     var id: String { rawValue }
 }
 
@@ -155,6 +156,16 @@ final class AppViewModel: ObservableObject {
                 return (slot.dayIndex, deadline)
             }
             .max { $0.deadline < $1.deadline }
+    }
+
+    /// 縦のホームに「縦のまま撮る」を出すか。
+    /// 今日の担当でまだ撮っていないとき、または撮った直後で撮り直せるとき。
+    var canShootTodayInPortrait: Bool {
+        guard RotashFeatureFlags.allowsPortraitShooting,
+              let slot = group?.currentWeek.slot(at: todayIndex)
+        else { return false }
+        if !slot.isFilled { return autoActiveDay == todayIndex }
+        return canShoot(dayIndex: todayIndex)
     }
 
     /// タップしなくても最初からカメラが開いている枠。

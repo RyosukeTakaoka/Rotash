@@ -50,6 +50,13 @@ final class CameraController: NSObject, ObservableObject {
         }
     }
 
+    /// - Parameter position: 最初に使うカメラ。縦で撮る画面では自撮りが多いので前面から始める。
+    init(position: AVCaptureDevice.Position = .back) {
+        // @Published の中身は、super.init の前にはこの形で入れる。
+        _position = Published(initialValue: position)
+        super.init()
+    }
+
     /// 映像を受け取るスレッドと画面のスレッドのあいだで、
     /// 「View があるか」「前のコマをまだ表示していないか」を安全にやり取りする。
     private let frameGate = FrameGate()

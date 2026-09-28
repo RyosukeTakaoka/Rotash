@@ -64,10 +64,8 @@ enum RotashMerge {
                 // 撮り直しても capturedAt は最初の1枚のままなので、ここで見分けないと
                 // 先にサーバーへ上がった撮り直し前の写真が勝ち、撮り直しが消えてしまう。
                 if isSameShot(local, remote) {
-                    let localVersion = local.retakenAt ?? local.capturedAt ?? .distantPast
-                    let remoteVersion = remote.retakenAt ?? remote.capturedAt ?? .distantPast
-                    // サーバーの日付は秒までなので、1秒未満の差は同じ版とみなして手元を残す。
-                    return remoteVersion.timeIntervalSince(localVersion) >= 1 ? adopted(remote) : local
+                    // 撮り直した回数が多い方が新しい版。同じなら同じ写真なので手元（ファイルあり）を残す。
+                    return (remote.retakeCount ?? 0) > (local.retakeCount ?? 0) ? adopted(remote) : local
                 }
                 let localIsEarlier = (local.capturedAt ?? .distantFuture) <= (remote.capturedAt ?? .distantFuture)
                 // 別々の写真なので、負けた側のファイル名も URL も引き継がない。

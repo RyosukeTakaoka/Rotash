@@ -63,9 +63,10 @@ struct Slot: Identifiable, Codable, Hashable {
     var photoURL: String?
     /// その日の最初の1枚を撮った時刻。撮り直しても変えない（撮り直せる30秒の起点）。
     var capturedAt: Date?
-    /// 撮り直した時刻（最後に撮り直したとき）。撮り直していなければ nil。
+    /// 撮った直後に撮り直した回数。撮り直していなければ nil（= 0）。
     /// 同期で「同じ人の同じ1枚の、新しい版」を見分けるために使う（`RotashMerge`）。
-    var retakenAt: Date?
+    /// 時刻で比べないのは、サーバーの日付が秒までしか無く、1秒以内の撮り直しを見分けられないため。
+    var retakeCount: Int?
     var takenByMemberID: UUID?
 
     /// 写真がある枠かどうか。

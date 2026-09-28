@@ -20,6 +20,8 @@ final class LensView: UIView {
         super.init(frame: frame)
         clipsToBounds = true
         backgroundColor = .black
+        // 枠のタップ（選択・撮影）は SwiftUI 側で受ける。ここでは触れても何もしない。
+        isUserInteractionEnabled = false
     }
 
     required init?(coder: NSCoder) {

@@ -132,13 +132,29 @@ final class AppViewModel: ObservableObject {
         return first.addingTimeInterval(window)
     }
 
-    /// 今日の枠で、いま撮り直せるなら、その締め切り。画面の残り秒数の表示に使う。
-    func todayRetakeDeadline(now: Date = Date()) -> Date? {
-        guard let slot = group?.currentWeek.slot(at: todayIndex),
-              canShoot(dayIndex: todayIndex, now: now),
-              let deadline = retakeDeadline(for: slot)
-        else { return nil }
-        return deadline
+    /// 今週のうち、いちばん遅い撮り直しの締め切り（撮れるかどうかは問わない）。
+    /// 画面の時計を「締め切りが過ぎるまで」進めるために使う。
+    var latestRetakeDeadline: Date? {
+        group?.currentWeek.slots.compactMap { retakeDeadline(for: $0) }.max()
+    }
+
+    /// いま撮り直せる枠と、その締め切り。画面の残り秒数と RETAKE ボタンに使う。
+    ///
+    /// 今日の枠に限らず今週の枠から探すのは、自由撮影モードで他の日を撮った直後にも
+    /// 同じように撮り直せるようにするため。複数あるときは、いちばん最近撮った枠。
+    /// 週の最後の1枚を撮って週が「完成」になった直後も、ここは撮り直せる枠を返す。
+    func retakeWindow(now: Date = Date()) -> (dayIndex: Int, deadline: Date)? {
+        guard let group else { return nil }
+        return group.currentWeek.slots
+            .compactMap { slot -> (dayIndex: Int, deadline: Date)? in
+                guard slot.isFilled,
+                      let deadline = retakeDeadline(for: slot),
+                      now < deadline,
+                      canShoot(dayIndex: slot.dayIndex, now: now)
+                else { return nil }
+                return (slot.dayIndex, deadline)
+            }
+            .max { $0.deadline < $1.deadline }
     }
 
     /// タップしなくても最初からカメラが開いている枠。
@@ -395,10 +411,10 @@ final class AppViewModel: ObservableObject {
         current.currentWeek.slots[index].photoFilename = filename
         current.currentWeek.slots[index].photoURL = nil      // 撮り直したら URL も取り直す
         if isRetake {
-            current.currentWeek.slots[index].retakenAt = now
+            current.currentWeek.slots[index].retakeCount = (previous.retakeCount ?? 0) + 1
         } else {
             current.currentWeek.slots[index].capturedAt = now
-            current.currentWeek.slots[index].retakenAt = nil
+            current.currentWeek.slots[index].retakeCount = nil
         }
         current.currentWeek.slots[index].takenByMemberID = current.myMemberID
         group = current

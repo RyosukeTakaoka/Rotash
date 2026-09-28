@@ -16,6 +16,10 @@ final class CameraController: NSObject, ObservableObject {
     @Published private(set) var status: Status = .idle
     /// 今どちらのカメラを使っているか。自撮り用に前面へ切り替えられる。
     @Published private(set) var position: AVCaptureDevice.Position = .back
+    /// Rotash レンズのライブビューに映像を渡せるか。
+    /// 映像の出口を追加できなかった端末では false になり、画面は普通のプレビューに戻す
+    /// （ここを見ずにレンズ表示にすると、ライブビューが真っ黒のままになる）。
+    @Published private(set) var supportsLensPreview = false
 
     let session = AVCaptureSession()
 
@@ -110,7 +114,8 @@ final class CameraController: NSObject, ObservableObject {
         videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
         videoOutput.alwaysDiscardsLateVideoFrames = true
         videoOutput.setSampleBufferDelegate(self, queue: videoQueue)
-        if session.canAddOutput(videoOutput) {
+        let addedVideoOutput = session.canAddOutput(videoOutput)
+        if addedVideoOutput {
             session.addOutput(videoOutput)
         }
         session.commitConfiguration()
@@ -120,6 +125,7 @@ final class CameraController: NSObject, ObservableObject {
         isConfigured = true
 
         DispatchQueue.main.async {
+            self.supportsLensPreview = addedVideoOutput
             self.status = .ready
             self.bindRotationCoordinator()
         }
@@ -281,8 +287,14 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
 
         DispatchQueue.main.async { [weak self] in
-            self?.lensView?.display(image)
-            self?.frameGate.endFrame()
+            guard let self else { return }
+            if let lensView = self.lensView {
+                lensView.display(image)
+            } else {
+                // View が閉じられた（weak なので didSet は呼ばれない）。変換をやめる。
+                self.frameGate.setWantsFrames(false)
+            }
+            self.frameGate.endFrame()
         }
     }
 }

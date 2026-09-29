@@ -254,9 +254,9 @@ enum WorkExporter {
            let context = UIGraphicsGetCurrentContext() {
             context.saveGState()
             context.clip(to: rect)
-            let widening = RotashLens.widening
-            let drewWithLens = layout.format == .screen && widening > 1
-                && RotashLens.draw(image, in: rect, widening: widening)
+            let lens = RotashLens.currentSetting(for: slot)
+            let drewWithLens = layout.format == .screen && lens.isActive
+                && RotashLens.draw(image, in: rect, setting: lens)
             if !drewWithLens {
                 image.draw(in: aspectFillRect(imageSize: image.size, in: rect))
             }

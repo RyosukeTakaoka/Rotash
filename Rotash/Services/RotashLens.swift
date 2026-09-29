@@ -21,7 +21,54 @@ import UIKit
 ///   だから Memories の 4:3 表示では、撮った写真の全体が自然なまま見える。
 /// - ライブビュー・7分割の表示・共有画像（`.screen`）・縦持ちの撮影画面で同じ計算を使うので、
 ///   撮るときに見えた絵と、あとで見える絵は同じになる。
+///
+/// # 内カメは別の方式（左右を押し込む）
+///
+/// 外カメは超広角レンズで本当に広く写るので、上の疑似広角で足りる。
+/// 内カメは顔の近くで撮ることが多く、欲しいのは「顔はそのまま、左右の景色も枠に入れたい」。
+/// そこで内カメで撮った写真だけ、**真ん中の一定の幅はまったく縮めず、その外側だけを横に押し込む**
+/// （`Style.sideSqueeze`）。最初に作った魚眼風と同じ系統だが、強すぎて端が 1/4 に潰れていたのが
+/// 「曲がっただけ」に見えた原因だったので、真ん中を完全に保護し、強さも控えめにしている。
+/// どちらのカメラで撮ったかは `Slot.capturedWithFront` に残し、あとで表示するときも同じ方式を使う。
 enum RotashLens {
+
+    /// どう広げるか。
+    enum Style: Equatable {
+        /// 真ん中を縦横そろえて縮め、足りない上下の端を伸ばす（外カメ）。
+        case pseudoWide
+        /// 真ん中はそのまま、左右だけを横に押し込む（内カメ）。
+        case sideSqueeze
+    }
+
+    /// 1枚の写真（またはライブビュー）にかけるレンズ。
+    struct Setting: Equatable {
+        var style: Style
+        var widening: Double
+
+        /// かけないのと同じ。
+        static let plain = Setting(style: .pseudoWide, widening: 1)
+
+        var isActive: Bool { widening > 1.001 }
+    }
+
+    /// 撮ったカメラから、かけるレンズを決める。
+    /// - Parameters:
+    ///   - back: 外カメの広げ具合（`resolve(stored:)` を通したもの）
+    ///   - front: 内カメの押し込み具合（`resolveFront(stored:)` を通したもの）
+    static func setting(isFront: Bool, back: Double, front: Double) -> Setting {
+        isFront ? Setting(style: .sideSqueeze, widening: front)
+                : Setting(style: .pseudoWide, widening: back)
+    }
+
+    /// 保存済みの写真にかけるレンズ。記録が無い古い写真は外カメ扱い（これまでと同じ見え方）。
+    static func setting(for slot: Slot, back: Double, front: Double) -> Setting {
+        setting(isFront: slot.capturedWithFront ?? false, back: back, front: front)
+    }
+
+    /// 画面の外（共有画像など）で使う、いまの設定での写真のレンズ。
+    static func currentSetting(for slot: Slot) -> Setting {
+        setting(for: slot, back: widening, front: frontWidening)
+    }
 
     /// 検証用ビルドで、設定画面から広げ具合を変えたときの保存先。
     static let storageKey = "rotash.lensWidening"
@@ -39,6 +86,21 @@ enum RotashLens {
         Preset(label: "1.4", widening: 1.4)
     ]
 
+    /// 内カメの押し込み具合を変えたときの保存先（検証用ビルド）。
+    static let frontStorageKey = "rotash.frontLensWidening"
+
+    /// 内カメで選べる押し込み具合。1.5 なら枠に 1.5 倍の横幅が入る（真ん中は縮めない）。
+    static let frontPresets: [Preset] = [
+        Preset(label: "普通", widening: 1.0),
+        Preset(label: "1.3", widening: 1.3),
+        Preset(label: "1.5", widening: 1.5),
+        Preset(label: "1.8", widening: 1.8)
+    ]
+
+    /// 内カメで、まったく縮めない真ん中の幅（枠の横幅に対する割合の半分）。
+    /// 0.3 なら、枠の中央 30% は撮ったときの形のまま。顔ひとつ分くらい。
+    static let protectedCenter: CGFloat = 0.3
+
     /// 縦の引き伸ばしが破綻しない上限（真ん中の縮尺がこれを超えると、端で上下が折り返す）。
     static let maxVerticalZoom: CGFloat = 1.45
 
@@ -53,6 +115,16 @@ enum RotashLens {
     /// `@AppStorage` で持っている値から、実際に使う広げ具合を決める。
     static func resolve(stored: Double?) -> Double {
         guard RotashFeatureFlags.isTestBuild, let stored else { return RotashFeatureFlags.lensWidening }
+        return max(1, stored)
+    }
+
+    /// いまの内カメの押し込み具合。
+    static var frontWidening: Double {
+        resolveFront(stored: UserDefaults.standard.object(forKey: frontStorageKey) as? Double)
+    }
+
+    static func resolveFront(stored: Double?) -> Double {
+        guard RotashFeatureFlags.isTestBuild, let stored else { return RotashFeatureFlags.frontLensWidening }
         return max(1, stored)
     }
 
@@ -74,8 +146,23 @@ enum RotashLens {
     ///   揃えないと、短冊のあいだに髪の毛ほどのすき間が見えることがある。
     static func bands(imageSize: CGSize,
                       in size: CGSize,
-                      widening: Double,
+                      setting: Setting,
                       pixelScale: CGFloat) -> [Band] {
+        switch setting.style {
+        case .pseudoWide:
+            return pseudoWideBands(imageSize: imageSize, in: size,
+                                   widening: setting.widening, pixelScale: pixelScale)
+        case .sideSqueeze:
+            return sideSqueezeBands(imageSize: imageSize, in: size,
+                                    widening: setting.widening, pixelScale: pixelScale)
+        }
+    }
+
+    /// 外カメ用。真ん中を縦横そろえて縮め、足りない上下の端を伸ばす。
+    static func pseudoWideBands(imageSize: CGSize,
+                                in size: CGSize,
+                                widening: Double,
+                                pixelScale: CGFloat) -> [Band] {
         guard imageSize.width > 0, imageSize.height > 0,
               size.width > 0, size.height > 0
         else { return [] }
@@ -131,6 +218,65 @@ enum RotashLens {
         return result
     }
 
+    /// 内カメ用。真ん中（`protectedCenter`）はそのまま、その外側だけを横に押し込む。
+    ///
+    /// 枠の横位置 v（左端 -1 … 右端 +1）を、写真の横位置へ移す。
+    ///   |v| ≤ c のとき   G(v) = v                         （縮めない）
+    ///   |v| > c のとき   G(v) = v ± (k − 1)·((|v| − c)/(1 − c))²
+    /// 真ん中との境目でなめらかにつながり（傾きが 1 のまま）、端の v = ±1 でちょうど k 倍の範囲に届く。
+    /// 縦には手を入れないので、縦の線はまっすぐのまま。
+    static func sideSqueezeBands(imageSize: CGSize,
+                                 in size: CGSize,
+                                 widening: Double,
+                                 pixelScale: CGFloat) -> [Band] {
+        guard imageSize.width > 0, imageSize.height > 0,
+              size.width > 0, size.height > 0
+        else { return [] }
+
+        let fillScale = max(size.width / imageSize.width, size.height / imageSize.height)
+        let visibleX = min(1, size.width / (fillScale * imageSize.width))
+        let visibleY = min(1, size.height / (fillScale * imageSize.height))
+        let sourceY = (1 - visibleY) / 2
+
+        // 写真の外までは広げられないので、横は 1 / visibleX 倍で止める。
+        let k = min(CGFloat(max(1, widening)), 1 / visibleX)
+        guard k > 1.001 else {
+            return [Band(destination: CGRect(origin: .zero, size: size),
+                         source: CGRect(x: (1 - visibleX) / 2, y: sourceY,
+                                        width: visibleX, height: visibleY))]
+        }
+
+        let c = protectedCenter
+        func sourceX(atCell v: CGFloat) -> CGFloat {
+            let a = abs(v)
+            let ramp = a <= c ? 0 : (a - c) / (1 - c)
+            let g = v + (v < 0 ? -1 : 1) * (k - 1) * ramp * ramp
+            return 0.5 + 0.5 * visibleX * g
+        }
+
+        let scale = max(pixelScale, 1)
+        let widthInPixels = size.width * scale
+        // 1本あたり 3px 前後（横に押し込む方向なので、縦長の短冊を横に並べる）。
+        let count = min(64, max(8, Int((widthInPixels / 3).rounded(.up))))
+
+        var result: [Band] = []
+        result.reserveCapacity(count)
+        for index in 0..<count {
+            let left = (widthInPixels * CGFloat(index) / CGFloat(count)).rounded()
+            let right = (widthInPixels * CGFloat(index + 1) / CGFloat(count)).rounded()
+            guard right > left else { continue }
+
+            let x0 = sourceX(atCell: 2 * left / widthInPixels - 1)
+            let x1 = sourceX(atCell: 2 * right / widthInPixels - 1)
+            result.append(Band(
+                destination: CGRect(x: left / scale, y: 0,
+                                    width: (right - left) / scale, height: size.height),
+                source: CGRect(x: x0, y: sourceY, width: x1 - x0, height: visibleY)
+            ))
+        }
+        return result
+    }
+
     // MARK: - 静止画への描画（共有画像用）
 
     /// 現在の UIKit の描画先に、レンズをかけた写真を `rect` いっぱいに描く。
@@ -142,14 +288,14 @@ enum RotashLens {
     ///
     /// - Returns: 描けなかったとき（CGImage を持たない画像など）は false。呼び出し側で普通に描くこと。
     @discardableResult
-    static func draw(_ image: UIImage, in rect: CGRect, widening: Double) -> Bool {
+    static func draw(_ image: UIImage, in rect: CGRect, setting: Setting) -> Bool {
         guard let cgImage = image.cgImage, image.imageOrientation == .up else { return false }
 
         // 組み立てる画像はピクセル単位の整数の大きさにする（倍率1）。
         let canvasSize = CGSize(width: max(1, rect.width.rounded(.up)),
                                 height: max(1, rect.height.rounded(.up)))
         let pixelSize = CGSize(width: cgImage.width, height: cgImage.height)
-        let pieces = Self.bands(imageSize: pixelSize, in: canvasSize, widening: widening, pixelScale: 1)
+        let pieces = Self.bands(imageSize: pixelSize, in: canvasSize, setting: setting, pixelScale: 1)
         guard !pieces.isEmpty else { return false }
 
         let format = UIGraphicsImageRendererFormat.default()

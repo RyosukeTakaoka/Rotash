@@ -8,9 +8,9 @@ import UIKit
 /// ライブビュー（毎秒30枚ほど）でも CPU で画像を作り直さずに済む。
 final class LensView: UIView {
 
-    /// 広げ具合。変わったら短冊を組み直す。
-    var widening: Double = 1 {
-        didSet { if oldValue != widening { setNeedsLayout() } }
+    /// かけるレンズ（方式と強さ）。変わったら短冊を組み直す。
+    var setting: RotashLens.Setting = .plain {
+        didSet { if oldValue != setting { setNeedsLayout() } }
     }
 
     private var image: CGImage?
@@ -65,7 +65,7 @@ final class LensView: UIView {
         let scale = traitCollection.displayScale
         let bands = RotashLens.bands(imageSize: CGSize(width: image.width, height: image.height),
                                      in: bounds.size,
-                                     widening: widening,
+                                     setting: setting,
                                      pixelScale: scale)
 
         while bandLayers.count > bands.count {
@@ -91,17 +91,17 @@ final class LensView: UIView {
 /// 保存済みの写真に Rotash レンズをかけて表示する。
 struct LensPhotoView: UIViewRepresentable {
     let image: CGImage
-    let widening: Double
+    let setting: RotashLens.Setting
 
     func makeUIView(context: Context) -> LensView {
         let view = LensView()
-        view.widening = widening
+        view.setting = setting
         view.display(image)
         return view
     }
 
     func updateUIView(_ uiView: LensView, context: Context) {
-        uiView.widening = widening
+        uiView.setting = setting
         uiView.display(image)
     }
 }
@@ -110,17 +110,17 @@ struct LensPhotoView: UIViewRepresentable {
 /// 普通のプレビュー（`CameraPreview`）の代わりに、カメラの映像を1コマずつ受け取って表示する。
 struct LensCameraPreview: UIViewRepresentable {
     let controller: CameraController
-    let widening: Double
+    let setting: RotashLens.Setting
 
     func makeUIView(context: Context) -> LensView {
         let view = LensView()
-        view.widening = widening
+        view.setting = setting
         controller.lensView = view
         return view
     }
 
     func updateUIView(_ uiView: LensView, context: Context) {
-        uiView.widening = widening
+        uiView.setting = setting
         if controller.lensView !== uiView {
             controller.lensView = uiView
         }

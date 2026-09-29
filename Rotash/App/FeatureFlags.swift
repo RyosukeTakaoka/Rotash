@@ -61,6 +61,11 @@ enum RotashFeatureFlags {
     /// 検証用ビルドでは、設定画面の「レンズ」から端末ごとに切り替えて見くらべられる。
     static let lensWidening: Double = 1.3
 
+    /// 内カメで撮った写真の押し込み具合（`RotashLens.Style.sideSqueeze`）。
+    /// 真ん中（顔のあたり）はそのまま、左右だけを横に押し込んで、枠に何倍の横幅を入れるか。
+    /// 1.0 で押し込まない。検証用ビルドでは設定画面の「内カメ」で切り替えられる。
+    static let frontLensWidening: Double = 1.5
+
     /// 検証中のビルドかどうか。TestFlight と開発ビルドで true、App Store 版では false。
     ///
     /// 「動きを確かめるための仕掛け」は、確かめている間しか要らない。

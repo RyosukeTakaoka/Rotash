@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var showImporter = false
     @State private var batonPayload: SharePayload?
     @AppStorage(RotashLens.storageKey) private var lensWidening = RotashFeatureFlags.lensWidening
+    @AppStorage(RotashLens.frontStorageKey) private var frontLensWidening = RotashFeatureFlags.frontLensWidening
 
     var body: some View {
         ZStack {
@@ -156,14 +157,24 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("レンズ").rotashLabel(11, color: Palette.text, tracking: 1)
 
-            Picker("レンズ", selection: $lensWidening) {
+            Text("外カメ（疑似広角）").rotashLabel(9, color: Palette.dim, tracking: 1)
+            Picker("外カメ", selection: $lensWidening) {
                 ForEach(RotashLens.presets, id: \.self) { preset in
                     Text(preset.label).tag(preset.widening)
                 }
             }
             .pickerStyle(.segmented)
 
-            Text("細い枠に、どれだけ広く写すか。真ん中は形を変えずに縮め、足りない上下の端だけを縦に伸ばします。「普通」はこれまでと同じ見え方です。")
+            Text("内カメ（左右を押し込む）").rotashLabel(9, color: Palette.dim, tracking: 1)
+                .padding(.top, 4)
+            Picker("内カメ", selection: $frontLensWidening) {
+                ForEach(RotashLens.frontPresets, id: \.self) { preset in
+                    Text(preset.label).tag(preset.widening)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Text("撮る前のライブビューにも同じようにかかります。外カメは形を変えずに縮めて上下の端を伸ばし、内カメは顔のあたりはそのままで左右の景色だけを押し込みます。「普通」はこれまでと同じ見え方です。")
                 .rotashLabel(9, color: Palette.faint, tracking: 0.4)
                 .lineSpacing(4)
         }

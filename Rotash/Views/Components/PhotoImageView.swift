@@ -9,8 +9,8 @@ struct PhotoImageView: View {
     var filename: String?
     var remoteURL: String?
     var maxPixel: CGFloat?
-    /// 1 より大きいと Rotash レンズをかけて表示する（7分割の枠用）。
-    var lensWidening: Double = 1
+    /// かける Rotash レンズ（7分割の枠用）。既定はかけない。
+    var lens: RotashLens.Setting = .plain
 
     @State private var image: UIImage?
 
@@ -20,11 +20,11 @@ struct PhotoImageView: View {
         self.maxPixel = maxPixel
     }
 
-    init(slot: Slot, maxPixel: CGFloat? = nil, lensWidening: Double = 1) {
+    init(slot: Slot, maxPixel: CGFloat? = nil, lens: RotashLens.Setting = .plain) {
         self.filename = slot.photoFilename
         self.remoteURL = slot.photoURL
         self.maxPixel = maxPixel
-        self.lensWidening = lensWidening
+        self.lens = lens
     }
 
     var body: some View {
@@ -37,8 +37,8 @@ struct PhotoImageView: View {
                 // overlay の中身はレイアウトに影響しないので、この形なら常に枠ぴったりになる。
                 Color.clear
                     .overlay {
-                        if lensWidening > 1, let cgImage = image.cgImage, image.imageOrientation == .up {
-                            LensPhotoView(image: cgImage, widening: lensWidening)
+                        if lens.isActive, let cgImage = image.cgImage, image.imageOrientation == .up {
+                            LensPhotoView(image: cgImage, setting: lens)
                         } else {
                             Image(uiImage: image)
                                 .resizable()

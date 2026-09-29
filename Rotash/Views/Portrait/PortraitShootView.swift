@@ -31,7 +31,20 @@ struct PortraitShootView: View {
     @State private var now = Date()
     /// 横向きの7分割と同じ疑似広角をかける。ここで見えた絵が、横にしたときの枠にそのまま入るように。
     @AppStorage(RotashLens.storageKey) private var storedLensWidening = RotashFeatureFlags.lensWidening
-    private var lensWidening: Double { RotashLens.resolve(stored: storedLensWidening) }
+    @AppStorage(RotashLens.frontStorageKey) private var storedFrontLensWidening = RotashFeatureFlags.frontLensWidening
+
+    private func lens(for slot: Slot) -> RotashLens.Setting {
+        RotashLens.setting(for: slot,
+                           back: RotashLens.resolve(stored: storedLensWidening),
+                           front: RotashLens.resolveFront(stored: storedFrontLensWidening))
+    }
+
+    /// ライブビューのレンズ。内カメなら左右を押し込み、外カメなら疑似広角。
+    private var liveLens: RotashLens.Setting {
+        RotashLens.setting(isFront: camera.position == .front,
+                           back: RotashLens.resolve(stored: storedLensWidening),
+                           front: RotashLens.resolveFront(stored: storedFrontLensWidening))
+    }
     private let clock = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     private var day: Int { app.todayIndex }
@@ -136,7 +149,7 @@ struct PortraitShootView: View {
             if showsLive {
                 liveContent
             } else if let slot, slot.isFilled {
-                PhotoImageView(slot: slot, maxPixel: 720, lensWidening: lensWidening)
+                PhotoImageView(slot: slot, maxPixel: 720, lens: lens(for: slot))
             } else {
                 Palette.surface
             }
@@ -151,8 +164,8 @@ struct PortraitShootView: View {
     private var liveContent: some View {
         switch camera.status {
         case .ready:
-            if lensWidening > 1, camera.supportsLensPreview {
-                LensCameraPreview(controller: camera, widening: lensWidening)
+            if liveLens.isActive, camera.supportsLensPreview {
+                LensCameraPreview(controller: camera, setting: liveLens)
             } else {
                 CameraPreview(controller: camera)
             }
@@ -182,7 +195,7 @@ struct PortraitShootView: View {
         if let week = app.group?.currentWeek, let slot = week.slot(at: index) {
             ZStack {
                 if slot.isFilled {
-                    PhotoImageView(slot: slot, maxPixel: 480, lensWidening: lensWidening)
+                    PhotoImageView(slot: slot, maxPixel: 480, lens: lens(for: slot))
                         .opacity(0.8)
                 } else {
                     Palette.surface
@@ -290,7 +303,7 @@ struct PortraitShootView: View {
                 self.flashOpacity = 0.85
                 withAnimation(.easeOut(duration: 0.28)) { self.flashOpacity = 0 }
                 if let data {
-                    self.app.attachPhoto(data, toDay: target)
+                    self.app.attachPhoto(data, toDay: target, front: self.camera.position == .front)
                     self.retaking = false
                 }
                 // 撮った時刻（attachPhoto の中で決まる）のあとで合わせる。先だと残りが一瞬 31 に見える。

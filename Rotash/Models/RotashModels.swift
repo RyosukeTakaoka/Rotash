@@ -67,6 +67,9 @@ struct Slot: Identifiable, Codable, Hashable {
     /// 同期で「同じ人の同じ1枚の、新しい版」を見分けるために使う（`RotashMerge`）。
     /// 時刻で比べないのは、サーバーの日付が秒までしか無く、1秒以内の撮り直しを見分けられないため。
     var retakeCount: Int?
+    /// 内カメで撮った写真か。内カメの写真だけレンズの方式を変える（`RotashLens.setting(for:)`）。
+    /// 記録の無い古い写真は nil（外カメ扱い）。写真と一緒に同期で相手に届く。
+    var capturedWithFront: Bool?
     var takenByMemberID: UUID?
 
     /// 写真がある枠かどうか。

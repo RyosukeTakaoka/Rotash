@@ -21,8 +21,21 @@ struct ThisWeekView: View {
     private let clock = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
     /// 検証用ビルドで設定画面から変えた Rotash レンズの広げ具合。
     @AppStorage(RotashLens.storageKey) private var storedLensWidening = RotashFeatureFlags.lensWidening
+    @AppStorage(RotashLens.frontStorageKey) private var storedFrontLensWidening = RotashFeatureFlags.frontLensWidening
 
-    private var lensWidening: Double { RotashLens.resolve(stored: storedLensWidening) }
+    /// 保存済みの写真にかけるレンズ（撮ったカメラで方式が変わる）。
+    private func lens(for slot: Slot) -> RotashLens.Setting {
+        RotashLens.setting(for: slot,
+                           back: RotashLens.resolve(stored: storedLensWidening),
+                           front: RotashLens.resolveFront(stored: storedFrontLensWidening))
+    }
+
+    /// ライブビューにかけるレンズ。いま使っているカメラで決まる（撮ったあとの表示と同じになる）。
+    private var liveLens: RotashLens.Setting {
+        RotashLens.setting(isFront: camera.position == .front,
+                           back: RotashLens.resolve(stored: storedLensWidening),
+                           front: RotashLens.resolveFront(stored: storedFrontLensWidening))
+    }
 
     private var week: RotashWeek? { app.group?.currentWeek }
 
@@ -221,7 +234,7 @@ struct ThisWeekView: View {
                 // ライブビューと同じレンズをかける。撮るときに見えた絵のまま枠に残る。
                 // 元の写真（約1200万画素）をそのまま7枚読むとメモリを大きく使うので、
                 // 枠の高さに足りる大きさに縮めて読む（720pt → 3倍の画面で 2160px）。
-                PhotoImageView(slot: slot, maxPixel: 720, lensWidening: lensWidening)
+                PhotoImageView(slot: slot, maxPixel: 720, lens: lens(for: slot))
             } else {
                 Palette.surface
             }
@@ -281,8 +294,8 @@ struct ThisWeekView: View {
     private var liveContent: some View {
         switch camera.status {
         case .ready:
-            if lensWidening > 1, camera.supportsLensPreview {
-                LensCameraPreview(controller: camera, widening: lensWidening)
+            if liveLens.isActive, camera.supportsLensPreview {
+                LensCameraPreview(controller: camera, setting: liveLens)
             } else {
                 CameraPreview(controller: camera)
             }
@@ -401,7 +414,7 @@ struct ThisWeekView: View {
                 self.flashOpacity = 0.85
                 withAnimation(.easeOut(duration: 0.28)) { self.flashOpacity = 0 }
                 if let data {
-                    self.app.attachPhoto(data, toDay: day)
+                    self.app.attachPhoto(data, toDay: day, front: self.camera.position == .front)
                     self.manualSelection = nil
                 }
                 // 撮り直しの残り秒数をここから数え始める。撮った時刻（attachPhoto の中で決まる）より

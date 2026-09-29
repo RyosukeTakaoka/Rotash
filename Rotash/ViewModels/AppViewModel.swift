@@ -402,7 +402,8 @@ final class AppViewModel: ObservableObject {
 
     // MARK: - Shooting
 
-    func attachPhoto(_ data: Data, toDay dayIndex: Int) {
+    /// - Parameter front: 内カメで撮ったか。表示するときのレンズの方式を決めるために残す。
+    func attachPhoto(_ data: Data, toDay dayIndex: Int, front: Bool = false) {
         guard var current = group,
               let index = current.currentWeek.slots.firstIndex(where: { $0.dayIndex == dayIndex }),
               let filename = try? PhotoStore.shared.save(data)
@@ -428,6 +429,7 @@ final class AppViewModel: ObservableObject {
             current.currentWeek.slots[index].retakeCount = nil
         }
         current.currentWeek.slots[index].takenByMemberID = current.myMemberID
+        current.currentWeek.slots[index].capturedWithFront = front
         group = current
         persist()
         if isRetake, let first = previous.capturedAt {

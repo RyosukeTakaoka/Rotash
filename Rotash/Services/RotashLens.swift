@@ -22,22 +22,29 @@ import UIKit
 /// - ライブビュー・7分割の表示・共有画像（`.screen`）・縦持ちの撮影画面で同じ計算を使うので、
 ///   撮るときに見えた絵と、あとで見える絵は同じになる。
 ///
-/// # 内カメは別の方式（左右を押し込む）
+/// # 内カメは「顔を守る」疑似広角
 ///
-/// 外カメは超広角レンズで本当に広く写るので、上の疑似広角で足りる。
-/// 内カメは顔の近くで撮ることが多く、欲しいのは「顔はそのまま、左右の景色も枠に入れたい」。
-/// そこで内カメで撮った写真だけ、**真ん中の一定の幅はまったく縮めず、その外側だけを横に押し込む**
-/// （`Style.sideSqueeze`）。最初に作った魚眼風と同じ系統だが、強すぎて端が 1/4 に潰れていたのが
-/// 「曲がっただけ」に見えた原因だったので、真ん中を完全に保護し、強さも控えめにしている。
+/// 内カメ（縦持ちの自撮り）は顔が枠の横幅いっぱいに来る。ここで横の端を押し込むと
+/// 目や頬がつぶれ、「広がったのではなく顔が曲がっただけ」に見える（以前の `sideSqueeze` がそうだった）。
+/// そこで内カメも外カメと同じく **縦横そろえて縮め**（顔ごと小さくなり、左右の景色が入る）、
+/// 足りない高さは上下の端で埋める。ただし伸ばすのは **顔より外（髪の上・服）だけ** にして、
+/// 枠の真ん中の高さ（`faceHalfHeight`）は形をまったく変えない（`Style.faceSafeWide`）。
 /// どちらのカメラで撮ったかは `Slot.capturedWithFront` に残し、あとで表示するときも同じ方式を使う。
+///
+/// # 横だけを曲げても広くならない理由
+///
+/// 縦持ちの内カメは、写真の **高さをもう全部** 枠に使っている（枠 1:3.2、写真 3:4）。
+/// 横には 2.4 倍ほど余りがあるが、縦の余りは無い。だから「同じ高さのまま横を増やす」と、
+/// どこかの縦横比が必ず崩れる。崩す場所を顔（左右）ではなく、髪・服（上下）に寄せるのがこの方式。
 enum RotashLens {
 
     /// どう広げるか。
     enum Style: Equatable {
         /// 真ん中を縦横そろえて縮め、足りない上下の端を伸ばす（外カメ）。
         case pseudoWide
-        /// 真ん中はそのまま、左右だけを横に押し込む（内カメ）。
-        case sideSqueeze
+        /// 疑似広角と同じく縦横そろえて縮めるが、真ん中の高さ（顔）は形を保ったまま、
+        /// 髪・服のある上下の端だけを伸ばす（内カメ）。
+        case faceSafeWide
     }
 
     /// 1枚の写真（またはライブビュー）にかけるレンズ。
@@ -54,9 +61,9 @@ enum RotashLens {
     /// 撮ったカメラから、かけるレンズを決める。
     /// - Parameters:
     ///   - back: 外カメの広げ具合（`resolve(stored:)` を通したもの）
-    ///   - front: 内カメの押し込み具合（`resolveFront(stored:)` を通したもの）
+    ///   - front: 内カメの広げ具合（`resolveFront(stored:)` を通したもの）
     static func setting(isFront: Bool, back: Double, front: Double) -> Setting {
-        isFront ? Setting(style: .sideSqueeze, widening: front)
+        isFront ? Setting(style: .faceSafeWide, widening: front)
                 : Setting(style: .pseudoWide, widening: back)
     }
 
@@ -86,20 +93,26 @@ enum RotashLens {
         Preset(label: "1.4", widening: 1.4)
     ]
 
-    /// 内カメの押し込み具合を変えたときの保存先（検証用ビルド）。
-    static let frontStorageKey = "rotash.frontLensWidening"
+    /// 内カメの広げ具合を変えたときの保存先（検証用ビルド）。
+    /// 以前の「左右を押し込む」方式とは数字の意味が違うので、キーを分けて古い値（1.8 など）を引き継がない。
+    static let frontStorageKey = "rotash.frontLensZoom"
 
-    /// 内カメで選べる押し込み具合。1.5 なら枠に 1.5 倍の横幅が入る（真ん中は縮めない）。
+    /// 内カメで選べる広げ具合。1.45 なら顔も景色も 1/1.45 の大きさになり、横に 1.45 倍の範囲が入る。
+    /// 上限は外カメと同じ `maxVerticalZoom`（それより上は、上下の端の伸びが強くなりすぎる）。
     static let frontPresets: [Preset] = [
         Preset(label: "普通", widening: 1.0),
-        Preset(label: "1.3", widening: 1.3),
-        Preset(label: "1.5", widening: 1.5),
-        Preset(label: "1.8", widening: 1.8)
+        Preset(label: "1.25", widening: 1.25),
+        Preset(label: "1.35", widening: 1.35),
+        Preset(label: "1.45", widening: 1.45)
     ]
 
-    /// 内カメで、まったく縮めない真ん中の幅（枠の横幅に対する割合の半分）。
-    /// 0.3 なら、枠の中央 30% は撮ったときの形のまま。顔ひとつ分くらい。
-    static let protectedCenter: CGFloat = 0.3
+    /// 内カメで、形をまったく変えない真ん中の高さ（枠の高さに対する割合の半分）。
+    /// 0.35 なら、枠の中央 35% の高さ（目から口のあたり）は縦横そろえて縮めるだけ。
+    static let faceHalfHeight: CGFloat = 0.35
+
+    /// 内カメで、真ん中から上下の端の伸ばし方へ、なめらかに移っていく幅（同じく割合の半分）。
+    /// ここで急に切り替えると、顔の上（おでこ）と下（あご）に折れ目が見える。
+    static let faceBlend: CGFloat = 0.35
 
     /// 縦の引き伸ばしが破綻しない上限（真ん中の縮尺がこれを超えると、端で上下が折り返す）。
     static let maxVerticalZoom: CGFloat = 1.45
@@ -118,7 +131,7 @@ enum RotashLens {
         return max(1, stored)
     }
 
-    /// いまの内カメの押し込み具合。
+    /// いまの内カメの広げ具合。
     static var frontWidening: Double {
         resolveFront(stored: UserDefaults.standard.object(forKey: frontStorageKey) as? Double)
     }
@@ -150,18 +163,21 @@ enum RotashLens {
                       pixelScale: CGFloat) -> [Band] {
         switch setting.style {
         case .pseudoWide:
-            return pseudoWideBands(imageSize: imageSize, in: size,
-                                   widening: setting.widening, pixelScale: pixelScale)
-        case .sideSqueeze:
-            return sideSqueezeBands(imageSize: imageSize, in: size,
-                                    widening: setting.widening, pixelScale: pixelScale)
+            return pseudoWideBands(imageSize: imageSize, in: size, widening: setting.widening,
+                                   protectsFace: false, pixelScale: pixelScale)
+        case .faceSafeWide:
+            return pseudoWideBands(imageSize: imageSize, in: size, widening: setting.widening,
+                                   protectsFace: true, pixelScale: pixelScale)
         }
     }
 
-    /// 外カメ用。真ん中を縦横そろえて縮め、足りない上下の端を伸ばす。
+    /// 真ん中を縦横そろえて縮め、足りない上下の端を伸ばす。
+    /// - Parameter protectsFace: true なら真ん中の高さは形を保ち、上下の端だけを伸ばす（内カメ）。
+    ///   false なら縦全体をなめらかな3次式で伸ばす（外カメ）。
     static func pseudoWideBands(imageSize: CGSize,
                                 in size: CGSize,
                                 widening: Double,
+                                protectsFace: Bool,
                                 pixelScale: CGFloat) -> [Band] {
         guard imageSize.width > 0, imageSize.height > 0,
               size.width > 0, size.height > 0
@@ -187,10 +203,9 @@ enum RotashLens {
 
         // 縦: 真ん中の縮尺は横と同じ（= 形が曲がらない）。枠の縦位置 v（上端 -1 … 下端 +1）を
         // 写真の縦位置 u へ移す。写真の高さに余裕があるうちは均一、足りなければ上下の端を伸ばす。
-        //   u(v) = s·v + (1 − s)·v³    （s = 真ん中の傾き。u(±1) = ±1、s < 1.5 なら単調）
         let s = visibleY * zoom
         func sourceY(atCell v: CGFloat) -> CGFloat {
-            let u = s <= 1 ? s * v : s * v + (1 - s) * v * v * v
+            let u = protectsFace ? faceSafeProfile(v, slope: s) : cubicProfile(v, slope: s)
             return 0.5 + 0.5 * u
         }
 
@@ -218,63 +233,36 @@ enum RotashLens {
         return result
     }
 
-    /// 内カメ用。真ん中（`protectedCenter`）はそのまま、その外側だけを横に押し込む。
-    ///
-    /// 枠の横位置 v（左端 -1 … 右端 +1）を、写真の横位置へ移す。
-    ///   |v| ≤ c のとき   G(v) = v                         （縮めない）
-    ///   |v| > c のとき   G(v) = v ± (k − 1)·((|v| − c)/(1 − c))²
-    /// 真ん中との境目でなめらかにつながり（傾きが 1 のまま）、端の v = ±1 でちょうど k 倍の範囲に届く。
-    /// 縦には手を入れないので、縦の線はまっすぐのまま。
-    static func sideSqueezeBands(imageSize: CGSize,
-                                 in size: CGSize,
-                                 widening: Double,
-                                 pixelScale: CGFloat) -> [Band] {
-        guard imageSize.width > 0, imageSize.height > 0,
-              size.width > 0, size.height > 0
-        else { return [] }
+    /// 外カメの縦の割り当て。真ん中の傾きが s で、上下の端 v = ±1 でちょうど写真の端に届く。
+    ///   u(v) = s·v + (1 − s)·v³    （u(±1) = ±1、s < 1.5 なら単調）
+    static func cubicProfile(_ v: CGFloat, slope s: CGFloat) -> CGFloat {
+        s <= 1 ? s * v : s * v + (1 - s) * v * v * v
+    }
 
-        let fillScale = max(size.width / imageSize.width, size.height / imageSize.height)
-        let visibleX = min(1, size.width / (fillScale * imageSize.width))
-        let visibleY = min(1, size.height / (fillScale * imageSize.height))
-        let sourceY = (1 - visibleY) / 2
-
-        // 写真の外までは広げられないので、横は 1 / visibleX 倍で止める。
-        let k = min(CGFloat(max(1, widening)), 1 / visibleX)
-        guard k > 1.001 else {
-            return [Band(destination: CGRect(origin: .zero, size: size),
-                         source: CGRect(x: (1 - visibleX) / 2, y: sourceY,
-                                        width: visibleX, height: visibleY))]
+    /// 内カメの縦の割り当て。枠の縦位置 v の大きさを a = |v| とすると、傾き（縮尺）は
+    ///   a ≤ c          のとき  s           （横と同じ縮尺 = 顔の形はそのまま）
+    ///   c < a < c + w  のとき  s から m へ smoothstep でなめらかに移る
+    ///   a ≥ c + w      のとき  m           （髪の上・服を一定の割合で伸ばす）
+    /// m は v = ±1 でちょうど写真の端（u = ±1）に届くように決める。
+    ///   m = (1 − s·c − s·w/2) / (1 − c − w/2)
+    /// 端を一定の割合で伸ばすので、3次式のように「いちばん端だけ極端に伸びる」ことがない。
+    /// s ≤ `maxVerticalZoom`（1.45）なら m ≥ 0.5 で、上下が折り返すこともない。
+    static func faceSafeProfile(_ v: CGFloat, slope s: CGFloat) -> CGFloat {
+        guard s > 1 else { return s * v }
+        let c = faceHalfHeight, w = faceBlend
+        let m = (1 - s * c - s * w / 2) / (1 - c - w / 2)
+        let a = abs(v)
+        let u: CGFloat
+        if a <= c {
+            u = s * a
+        } else if a < c + w {
+            // smoothstep S(t) = 3t² − 2t³ の積分は t³ − t⁴/2。
+            let t = (a - c) / w
+            u = s * c + w * (s * t + (m - s) * (t * t * t - t * t * t * t / 2))
+        } else {
+            u = s * c + w * (s + m) / 2 + m * (a - c - w)
         }
-
-        let c = protectedCenter
-        func sourceX(atCell v: CGFloat) -> CGFloat {
-            let a = abs(v)
-            let ramp = a <= c ? 0 : (a - c) / (1 - c)
-            let g = v + (v < 0 ? -1 : 1) * (k - 1) * ramp * ramp
-            return 0.5 + 0.5 * visibleX * g
-        }
-
-        let scale = max(pixelScale, 1)
-        let widthInPixels = size.width * scale
-        // 1本あたり 3px 前後（横に押し込む方向なので、縦長の短冊を横に並べる）。
-        let count = min(64, max(8, Int((widthInPixels / 3).rounded(.up))))
-
-        var result: [Band] = []
-        result.reserveCapacity(count)
-        for index in 0..<count {
-            let left = (widthInPixels * CGFloat(index) / CGFloat(count)).rounded()
-            let right = (widthInPixels * CGFloat(index + 1) / CGFloat(count)).rounded()
-            guard right > left else { continue }
-
-            let x0 = sourceX(atCell: 2 * left / widthInPixels - 1)
-            let x1 = sourceX(atCell: 2 * right / widthInPixels - 1)
-            result.append(Band(
-                destination: CGRect(x: left / scale, y: 0,
-                                    width: (right - left) / scale, height: size.height),
-                source: CGRect(x: x0, y: sourceY, width: x1 - x0, height: visibleY)
-            ))
-        }
-        return result
+        return v < 0 ? -u : u
     }
 
     // MARK: - 静止画への描画（共有画像用）

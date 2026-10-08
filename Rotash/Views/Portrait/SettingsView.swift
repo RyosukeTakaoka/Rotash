@@ -165,7 +165,7 @@ struct SettingsView: View {
             }
             .pickerStyle(.segmented)
 
-            Text("内カメ（左右を押し込む）").rotashLabel(9, color: Palette.dim, tracking: 1)
+            Text("内カメ（顔を守る疑似広角）").rotashLabel(9, color: Palette.dim, tracking: 1)
                 .padding(.top, 4)
             Picker("内カメ", selection: $frontLensWidening) {
                 ForEach(RotashLens.frontPresets, id: \.self) { preset in
@@ -174,7 +174,7 @@ struct SettingsView: View {
             }
             .pickerStyle(.segmented)
 
-            Text("撮る前のライブビューにも同じようにかかります。外カメは形を変えずに縮めて上下の端を伸ばし、内カメは顔のあたりはそのままで左右の景色だけを押し込みます。「普通」はこれまでと同じ見え方です。")
+            Text("撮る前のライブビューにも同じようにかかります。外カメは形を変えずに縮めて上下の端を伸ばし、内カメは顔の形を変えずに顔ごと縮めて、髪の上と服のあたりだけを伸ばします。「普通」はこれまでと同じ見え方です。")
                 .rotashLabel(9, color: Palette.faint, tracking: 0.4)
                 .lineSpacing(4)
         }

@@ -24,6 +24,14 @@ struct PortraitShootView: View {
     @StateObject private var camera = CameraController(position: .front)
 
     @State private var isCapturing = false
+    /// パノラマで撮るか（試験中）。オンのとき、シャッターで「ため始める / やめてつなぐ」になる。
+    @State private var panoramaArmed = false
+    /// パノラマのコマをためている最中か。
+    @State private var isRecordingPanorama = false
+    /// ためたコマをつないでいる最中か。
+    @State private var isStitching = false
+    /// つなげなかったときの知らせ。
+    @State private var panoramaNote: String?
     @State private var flashOpacity: Double = 0
     /// 撮ったあと、撮り直すためにライブビューへ戻しているか。
     @State private var retaking = false
@@ -97,6 +105,9 @@ struct PortraitShootView: View {
         .onAppear { syncCamera() }
         .onDisappear { camera.stop() }
         .onChange(of: showsLive) { _, _ in syncCamera() }
+        .onChange(of: camera.panoramaFrameCount) { _, count in
+            if isRecordingPanorama, count >= CameraController.panoramaMaxFrames { finishPanorama() }
+        }
         .onReceive(clock) { date in
             if let deadline = app.latestRetakeDeadline, now <= deadline { now = date }
         }
@@ -168,7 +179,7 @@ struct PortraitShootView: View {
         .clipped()
         .overlay(Rectangle().stroke(showsLive ? Palette.live : Color.clear, lineWidth: 2))
         .contentShape(Rectangle())
-        .onTapGesture { if showsLive { capture() } }
+        .onTapGesture { if showsLive { shutter() } }
     }
 
     @ViewBuilder
@@ -224,8 +235,11 @@ struct PortraitShootView: View {
     private var bottomControl: some View {
         VStack(spacing: 10) {
             if showsLive {
-                Text(isFilled ? "RETAKE\(retakeCountdown)" : "SHOOT")
-                    .rotashLabel(9, color: Palette.live, tracking: 3)
+                HStack(spacing: 14) {
+                    Text(shootLabel)
+                        .rotashLabel(9, color: Palette.live, tracking: 3)
+                    panoramaToggle
+                }
                 HStack(spacing: 20) {
                     flipButton
                     shutterButton
@@ -310,7 +324,7 @@ struct PortraitShootView: View {
     }
 
     private var shutterButton: some View {
-        Button { capture() } label: {
+        Button { shutter() } label: {
             ZStack {
                 Circle()
                     .stroke(Color.white.opacity(0.9), lineWidth: 2)
@@ -318,11 +332,90 @@ struct PortraitShootView: View {
                 Circle()
                     .fill(Color.white)
                     .frame(width: 50, height: 50)
-                    .opacity(isCapturing ? 0.35 : 1)
+                    .opacity(isCapturing && !isRecordingPanorama ? 0.35 : 1)
+                if isRecordingPanorama {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Palette.live)
+                        .frame(width: 22, height: 22)
+                }
             }
         }
         .buttonStyle(.plain)
-        .disabled(isCapturing)
+        .disabled(isCapturing && !isRecordingPanorama)
+    }
+
+    // MARK: - パノラマ（試験中）
+
+    /// シャッターの上の文字。パノラマ中は、動かし方とたまったコマの数を出す。
+    private var shootLabel: String {
+        if isStitching { return "つなぎ合わせ中…" }
+        if isRecordingPanorama {
+            return "ゆっくり上か下（左右でも）へ  \(camera.panoramaFrameCount)/\(CameraController.panoramaMaxFrames)"
+        }
+        if let panoramaNote { return panoramaNote }
+        if panoramaArmed { return "PANO：押して動かす" }
+        return isFilled ? "RETAKE\(retakeCountdown)" : "SHOOT"
+    }
+
+    /// パノラマのオン・オフ（検証用ビルドで、映像の出口がある端末だけ）。
+    @ViewBuilder
+    private var panoramaToggle: some View {
+        if RotashFeatureFlags.isTestBuild, camera.supportsLensPreview, camera.status == .ready {
+            Button {
+                panoramaArmed.toggle()
+                panoramaNote = nil
+            } label: {
+                Text(panoramaArmed ? "PANO ●" : "PANO ○")
+                    .rotashLabel(9, color: panoramaArmed ? Palette.live : Palette.dim, tracking: 1.6)
+                    .frame(minHeight: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isCapturing)
+        }
+    }
+
+    /// シャッター。パノラマがオンなら、1回目でため始め、2回目（または上限）でやめてつなぐ。
+    private func shutter() {
+        guard panoramaArmed else { return capture() }
+        if isRecordingPanorama {
+            finishPanorama()
+        } else {
+            guard !isCapturing, app.canShoot(dayIndex: day) else { return }
+            isCapturing = true
+            isRecordingPanorama = true
+            panoramaNote = nil
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+            camera.startPanorama()
+        }
+    }
+
+    private func finishPanorama() {
+        guard isRecordingPanorama else { return }
+        isRecordingPanorama = false
+        isStitching = true
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        let frames = camera.finishPanorama()
+        let target = day
+        let front = camera.position == .front
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let data = PanoramaStitcher.stitch(frames).flatMap { UIImage(cgImage: $0).rotashJPEGData() }
+            DispatchQueue.main.async {
+                self.isStitching = false
+                self.isCapturing = false
+                guard let data else {
+                    self.panoramaNote = "つなげませんでした（もっとゆっくり）"
+                    return
+                }
+                self.flashOpacity = 0.85
+                withAnimation(.easeOut(duration: 0.28)) { self.flashOpacity = 0 }
+                self.app.attachPhoto(data, toDay: target, front: front)
+                self.retaking = false
+                self.panoramaArmed = false
+                self.now = Date()
+            }
+        }
     }
 
     // MARK: - 撮影

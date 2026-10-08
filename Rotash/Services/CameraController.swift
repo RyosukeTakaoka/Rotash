@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreImage
 import UIKit
 import VideoToolbox
 
@@ -20,6 +21,11 @@ final class CameraController: NSObject, ObservableObject {
     /// 映像の出口を追加できなかった端末では false になり、画面は普通のプレビューに戻す
     /// （ここを見ずにレンズ表示にすると、ライブビューが真っ黒のままになる）。
     @Published private(set) var supportsLensPreview = false
+    /// パノラマ用にためたコマの数（撮っている間だけ増える）。
+    @Published private(set) var panoramaFrameCount = 0
+
+    /// パノラマでためるコマの上限。1コマ 720×960 ほど（約 2.8MB）なので、36 コマで約 100MB。
+    static let panoramaMaxFrames = 36
 
     let session = AVCaptureSession()
 
@@ -65,6 +71,33 @@ final class CameraController: NSObject, ObservableObject {
     /// 映像を受け取るスレッドと画面のスレッドのあいだで、
     /// 「View があるか」「前のコマをまだ表示していないか」を安全にやり取りする。
     private let frameGate = FrameGate()
+
+    /// パノラマ用に、映像のコマをためる（映像のスレッドと画面のスレッドで共有）。
+    private let panoramaRecorder = PanoramaRecorder()
+    private static let ciContext = CIContext(options: [.cacheIntermediates: false])
+
+    // MARK: - パノラマ（試験中）
+
+    /// パノラマ用のコマをため始める。映像の出口（`supportsLensPreview`）が無い端末では何もたまらない。
+    func startPanorama() {
+        panoramaFrameCount = 0
+        panoramaRecorder.start(maxFrames: Self.panoramaMaxFrames)
+    }
+
+    /// ためるのをやめて、ためたコマを受け取る。
+    func finishPanorama() -> [CGImage] {
+        panoramaRecorder.finish()
+    }
+
+    /// パノラマ用の1コマ。長い辺を 960px に小さくする（大きいままためると、すぐにメモリが足りなくなる）。
+    private static func panoramaFrame(from pixelBuffer: CVPixelBuffer) -> CGImage? {
+        let source = CIImage(cvPixelBuffer: pixelBuffer)
+        let longSide = max(source.extent.width, source.extent.height)
+        guard longSide > 0 else { return nil }
+        let scale = min(1, 960 / longSide)
+        let scaled = source.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        return ciContext.createCGImage(scaled, from: scaled.extent.integral)
+    }
 
     // MARK: - Lifecycle
 
@@ -393,6 +426,13 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput,
                        didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
+        // パノラマを撮っている間は、画面に出すかどうかに関係なくコマをためる。
+        if panoramaRecorder.wantsFrame(), let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
+           let frame = Self.panoramaFrame(from: pixelBuffer) {
+            let count = panoramaRecorder.append(frame)
+            DispatchQueue.main.async { [weak self] in self?.panoramaFrameCount = count }
+        }
+
         // 前のコマをまだ画面に出していなければ、このコマは捨てる（遅れを溜めない）。
         guard frameGate.beginFrame() else { return }
 
@@ -415,6 +455,50 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
             }
             self.frameGate.endFrame()
         }
+    }
+}
+
+/// パノラマ用のコマをためる箱。映像のスレッドでためて、画面のスレッドで受け取る。
+private final class PanoramaRecorder {
+    private let lock = NSLock()
+    private var isRecording = false
+    private var frames: [CGImage] = []
+    private var maxFrames = 0
+    private var tick = 0
+
+    func start(maxFrames: Int) {
+        lock.lock()
+        frames = []
+        self.maxFrames = maxFrames
+        tick = 0
+        isRecording = true
+        lock.unlock()
+    }
+
+    /// このコマをためるか。毎秒 30 コマのうち 10 コマだけためる（となりのコマが近すぎても役に立たない）。
+    func wantsFrame() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard isRecording, frames.count < maxFrames else { return false }
+        tick += 1
+        return tick % 3 == 1
+    }
+
+    /// ためて、いまの数を返す。
+    func append(_ frame: CGImage) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        if isRecording, frames.count < maxFrames { frames.append(frame) }
+        return frames.count
+    }
+
+    func finish() -> [CGImage] {
+        lock.lock()
+        defer { lock.unlock() }
+        isRecording = false
+        let result = frames
+        frames = []
+        return result
     }
 }
 

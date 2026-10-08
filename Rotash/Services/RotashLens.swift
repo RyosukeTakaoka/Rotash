@@ -429,7 +429,12 @@ enum RotashLens {
         let fillScale = max(size.width / imageSize.width, size.height / imageSize.height)
         let visibleX = min(1, size.width / (fillScale * imageSize.width))
         let visibleY = min(1, size.height / (fillScale * imageSize.height))
-        let zoom = min(CGFloat(max(1, setting.widening)), 1 / visibleX)
+        // 縦に長い写真（上下に振ったパノラマなど）は、高さに余りがあるぶん、縮めなくても横が入る。
+        // 普通の 3:4 の写真を widening 倍に縮めたときと同じ横の範囲が入るところで止めて、上下の黒を減らす。
+        let aspect = imageSize.width / imageSize.height
+        let widening = aspect < 0.75 ? max(1, CGFloat(setting.widening) * aspect / 0.75)
+                                     : CGFloat(max(1, setting.widening))
+        let zoom = min(widening, 1 / visibleX)
 
         // 縮めたあと、枠の高さぶんに写真の高さの何割が要るか。1 を超えたぶんが上下の黒になる。
         let neededY = visibleY * zoom

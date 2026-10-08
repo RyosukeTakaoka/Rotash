@@ -22,31 +22,25 @@ import UIKit
 /// - ライブビュー・7分割の表示・共有画像（`.screen`）・縦持ちの撮影画面で同じ計算を使うので、
 ///   撮るときに見えた絵と、あとで見える絵は同じになる。
 ///
-/// # 内カメは「顔を守る」疑似広角
-///
-/// 内カメ（縦持ちの自撮り）は顔が枠の横幅いっぱいに来る。ここで横の端を押し込むと
-/// 目や頬がつぶれ、「広がったのではなく顔が曲がっただけ」に見える（以前の `sideSqueeze` がそうだった）。
-/// そこで内カメも外カメと同じく **縦横そろえて縮め**（顔ごと小さくなり、左右の景色が入る）、
-/// 足りない高さは上下の端で埋める。ただし伸ばすのは **顔より外（髪の上・服）だけ** にして、
-/// 枠の真ん中の高さ（`faceHalfHeight`）は形をまったく変えない（`Style.faceSafeWide`）。
-/// どちらのカメラで撮ったかは `Slot.capturedWithFront` に残し、あとで表示するときも同じ方式を使う。
-///
-/// # 縦は広がらないが、横の余りは左右の端で使う
+/// # 内カメは曲げずに縮めて、上下を黒く欠かす（レターボックス）
 ///
 /// 縦持ちの内カメは、写真の **高さをもう全部** 枠に使っている（枠 1:3.2、写真 3:4）。
-/// 横には 2.4 倍ほど余りがあるが、縦の余りは無い。だから顔の縮め具合は、上下の端の伸びが
-/// 破綻しない 1.45 倍で止める。それより広くしたいぶんは、顔より外の **左右の端に押し込んで** 入れる
-/// （縦は広がらないまま、横の景色だけが増える）。顔の真ん中（`faceHalfWidth`）は押し込まないので、
-/// 以前の `sideSqueeze` のように目や頬がつぶれることはない。
+/// 横には 2.4 倍ほど余りがあるが、縦の余りは無い。ここで「枠を埋めたまま横を増やす」と、
+/// どこかを必ず曲げることになる。左右を押し込む方式（`sideSqueeze`）も、上下を伸ばす方式も、
+/// 自撮りでは「魚眼のような違和感」が残った。
+///
+/// そこで内カメは **縦横そろえて縮めるだけ**（形は一切曲げない）にして、
+/// 縮めたぶん足りなくなる枠の上と下は黒いまま残す（`Style.letterbox`）。映画の黒帯と同じ考え方。
+/// 1.8 なら写真は枠の高さの 56% に収まり、横には普通の 1.8 倍の範囲が入る。
+/// どちらのカメラで撮ったかは `Slot.capturedWithFront` に残し、あとで表示するときも同じ方式を使う。
 enum RotashLens {
 
     /// どう広げるか。
     enum Style: Equatable {
         /// 真ん中を縦横そろえて縮め、足りない上下の端を伸ばす（外カメ）。
         case pseudoWide
-        /// 疑似広角と同じく縦横そろえて縮めるが、真ん中の高さ（顔）は形を保ったまま、
-        /// 髪・服のある上下の端だけを伸ばす（内カメ）。
-        case faceSafeWide
+        /// 縦横そろえて縮めるだけで曲げない。足りない枠の上下は黒く残す（内カメ）。
+        case letterbox
     }
 
     /// 1枚の写真（またはライブビュー）にかけるレンズ。
@@ -65,7 +59,7 @@ enum RotashLens {
     ///   - back: 外カメの広げ具合（`resolve(stored:)` を通したもの）
     ///   - front: 内カメの広げ具合（`resolveFront(stored:)` を通したもの）
     static func setting(isFront: Bool, back: Double, front: Double) -> Setting {
-        isFront ? Setting(style: .faceSafeWide, widening: front)
+        isFront ? Setting(style: .letterbox, widening: front)
                 : Setting(style: .pseudoWide, widening: back)
     }
 
@@ -96,35 +90,17 @@ enum RotashLens {
     ]
 
     /// 内カメの広げ具合を変えたときの保存先（検証用ビルド）。
-    /// 以前の「左右を押し込む」方式とは数字の意味が違うので、キーを分けて古い値（1.8 など）を引き継がない。
-    static let frontStorageKey = "rotash.frontLensZoom"
+    /// 以前の曲げる方式とは見え方がまったく違うので、キーを分けて古い値を引き継がない。
+    static let frontStorageKey = "rotash.frontLetterbox"
 
     /// 内カメで選べる広げ具合（枠に、普通の何倍の横幅を入れるか）。
-    /// - 1.45 まで: 顔ごと縦横そろえて縮めるだけ。横は均一で、上下の端（髪・服）だけを伸ばす
-    /// - 1.45 より上: 顔の縮め具合は 1.45 のまま、残りの横幅を **左右の端（顔より外）** に押し込む。
-    ///   縦は広がらないが、写真の横の余りを使える。2.0 で左右の端が約 1/2 の幅になる
+    /// 写真は枠の高さの 1/広げ具合 に収まり、残りの上下は黒くなる（2.0 なら上下 25% ずつ）。
     static let frontPresets: [Preset] = [
         Preset(label: "普通", widening: 1.0),
-        Preset(label: "1.45", widening: 1.45),
+        Preset(label: "1.5", widening: 1.5),
         Preset(label: "1.8", widening: 1.8),
-        Preset(label: "2.0", widening: 2.0),
-        Preset(label: "2.2", widening: 2.2)
+        Preset(label: "2.0", widening: 2.0)
     ]
-
-    /// 内カメで、形をまったく変えない真ん中の高さ（枠の高さに対する割合の半分）。
-    /// 0.35 なら、枠の中央 35% の高さ（目から口のあたり）は縦横そろえて縮めるだけ。
-    static let faceHalfHeight: CGFloat = 0.35
-
-    /// 内カメで、真ん中から上下の端の伸ばし方へ、なめらかに移っていく幅（同じく割合の半分）。
-    /// ここで急に切り替えると、顔の上（おでこ）と下（あご）に折れ目が見える。
-    static let faceBlend: CGFloat = 0.35
-
-    /// 内カメで、左右に押し込まない真ん中の幅（枠の横幅に対する割合の半分）。
-    /// 0.5 なら枠の中央 50%。1.45 倍に縮めた自撮りの顔なら、目までがこの中に入る。
-    static let faceHalfWidth: CGFloat = 0.5
-
-    /// 内カメで、真ん中から左右の端の押し込み方へ、なめらかに移っていく幅（同じく割合の半分）。
-    static let faceWidthBlend: CGFloat = 0.25
 
     /// 縦の引き伸ばしが破綻しない上限（真ん中の縮尺がこれを超えると、端で上下が折り返す）。
     static let maxVerticalZoom: CGFloat = 1.45
@@ -158,7 +134,7 @@ enum RotashLens {
     /// 1本の短冊。`destination` は枠の中の位置（pt）、
     /// `source` は写真のどこを持ってくるか（写真全体を 0〜1 とした割合）。
     /// 外カメの疑似広角では横は均一なので、短冊は **横長の帯**（枠の上から下へ積む）になる。
-    /// 内カメは縦横どちらも曲がるので、格子のタイルになる。
+    /// 内カメのレターボックスは1枚だけで、短冊に覆われない枠の上下が黒く見える。
     struct Band: Equatable {
         let destination: CGRect
         let source: CGRect
@@ -178,9 +154,9 @@ enum RotashLens {
         case .pseudoWide:
             return pseudoWideBands(imageSize: imageSize, in: size,
                                    widening: setting.widening, pixelScale: pixelScale)
-        case .faceSafeWide:
-            return faceSafeWideBands(imageSize: imageSize, in: size,
-                                     widening: setting.widening, pixelScale: pixelScale)
+        case .letterbox:
+            return letterboxBands(imageSize: imageSize, in: size,
+                                  widening: setting.widening, pixelScale: pixelScale)
         }
     }
 
@@ -248,16 +224,15 @@ enum RotashLens {
         s <= 1 ? s * v : s * v + (1 - s) * v * v * v
     }
 
-    /// 内カメ用。顔のまわりは縦横そろえて縮め（形はそのまま）、
-    /// 足りない高さは上下の端（髪・服）を伸ばし、余っている横幅は左右の端（顔より外）に押し込む。
+    /// 内カメ用。写真を縦横そろえて `widening` 倍ぶん縮め、枠の上下中央に置く。
     ///
-    /// 縦も横も、枠の位置 v（-1 … +1）を `plateauProfile` で写真の位置へ移す。
-    /// 縦と横が別々に曲がるので、短冊は帯ではなく **格子のタイル**（行 × 列）になる。
-    /// まっすぐ移せる区間（顔のまわり・端の一定に伸ばすところ）は1枚にまとめるので、タイルは数百枚で済む。
-    static func faceSafeWideBands(imageSize: CGSize,
-                                  in size: CGSize,
-                                  widening: Double,
-                                  pixelScale: CGFloat) -> [Band] {
+    /// 横は写真の外までは広げられないので 1 / visibleX 倍で止める。
+    /// 縦は、写真の高さに余りがあるうち（visibleY < 1）はその余りから使い、
+    /// 足りなくなったら写真の高さ全体を枠より低く置く。覆われない枠の上下は、描く側の背景（黒）が見える。
+    static func letterboxBands(imageSize: CGSize,
+                               in size: CGSize,
+                               widening: Double,
+                               pixelScale: CGFloat) -> [Band] {
         guard imageSize.width > 0, imageSize.height > 0,
               size.width > 0, size.height > 0
         else { return [] }
@@ -265,113 +240,21 @@ enum RotashLens {
         let fillScale = max(size.width / imageSize.width, size.height / imageSize.height)
         let visibleX = min(1, size.width / (fillScale * imageSize.width))
         let visibleY = min(1, size.height / (fillScale * imageSize.height))
+        let zoom = min(CGFloat(max(1, widening)), 1 / visibleX)
 
-        // 横に普通の何倍の範囲を入れるか（写真の外までは広げられないので 1 / visibleX で止める）。
-        let reach = min(CGFloat(max(1, widening)), 1 / visibleX)
-        // 顔の縮め具合。縦の伸びが破綻しない範囲で止め、それを超える分は左右の端に押し込む。
-        let zoom = min(reach, maxVerticalZoom / visibleY)
+        // 縮めたあと、枠の高さぶんに写真の高さの何割が要るか。1 を超えたぶんが上下の黒になる。
+        let neededY = visibleY * zoom
+        let widthX = visibleX * zoom
+        let sourceHeight = min(1, neededY)
+        let source = CGRect(x: (1 - widthX) / 2, y: (1 - sourceHeight) / 2,
+                            width: widthX, height: sourceHeight)
 
-        guard reach > 1.001 else {
-            return [Band(destination: CGRect(origin: .zero, size: size),
-                         source: CGRect(x: (1 - visibleX) / 2, y: (1 - visibleY) / 2,
-                                        width: visibleX, height: visibleY))]
-        }
-
-        // 横: 普通の切り出しの幅を ±1 とした写真の位置。reach == zoom なら均一になる。
-        func horizontal(_ v: CGFloat) -> CGFloat {
-            plateauProfile(v, slope: zoom, reach: reach, flat: faceHalfWidth, blend: faceWidthBlend)
-        }
-        // 縦: 写真の高さ全体を ±1 とした位置。高さに余裕があるうちは均一に切り出す。
-        let s = visibleY * zoom
-        func vertical(_ v: CGFloat) -> CGFloat {
-            s <= 1 ? s * v : plateauProfile(v, slope: s, reach: 1, flat: faceHalfHeight, blend: faceBlend)
-        }
-
+        // 写真が枠の中で占める高さ。上下の境目は画面のピクセルに揃える。
         let scale = max(pixelScale, 1)
-        let columns = breakpoints(pixels: max(1, Int((size.width * scale).rounded())), map: horizontal)
-        let rows = breakpoints(pixels: max(1, Int((size.height * scale).rounded())),
-                               map: { vertical($0) / visibleY })
-
-        func cell(_ p: Int, of edges: [Int]) -> CGFloat { 2 * CGFloat(p) / CGFloat(edges.last ?? 1) - 1 }
-        let sourceXs = columns.map { 0.5 + 0.5 * visibleX * horizontal(cell($0, of: columns)) }
-        let sourceYs = rows.map { 0.5 + 0.5 * vertical(cell($0, of: rows)) }
-
-        var result: [Band] = []
-        result.reserveCapacity((rows.count - 1) * (columns.count - 1))
-        for r in 0..<(rows.count - 1) {
-            let top = CGFloat(rows[r]) / scale, bottom = CGFloat(rows[r + 1]) / scale
-            for c in 0..<(columns.count - 1) {
-                let left = CGFloat(columns[c]) / scale, right = CGFloat(columns[c + 1]) / scale
-                result.append(Band(
-                    destination: CGRect(x: left, y: top, width: right - left, height: bottom - top),
-                    source: CGRect(x: sourceXs[c], y: sourceYs[r],
-                                   width: sourceXs[c + 1] - sourceXs[c],
-                                   height: sourceYs[r + 1] - sourceYs[r])
-                ))
-            }
-        }
-        return result
-    }
-
-    /// 真ん中を傾き s のまま保ち、外側をなめらかに傾き m へ変えて、端の v = ±1 でちょうど ±r に届く割り当て。
-    /// 枠の位置 v の大きさを a = |v| とすると、傾き（縮尺）は
-    ///   a ≤ c          のとき  s           （顔の形はそのまま）
-    ///   c < a < c + w  のとき  s から m へ smoothstep でなめらかに移る
-    ///   a ≥ c + w      のとき  m           （一定の割合で伸ばす / 押し込む）
-    ///   m = (r − s·c − s·w/2) / (1 − c − w/2)
-    /// 縦（r = 1 < s）では m < s で端を伸ばし、横（r > s）では m > s で端を押し込む。
-    /// 端を一定の割合で変えるので、3次式のように「いちばん端だけ極端に伸びる」ことがない。
-    /// 縦は s ≤ `maxVerticalZoom`（1.45）なら m ≥ 0.5 で、上下が折り返すこともない。
-    static func plateauProfile(_ v: CGFloat, slope s: CGFloat, reach r: CGFloat,
-                               flat c: CGFloat, blend w: CGFloat) -> CGFloat {
-        let m = (r - s * c - s * w / 2) / (1 - c - w / 2)
-        let a = abs(v)
-        let u: CGFloat
-        if a <= c {
-            u = s * a
-        } else if a < c + w {
-            // smoothstep S(t) = 3t² − 2t³ の積分は t³ − t⁴/2。
-            let t = (a - c) / w
-            u = s * c + w * (s * t + (m - s) * (t * t * t - t * t * t * t / 2))
-        } else {
-            u = s * c + w * (s + m) / 2 + m * (a - c - w)
-        }
-        return v < 0 ? -u : u
-    }
-
-    /// 枠の一辺（`pixels` ピクセル）を、`map` がほぼまっすぐとみなせる区間に分けた境目を返す（0 と `pixels` を含む）。
-    /// まっすぐな区間は1本にまとめ、曲がるところだけ細かく割る。境目は画面のピクセル上に置く。
-    /// - Parameter map: 枠の位置 v（-1 … +1）→ 写真の位置（普通の表示で ±1 になる単位）
-    static func breakpoints(pixels: Int, map: (CGFloat) -> CGFloat) -> [Int] {
-        // 4px ごとの点を候補にし、間の点が直線から 0.35px 以上ずれない範囲でつなげる。
-        let step = 4
-        let tolerance: CGFloat = 0.35
-        guard pixels > step else { return [0, pixels] }
-
-        var candidates = Array(stride(from: 0, to: pixels, by: step))
-        candidates.append(pixels)
-        let half = CGFloat(pixels) / 2
-        let positions = candidates.map { map(CGFloat($0) / half - 1) * half }
-
-        func isStraight(_ from: Int, _ to: Int) -> Bool {
-            let x0 = CGFloat(candidates[from]), x1 = CGFloat(candidates[to])
-            let y0 = positions[from], y1 = positions[to]
-            for k in (from + 1)..<to {
-                let line = y0 + (y1 - y0) * (CGFloat(candidates[k]) - x0) / (x1 - x0)
-                if abs(positions[k] - line) > tolerance { return false }
-            }
-            return true
-        }
-
-        var result = [0]
-        var start = 0
-        while start < candidates.count - 1 {
-            var end = start + 1
-            while end + 1 < candidates.count, isStraight(start, end + 1) { end += 1 }
-            result.append(candidates[end])
-            start = end
-        }
-        return result
+        let photoHeight = neededY > 1 ? size.height / neededY : size.height
+        let top = ((size.height - photoHeight) / 2 * scale).rounded() / scale
+        return [Band(destination: CGRect(x: 0, y: top, width: size.width, height: size.height - 2 * top),
+                     source: source)]
     }
 
     // MARK: - 静止画への描画（共有画像用）
@@ -398,7 +281,10 @@ enum RotashLens {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
         format.opaque = true
-        let assembled = UIGraphicsImageRenderer(size: canvasSize, format: format).image { _ in
+        let assembled = UIGraphicsImageRenderer(size: canvasSize, format: format).image { context in
+            // 内カメのレターボックスは短冊が枠の上下を覆わないので、そこは画面と同じく黒にする。
+            UIColor.black.setFill()
+            context.fill(CGRect(origin: .zero, size: canvasSize))
             for band in pieces {
                 let crop = CGRect(x: band.source.minX * pixelSize.width,
                                   y: band.source.minY * pixelSize.height,

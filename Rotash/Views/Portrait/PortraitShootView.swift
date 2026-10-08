@@ -39,7 +39,7 @@ struct PortraitShootView: View {
                            front: RotashLens.resolveFront(stored: storedFrontLensWidening))
     }
 
-    /// ライブビューのレンズ。内カメなら顔を守る疑似広角、外カメなら疑似広角。
+    /// ライブビューのレンズ。内カメなら上下を黒くして横を広げ、外カメなら疑似広角。
     private var liveLens: RotashLens.Setting {
         RotashLens.setting(isFront: camera.position == .front,
                            back: RotashLens.resolve(stored: storedLensWidening),

@@ -61,11 +61,19 @@ enum RotashFeatureFlags {
     /// 検証用ビルドでは、設定画面の「レンズ」から端末ごとに切り替えて見くらべられる。
     static let lensWidening: Double = 1.3
 
-    /// 内カメで撮った写真の広げ具合（`RotashLens.Style.letterbox`）。枠に、普通の何倍の横幅を入れるか。
-    /// 写真は曲げずに縦横そろえて縮めるだけで、足りなくなる枠の上下は黒く残す。
-    /// 1.8 なら写真は枠の高さの 56% に収まり、縦持ちで写真の横幅の約 7 割が入る。
+    /// 内カメで撮った写真を縮める割合（`RotashLens.Style.front`）。人の形は曲げずに縦横そろえて縮め、
+    /// 足りなくなる枠の上下は黒く残す。1.8 なら写真は枠の高さの 56% に収まる。
     /// 1.0 で従来どおり。検証用ビルドでは設定画面の「内カメ」で切り替えられる。
     static let frontLensWidening: Double = 1.8
+
+    /// 内カメで、人を守りながら背景をどう押し込むか（`RotashLens.FrontMode`。試験中）。
+    /// 検証用ビルドでは設定画面と、縦持ちの撮影画面の MODE ボタンで切り替えられる。
+    /// 良いものを選んだら、ここをその方式にして公開版でも使う。
+    static let frontLensMode: RotashLens.FrontMode = .person
+
+    /// 内カメで、枠に入れる写真の横幅（写真全体に対する割合）。縮めるだけで入る幅を超えたぶんを、
+    /// 人のいない所に押し込む。0 なら押し込まない。
+    static let frontLensReach: Double = 0.9
 
     /// 検証中のビルドかどうか。TestFlight と開発ビルドで true、App Store 版では false。
     ///

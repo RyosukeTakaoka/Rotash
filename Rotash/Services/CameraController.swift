@@ -208,6 +208,26 @@ final class CameraController: NSObject, ObservableObject {
             .max(by: { Int($0.width) * Int($0.height) < Int($1.width) * Int($1.height) }) {
             output.maxPhotoDimensions = largest
         }
+        applyDistortionCorrection()
+    }
+
+    /// Apple の「内容を見て歪みを直す」補正（検証用ビルドの設定画面でオンにしたときだけ）。
+    ///
+    /// 広角レンズの端で顔などが引き伸ばされるのを、写っているものを見ながら直す機能。
+    /// 撮った写真にだけ効き、ライブビューには効かない。対応していないカメラ（多くの内カメ）では何もしない。
+    /// セッションのスレッドで呼ぶこと。
+    private func applyDistortionCorrection() {
+        let wanted = RotashFeatureFlags.isTestBuild
+            && UserDefaults.standard.bool(forKey: RotashLens.appleCorrectionKey)
+        guard output.isContentAwareDistortionCorrectionSupported else {
+            #if DEBUG
+            if wanted { print("📷 このカメラは Apple の歪み補正に対応していない") }
+            #endif
+            return
+        }
+        if output.isContentAwareDistortionCorrectionEnabled != wanted {
+            output.isContentAwareDistortionCorrectionEnabled = wanted
+        }
     }
 
     /// 写真が撮れるフォーマットのうち、縦の画角がいちばん広いもの。
@@ -331,6 +351,8 @@ final class CameraController: NSObject, ObservableObject {
                connection.isVideoRotationAngleSupported(angle) {
                 connection.videoRotationAngle = angle
             }
+            // 設定画面で切り替えたばかりでも、この1枚から効くように撮る直前にも合わせる。
+            self.applyDistortionCorrection()
             let settings = AVCapturePhotoSettings()
             settings.flashMode = .off
             settings.maxPhotoDimensions = self.output.maxPhotoDimensions

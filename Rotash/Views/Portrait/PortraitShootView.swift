@@ -32,18 +32,27 @@ struct PortraitShootView: View {
     /// 横向きの7分割と同じ疑似広角をかける。ここで見えた絵が、横にしたときの枠にそのまま入るように。
     @AppStorage(RotashLens.storageKey) private var storedLensWidening = RotashFeatureFlags.lensWidening
     @AppStorage(RotashLens.frontStorageKey) private var storedFrontLensWidening = RotashFeatureFlags.frontLensWidening
+    @AppStorage(RotashLens.frontModeKey) private var storedFrontLensMode = RotashFeatureFlags.frontLensMode.rawValue
+    @AppStorage(RotashLens.frontReachKey) private var storedFrontLensReach = RotashFeatureFlags.frontLensReach
+
+    /// 内カメのレンズの選び方（方式・縮める割合・押し込む横幅）。
+    private var frontLens: RotashLens.FrontOptions {
+        RotashLens.resolveFront(mode: storedFrontLensMode,
+                                widening: storedFrontLensWidening,
+                                reach: storedFrontLensReach)
+    }
 
     private func lens(for slot: Slot) -> RotashLens.Setting {
         RotashLens.setting(for: slot,
                            back: RotashLens.resolve(stored: storedLensWidening),
-                           front: RotashLens.resolveFront(stored: storedFrontLensWidening))
+                           front: frontLens)
     }
 
     /// ライブビューのレンズ。内カメなら上下を黒くして横を広げ、外カメなら疑似広角。
     private var liveLens: RotashLens.Setting {
         RotashLens.setting(isFront: camera.position == .front,
                            back: RotashLens.resolve(stored: storedLensWidening),
-                           front: RotashLens.resolveFront(stored: storedFrontLensWidening))
+                           front: frontLens)
     }
     private let clock = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
@@ -218,7 +227,7 @@ struct PortraitShootView: View {
                 HStack(spacing: 20) {
                     flipButton
                     shutterButton
-                    Color.clear.frame(width: 62, height: 1)
+                    modeButton
                 }
             } else if isFilled, app.canShoot(dayIndex: day, now: now) {
                 // 撮った直後。事故ったと思ったら、ここから撮り直せる。
@@ -266,6 +275,30 @@ struct PortraitShootView: View {
                     .frame(width: 62, height: 46)
                     .overlay(Rectangle().stroke(Palette.line, lineWidth: 1))
                     .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isCapturing)
+        } else {
+            Color.clear.frame(width: 62, height: 1)
+        }
+    }
+
+    /// 内カメの方式を、撮りながら切り替えて見くらべるためのボタン（検証用ビルドの内カメだけ）。
+    /// 押すたびに次の方式になる。設定画面の「内カメの方式」と同じ値を変える。
+    @ViewBuilder
+    private var modeButton: some View {
+        if RotashFeatureFlags.isTestBuild, camera.position == .front, camera.status == .ready {
+            Button {
+                storedFrontLensMode = frontLens.mode.next.rawValue
+                UISelectionFeedbackGenerator().selectionChanged()
+            } label: {
+                VStack(spacing: 3) {
+                    Text("MODE").rotashLabel(7, color: Palette.dim, tracking: 1.4)
+                    Text(frontLens.mode.label).rotashLabel(10, color: Palette.text, tracking: 0.6)
+                }
+                .frame(width: 62, height: 46)
+                .overlay(Rectangle().stroke(Palette.line, lineWidth: 1))
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(isCapturing)

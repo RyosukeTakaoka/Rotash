@@ -22,19 +22,28 @@ struct ThisWeekView: View {
     /// 検証用ビルドで設定画面から変えた Rotash レンズの広げ具合。
     @AppStorage(RotashLens.storageKey) private var storedLensWidening = RotashFeatureFlags.lensWidening
     @AppStorage(RotashLens.frontStorageKey) private var storedFrontLensWidening = RotashFeatureFlags.frontLensWidening
+    @AppStorage(RotashLens.frontModeKey) private var storedFrontLensMode = RotashFeatureFlags.frontLensMode.rawValue
+    @AppStorage(RotashLens.frontReachKey) private var storedFrontLensReach = RotashFeatureFlags.frontLensReach
+
+    /// 内カメのレンズの選び方（方式・縮める割合・押し込む横幅）。
+    private var frontLens: RotashLens.FrontOptions {
+        RotashLens.resolveFront(mode: storedFrontLensMode,
+                                widening: storedFrontLensWidening,
+                                reach: storedFrontLensReach)
+    }
 
     /// 保存済みの写真にかけるレンズ（撮ったカメラで方式が変わる）。
     private func lens(for slot: Slot) -> RotashLens.Setting {
         RotashLens.setting(for: slot,
                            back: RotashLens.resolve(stored: storedLensWidening),
-                           front: RotashLens.resolveFront(stored: storedFrontLensWidening))
+                           front: frontLens)
     }
 
     /// ライブビューにかけるレンズ。いま使っているカメラで決まる（撮ったあとの表示と同じになる）。
     private var liveLens: RotashLens.Setting {
         RotashLens.setting(isFront: camera.position == .front,
                            back: RotashLens.resolve(stored: storedLensWidening),
-                           front: RotashLens.resolveFront(stored: storedFrontLensWidening))
+                           front: frontLens)
     }
 
     private var week: RotashWeek? { app.group?.currentWeek }

@@ -20,7 +20,9 @@ enum LensCompositor {
     ///
     /// 背景にも人は写っているが、押し込まれて細くなった人は同じ中心にいるので、重ねた原寸の人に隠れる。
     /// 人が見つからないときは、押し込まずに縮めるだけの絵になる。
-    static func cutout(_ image: CGImage, frame: RotashLens.FrontFrame, canvas: CGSize, live: Bool) -> CGImage? {
+    /// - Parameter transparentBars: 上下を黒にせず透明にする（下にぼかしを敷くとき）。
+    static func cutout(_ image: CGImage, frame: RotashLens.FrontFrame, canvas: CGSize, live: Bool,
+                       transparentBars: Bool) -> CGImage? {
         let imageWidth = CGFloat(image.width), imageHeight = CGFloat(image.height)
         let canvasRect = CGRect(origin: .zero, size: canvas)
         // Core Image は左下が原点。写真が占める帯（上下の黒を除いた所）。
@@ -42,7 +44,7 @@ enum LensCompositor {
                                                 ty: band.minY - sourceBottom * scaleY)
         let person = source.transformed(by: personTransform).cropped(to: band)
 
-        let black = CIImage(color: .black).cropped(to: canvasRect)
+        let black = transparentBars ? CIImage.empty() : CIImage(color: .black).cropped(to: canvasRect)
         var output = person.composited(over: black)
 
         if let mask, center != nil {
@@ -69,6 +71,26 @@ enum LensCompositor {
         return context.createCGImage(output.cropped(to: canvasRect), from: canvasRect)
     }
 
+    // MARK: - 上下のぼかし
+
+    /// ぼかしの上にかける黒の濃さ（画面の `UIBlurEffect(style: .dark)` に近づける）。
+    static let backdropDimming: CGFloat = 0.35
+
+    /// 写真全体を枠いっぱいに広げて（aspectFill）強くぼかした画像。共有画像の上下を埋めるのに使う。
+    static func blurredBackdrop(_ image: CGImage, canvas: CGSize) -> CGImage? {
+        let canvasRect = CGRect(origin: .zero, size: canvas)
+        let source = CIImage(cgImage: image)
+        let fill = max(canvas.width / source.extent.width, canvas.height / source.extent.height)
+        let placed = source
+            .transformed(by: CGAffineTransform(scaleX: fill, y: fill))
+            .transformed(by: CGAffineTransform(translationX: (canvas.width - source.extent.width * fill) / 2,
+                                               y: (canvas.height - source.extent.height * fill) / 2))
+        let blurred = placed.clampedToExtent()
+            .applyingGaussianBlur(sigma: Double(max(canvas.width, canvas.height)) * 0.03)
+            .cropped(to: canvasRect)
+        return context.createCGImage(blurred, from: canvasRect)
+    }
+
     // MARK: - シームカービング
 
     /// シームカービング（Avidan & Shamir, 2007）。
@@ -78,7 +100,9 @@ enum LensCompositor {
     /// 空や壁のような平らな所から抜けていくので、人や物の形は残りやすい。人物の切り抜きの所は抜かない。
     ///
     /// 重いので、小さくした画像で計算する（ライブビューは高さ 320px、写真は 900px）。
-    static func seamCarved(_ image: CGImage, frame: RotashLens.FrontFrame, canvas: CGSize, live: Bool) -> CGImage? {
+    /// - Parameter transparentBars: 上下を黒にせず透明にする（下にぼかしを敷くとき）。
+    static func seamCarved(_ image: CGImage, frame: RotashLens.FrontFrame, canvas: CGSize, live: Bool,
+                           transparentBars: Bool) -> CGImage? {
         let imageWidth = CGFloat(image.width), imageHeight = CGFloat(image.height)
         let crop = CGRect(x: frame.windowMinX * imageWidth, y: frame.sourceY * imageHeight,
                           width: frame.window * imageWidth, height: frame.sourceHeight * imageHeight).integral
@@ -146,8 +170,11 @@ enum LensCompositor {
                                      bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace,
                                      bitmapInfo: bitmapInfo)
         else { return nil }
-        output.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
-        output.fill(CGRect(origin: .zero, size: canvas))
+        output.clear(CGRect(origin: .zero, size: canvas))
+        if !transparentBars {
+            output.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+            output.fill(CGRect(origin: .zero, size: canvas))
+        }
         output.interpolationQuality = .high
         output.draw(carved, in: CGRect(x: 0, y: canvas.height - frame.photoTop - frame.photoHeight,
                                        width: canvas.width, height: frame.photoHeight))

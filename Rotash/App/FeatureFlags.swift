@@ -75,6 +75,9 @@ enum RotashFeatureFlags {
     /// 人のいない所に押し込む。0 なら押し込まない。
     static let frontLensReach: Double = 0.9
 
+    /// 内カメで、上下の黒の代わりに写真全体をぼかしたものを敷くか（試験中）。
+    static let frontLensBlurFill = false
+
     /// 検証中のビルドかどうか。TestFlight と開発ビルドで true、App Store 版では false。
     ///
     /// 「動きを確かめるための仕掛け」は、確かめている間しか要らない。

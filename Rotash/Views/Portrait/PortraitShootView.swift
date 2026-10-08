@@ -34,12 +34,14 @@ struct PortraitShootView: View {
     @AppStorage(RotashLens.frontStorageKey) private var storedFrontLensWidening = RotashFeatureFlags.frontLensWidening
     @AppStorage(RotashLens.frontModeKey) private var storedFrontLensMode = RotashFeatureFlags.frontLensMode.rawValue
     @AppStorage(RotashLens.frontReachKey) private var storedFrontLensReach = RotashFeatureFlags.frontLensReach
+    @AppStorage(RotashLens.frontBlurKey) private var storedFrontLensBlur = RotashFeatureFlags.frontLensBlurFill
 
     /// 内カメのレンズの選び方（方式・縮める割合・押し込む横幅）。
     private var frontLens: RotashLens.FrontOptions {
         RotashLens.resolveFront(mode: storedFrontLensMode,
                                 widening: storedFrontLensWidening,
-                                reach: storedFrontLensReach)
+                                reach: storedFrontLensReach,
+                                blur: storedFrontLensBlur)
     }
 
     private func lens(for slot: Slot) -> RotashLens.Setting {

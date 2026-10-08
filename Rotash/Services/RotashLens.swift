@@ -65,6 +65,10 @@ enum RotashLens {
         case cutout
         /// シームカービング。目立たない縦の継ぎ目（空・壁など）を1本ずつ抜いて幅を詰める。人は抜かない。
         case seamCarving
+        /// 押し込まず、人の位置に合わせて切り出す所を左右に動かす（パン）。
+        case follow
+        /// 写真の横幅を7本の細い帯に分け、帯どうしの間を飛ばして並べる（スリット風）。帯の中は曲げない。
+        case slits
 
         var id: String { rawValue }
 
@@ -78,6 +82,8 @@ enum RotashLens {
             case .saliency: return "重要度"
             case .cutout: return "切抜き"
             case .seamCarving: return "継ぎ目"
+            case .follow: return "追従"
+            case .slits: return "スリット"
             }
         }
 
@@ -91,6 +97,8 @@ enum RotashLens {
             case .saliency: return "人と「目を引く所」を守り、どうでもいい所ほど押し込む"
             case .cutout: return "人を切り抜いて原寸で重ね、背景だけを強く縮める"
             case .seamCarving: return "目立たない縦の筋を抜いて幅を詰める（人は抜かない）"
+            case .follow: return "押し込まず、人のいる所へ切り出す位置を動かす"
+            case .slits: return "写真を7本の細い帯に分けて並べる（帯の境目で絵がとぶ）"
             }
         }
 
@@ -102,7 +110,7 @@ enum RotashLens {
         }
 
         /// 枠に入れる横幅（`Setting.reach`）を使うか。黒帯だけの方式は使わない。
-        var squeezes: Bool { self != .letterbox }
+        var squeezes: Bool { self != .letterbox && self != .follow }
     }
 
     /// 1枚の写真（またはライブビュー）にかけるレンズ。
@@ -112,6 +120,8 @@ enum RotashLens {
         var widening: Double
         /// 内カメで、枠に入れる写真の横幅（写真全体に対する割合）。0 なら押し込まない。
         var reach: Double = 0
+        /// 内カメで、上下の黒の代わりに、写真全体をぼかしたものを敷く。
+        var fillsWithBlur = false
 
         /// かけないのと同じ。
         static let plain = Setting(style: .pseudoWide, widening: 1)
@@ -133,7 +143,7 @@ enum RotashLens {
         /// 短冊を決めるのに Vision の解析が要るか。
         var analysisNeeds: LensAnalyzer.Needs {
             switch frontMode {
-            case .person: return [.person]
+            case .person, .follow: return [.person]
             case .face: return [.face]
             case .saliency: return [.person, .saliency]
             default: return []
@@ -146,6 +156,7 @@ enum RotashLens {
         var mode: FrontMode
         var widening: Double
         var reach: Double
+        var fillsWithBlur: Bool
     }
 
     /// 撮ったカメラから、かけるレンズを決める。
@@ -153,7 +164,8 @@ enum RotashLens {
     ///   - back: 外カメの広げ具合（`resolve(stored:)` を通したもの）
     ///   - front: 内カメの選び方（`resolveFront(...)` を通したもの）
     static func setting(isFront: Bool, back: Double, front: FrontOptions) -> Setting {
-        isFront ? Setting(style: .front(front.mode), widening: front.widening, reach: front.reach)
+        isFront ? Setting(style: .front(front.mode), widening: front.widening, reach: front.reach,
+                          fillsWithBlur: front.fillsWithBlur)
                 : Setting(style: .pseudoWide, widening: back)
     }
 
@@ -202,6 +214,9 @@ enum RotashLens {
     /// 内カメで、枠に入れる横幅を変えたときの保存先（検証用ビルド）。
     static let frontReachKey = "rotash.frontLensReach"
 
+    /// 内カメで、上下の黒をぼかしで埋めるかの保存先（検証用ビルド）。
+    static let frontBlurKey = "rotash.frontLensBlurFill"
+
     /// Apple の「内容を見て歪みを直す」補正（撮った写真にだけ効く）を使うかの保存先（検証用ビルド）。
     static let appleCorrectionKey = "rotash.appleDistortionCorrection"
 
@@ -242,15 +257,17 @@ enum RotashLens {
     }
 
     /// `@AppStorage` で持っている値から、内カメのレンズの選び方を決める。公開版ではフラグの値に固定。
-    static func resolveFront(mode: String?, widening: Double?, reach: Double?) -> FrontOptions {
+    static func resolveFront(mode: String?, widening: Double?, reach: Double?, blur: Bool?) -> FrontOptions {
         guard RotashFeatureFlags.isTestBuild else {
             return FrontOptions(mode: RotashFeatureFlags.frontLensMode,
                                 widening: RotashFeatureFlags.frontLensWidening,
-                                reach: RotashFeatureFlags.frontLensReach)
+                                reach: RotashFeatureFlags.frontLensReach,
+                                fillsWithBlur: RotashFeatureFlags.frontLensBlurFill)
         }
         return FrontOptions(mode: mode.flatMap(FrontMode.init(rawValue:)) ?? RotashFeatureFlags.frontLensMode,
                             widening: resolveFront(stored: widening),
-                            reach: min(1, max(0, reach ?? RotashFeatureFlags.frontLensReach)))
+                            reach: min(1, max(0, reach ?? RotashFeatureFlags.frontLensReach)),
+                            fillsWithBlur: blur ?? RotashFeatureFlags.frontLensBlurFill)
     }
 
     /// いまの内カメのレンズの選び方。
@@ -258,7 +275,8 @@ enum RotashLens {
         let defaults = UserDefaults.standard
         return resolveFront(mode: defaults.string(forKey: frontModeKey),
                             widening: defaults.object(forKey: frontStorageKey) as? Double,
-                            reach: defaults.object(forKey: frontReachKey) as? Double)
+                            reach: defaults.object(forKey: frontReachKey) as? Double,
+                            blur: defaults.object(forKey: frontBlurKey) as? Bool)
     }
 
     // MARK: - 計算
@@ -292,6 +310,14 @@ enum RotashLens {
         case .front(let mode):
             guard let frame = frontFrame(imageSize: imageSize, in: size, setting: setting, pixelScale: pixelScale)
             else { return [] }
+            switch mode {
+            case .follow:
+                return [followBand(frame: frame, in: size, analysis: analysis)]
+            case .slits:
+                return slitBands(frame: frame, in: size, pixelScale: pixelScale)
+            default:
+                break
+            }
             // 1枚の画像として作る方式（切り抜き・シームカービング）は、出来上がるまで黒帯だけで出す。
             guard frame.window > frame.natural + 0.001, !setting.needsPrerender else {
                 return [frame.plainBand(in: size)]
@@ -448,7 +474,7 @@ enum RotashLens {
         }
 
         switch mode {
-        case .letterbox, .center, .cutout, .seamCarving:
+        case .letterbox, .center, .cutout, .seamCarving, .follow, .slits:
             return falloff(centerColumns())
         case .person:
             return falloff((analysis?.person ?? []).map { $0 > 0.03 ? CGFloat(1) : 0 })
@@ -542,6 +568,39 @@ enum RotashLens {
         return result
     }
 
+    /// 押し込まずに、人の横の中心が枠の真ん中に来るよう切り出す所を動かす（写真の外へははみ出さない）。
+    /// 人が見つからないときは真ん中を切り出す。
+    static func followBand(frame: FrontFrame, in size: CGSize, analysis: LensAnalysis?) -> Band {
+        let center = analysis?.personCenter ?? 0.5
+        let x = min(max(0, center - frame.natural / 2), 1 - frame.natural)
+        return Band(destination: CGRect(x: 0, y: frame.photoTop, width: size.width, height: frame.photoHeight),
+                    source: CGRect(x: x, y: frame.sourceY, width: frame.natural, height: frame.sourceHeight))
+    }
+
+    /// 枠を7本の帯に分け、写真の窓（`frame.window`）の横幅を均等に7か所から切り出して並べる。
+    /// 帯の中は縮めるだけ（形はそのまま）で、帯と帯のあいだの写真は飛ばす。
+    /// 窓が縮めるだけで入る幅と同じなら、普通の1枚と同じになる。
+    static func slitBands(frame: FrontFrame, in size: CGSize, pixelScale: CGFloat) -> [Band] {
+        let slits = 7
+        let scale = max(pixelScale, 1)
+        let widthInPixels = size.width * scale
+        let sliceWidth = frame.natural / CGFloat(slits)
+        var result: [Band] = []
+        for index in 0..<slits {
+            let left = (widthInPixels * CGFloat(index) / CGFloat(slits)).rounded()
+            let right = (widthInPixels * CGFloat(index + 1) / CGFloat(slits)).rounded()
+            guard right > left else { continue }
+            let center = frame.windowMinX + frame.window * (CGFloat(index) + 0.5) / CGFloat(slits)
+            result.append(Band(
+                destination: CGRect(x: left / scale, y: frame.photoTop,
+                                    width: (right - left) / scale, height: frame.photoHeight),
+                source: CGRect(x: center - sliceWidth / 2, y: frame.sourceY,
+                               width: sliceWidth, height: frame.sourceHeight)
+            ))
+        }
+        return result
+    }
+
     /// 1枚の画像として作る方式（切り抜き・シームカービング）の絵を、枠のピクセルの大きさで作る。
     /// 上下の黒も含めた、枠いっぱいの画像を返す。重いので、画面のスレッドでは呼ばないこと。
     /// - Parameter live: ライブビュー用（速さを優先して、解析と組み立てを軽くする）。
@@ -553,9 +612,11 @@ enum RotashLens {
         else { return nil }
         switch setting.frontMode {
         case .cutout:
-            return LensCompositor.cutout(image, frame: frame, canvas: canvas, live: live)
+            return LensCompositor.cutout(image, frame: frame, canvas: canvas, live: live,
+                                         transparentBars: setting.fillsWithBlur)
         case .seamCarving:
-            return LensCompositor.seamCarved(image, frame: frame, canvas: canvas, live: live)
+            return LensCompositor.seamCarved(image, frame: frame, canvas: canvas, live: live,
+                                             transparentBars: setting.fillsWithBlur)
         default:
             return nil
         }
@@ -579,28 +640,41 @@ enum RotashLens {
         let canvasSize = CGSize(width: max(1, rect.width.rounded(.up)),
                                 height: max(1, rect.height.rounded(.up)))
         let pixelSize = CGSize(width: cgImage.width, height: cgImage.height)
+        let canvasRect = CGRect(origin: .zero, size: canvasSize)
 
-        // 1枚の画像として作る方式は、作ったものをそのまま描く。
+        // 1枚の画像として作る方式は作った絵を、それ以外は短冊を描く。
+        var rendered: CGImage?
+        var pieces: [Band] = []
         if setting.needsPrerender {
-            guard let rendered = prerender(cgImage, size: canvasSize, scale: 1, setting: setting, live: false)
-            else { return false }
-            UIImage(cgImage: rendered).draw(in: CGRect(origin: rect.origin, size: canvasSize))
-            return true
+            rendered = prerender(cgImage, size: canvasSize, scale: 1, setting: setting, live: false)
+            guard rendered != nil else { return false }
+        } else {
+            let needs = setting.analysisNeeds
+            let analysis = needs.isEmpty ? nil : LensAnalyzer.analyze(cgImage, needs: needs, live: false)
+            pieces = Self.bands(imageSize: pixelSize, in: canvasSize, setting: setting,
+                                pixelScale: 1, analysis: analysis)
+            guard !pieces.isEmpty else { return false }
         }
 
-        let needs = setting.analysisNeeds
-        let analysis = needs.isEmpty ? nil : LensAnalyzer.analyze(cgImage, needs: needs, live: false)
-        let pieces = Self.bands(imageSize: pixelSize, in: canvasSize, setting: setting,
-                                pixelScale: 1, analysis: analysis)
-        guard !pieces.isEmpty else { return false }
+        // 上下をぼかしで埋めるときは、写真全体をぼかして枠いっぱいに敷く（画面の LensView と同じ見え方）。
+        let backdrop = setting.fillsWithBlur && setting.frontMode != nil
+            ? LensCompositor.blurredBackdrop(cgImage, canvas: canvasSize) : nil
 
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
         format.opaque = true
         let assembled = UIGraphicsImageRenderer(size: canvasSize, format: format).image { context in
-            // 内カメは短冊が枠の上下を覆わないので、そこは画面と同じく黒にする。
+            // 内カメは短冊が枠の上下を覆わないので、そこは画面と同じく黒（またはぼかし）にする。
             UIColor.black.setFill()
-            context.fill(CGRect(origin: .zero, size: canvasSize))
+            context.fill(canvasRect)
+            if let backdrop {
+                UIImage(cgImage: backdrop).draw(in: canvasRect)
+                UIColor(white: 0, alpha: LensCompositor.backdropDimming).setFill()
+                context.fill(canvasRect, blendMode: .normal)
+            }
+            if let rendered {
+                UIImage(cgImage: rendered).draw(in: canvasRect)
+            }
             for band in pieces {
                 let crop = CGRect(x: band.source.minX * pixelSize.width,
                                   y: band.source.minY * pixelSize.height,

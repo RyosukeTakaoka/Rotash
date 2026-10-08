@@ -14,6 +14,7 @@ struct SettingsView: View {
     @AppStorage(RotashLens.frontModeKey) private var frontLensMode = RotashFeatureFlags.frontLensMode.rawValue
     @AppStorage(RotashLens.frontReachKey) private var frontLensReach = RotashFeatureFlags.frontLensReach
     @AppStorage(RotashLens.appleCorrectionKey) private var appleDistortionCorrection = false
+    @AppStorage(RotashLens.frontBlurKey) private var frontLensBlur = RotashFeatureFlags.frontLensBlurFill
 
     var body: some View {
         ZStack {
@@ -206,6 +207,12 @@ struct SettingsView: View {
                 }
             }
             .pickerStyle(.segmented)
+
+            Toggle(isOn: $frontLensBlur) {
+                Text("内カメの上下の黒を、写真のぼかしで埋める")
+                    .rotashLabel(9, color: Palette.dim, tracking: 0.6)
+            }
+            .padding(.top, 4)
 
             Toggle(isOn: $appleDistortionCorrection) {
                 Text("Apple の歪み補正（撮った写真だけ・対応カメラのみ）")

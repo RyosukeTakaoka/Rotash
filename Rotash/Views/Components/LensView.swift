@@ -22,6 +22,7 @@ final class LensView: UIView {
             analyzedImage = nil
             prerendered = nil
             prerenderedKey = nil
+            updateBackdrop()
             setNeedsLayout()
         }
     }
@@ -31,6 +32,12 @@ final class LensView: UIView {
 
     private var image: CGImage?
     private var bandLayers: [CALayer] = []
+
+    /// 上下をぼかしで埋めるときの下敷き（写真全体を枠いっぱいに広げた層と、その上のぼかし）。
+    /// 短冊はさらにその上の `bandContainer` に並べる。
+    private let backdropLayer = CALayer()
+    private let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .dark))
+    private let bandContainer = CALayer()
 
     /// Vision の解析結果と、それを求めた画像。
     private var analysis: LensAnalysis?
@@ -49,6 +56,14 @@ final class LensView: UIView {
         backgroundColor = .black
         // 枠のタップ（選択・撮影）は SwiftUI 側で受ける。ここでは触れても何もしない。
         isUserInteractionEnabled = false
+
+        backdropLayer.contentsGravity = .resizeAspectFill
+        backdropLayer.masksToBounds = true
+        layer.addSublayer(backdropLayer)
+        addSubview(blurView)
+        // blurView の層のあとに足すので、短冊はぼかしより上に来る。
+        layer.addSublayer(bandContainer)
+        updateBackdrop()
     }
 
     required init?(coder: NSCoder) {
@@ -59,6 +74,12 @@ final class LensView: UIView {
     func display(_ newImage: CGImage?) {
         let sizeChanged = newImage?.width != image?.width || newImage?.height != image?.height
         image = newImage
+        if setting.fillsWithBlur {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            backdropLayer.contents = newImage
+            CATransaction.commit()
+        }
 
         if let newImage {
             if setting.needsPrerender {
@@ -85,10 +106,24 @@ final class LensView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        backdropLayer.frame = bounds
+        bandContainer.frame = bounds
+        CATransaction.commit()
+        blurView.frame = bounds
         if setting.needsPrerender, let image, prerenderedKey?.size != bounds.size {
             requestPrerender(image)
         }
         rebuildBands()
+    }
+
+    /// ぼかしの下敷きを、設定に合わせて出す・隠す（外カメと、ぼかさない内カメは黒のまま）。
+    private func updateBackdrop() {
+        let shows = setting.fillsWithBlur && setting.frontMode != nil
+        backdropLayer.isHidden = !shows
+        blurView.isHidden = !shows
+        if !shows { backdropLayer.contents = nil } else if backdropLayer.contents == nil { backdropLayer.contents = image }
     }
 
     // MARK: - 別スレッドの仕事
@@ -181,7 +216,7 @@ final class LensView: UIView {
             layer.contentsGravity = .resize
             layer.minificationFilter = .linear
             layer.magnificationFilter = .linear
-            self.layer.addSublayer(layer)
+            bandContainer.addSublayer(layer)
             bandLayers.append(layer)
         }
 

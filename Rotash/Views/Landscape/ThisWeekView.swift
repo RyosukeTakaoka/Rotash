@@ -11,6 +11,8 @@ struct ThisWeekView: View {
 
     @State private var manualSelection: Int?
     @State private var isCapturing = false
+    /// パノラマで撮るときの状態（試験中）。
+    @StateObject private var panorama = PanoramaShooter()
     @State private var flashOpacity: Double = 0
     @State private var draftTitle = ""
     /// 撮り直せる残り時間を数えるための「いま」。撮り直せるあいだだけ進める。
@@ -19,7 +21,7 @@ struct ThisWeekView: View {
     /// 撮り直しの残り秒数を数える時計。`body` の中で作ると描き直すたびに作り直されて刻まなくなるので、
     /// プロパティとして持つ（ThisWeekView 自体が作り直されたときだけ新しくなる）。
     private let clock = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
-    /// 検証用ビルドで設定画面から変えた Rotash レンズの広げ具合。
+    /// 設定画面で変えた Rotash レンズの広げ具合。
     @AppStorage(RotashLens.storageKey) private var storedLensWidening = RotashFeatureFlags.lensWidening
     @AppStorage(RotashLens.frontStorageKey) private var storedFrontLensWidening = RotashFeatureFlags.frontLensWidening
     @AppStorage(RotashLens.frontModeKey) private var storedFrontLensMode = RotashFeatureFlags.frontLensMode.rawValue
@@ -92,6 +94,11 @@ struct ThisWeekView: View {
         .onAppear { syncCamera() }
         .onDisappear { camera.stop() }
         .onChange(of: activeDay) { _, _ in syncCamera() }
+        .onChange(of: camera.panoramaFrameCount) { _, count in
+            if panorama.isRecording, count >= CameraController.panoramaMaxFrames, let day = activeDay {
+                finishPanorama(day: day)
+            }
+        }
         // 撮り直せる時間のあいだだけ時計を進め、残り秒数と「時間切れでカメラを閉じる」を画面に反映する。
         .onReceive(clock) { date in
             // 「いま撮り直せるか」ではなく「締め切りがまだ来ていないか」で進める。
@@ -294,7 +301,7 @@ struct ThisWeekView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             if isActive {
-                capture(day: day)
+                shutter(day: day)
             } else if shootable {
                 manualSelection = day
             }
@@ -338,8 +345,16 @@ struct ThisWeekView: View {
     private func bottomControl(week: RotashWeek) -> some View {
         if let activeDay {
             VStack(spacing: 8) {
-                Text(isRetake ? "RETAKE\(retakeCountdown(for: activeDay))" : "SHOOT")
-                    .rotashLabel(9, color: Palette.live, tracking: 3)
+                HStack(spacing: 12) {
+                    Text(panorama.status(frameCount: camera.panoramaFrameCount)
+                         ?? (isRetake ? "RETAKE\(retakeCountdown(for: activeDay))" : "SHOOT"))
+                        .rotashLabel(9, color: Palette.live, tracking: 3)
+                    if camera.supportsLensPreview, camera.status == .ready {
+                        PanoramaToggle(shooter: panorama)
+                            .background(Color.black.opacity(0.5))
+                            .disabled(isCapturing)
+                    }
+                }
 
                 // FLIP は狭い枠の隅だと押しづらいので、シャッターの横に置いて
                 // 指の届く大きさ（44pt 以上）にしている。
@@ -347,7 +362,7 @@ struct ThisWeekView: View {
                 HStack(spacing: 20) {
                     flipButton
                     shutterButton
-                    Color.clear.frame(width: flipButtonWidth, height: 1)
+                    modeButton
                 }
             }
             .padding(.bottom, 12)
@@ -399,8 +414,19 @@ struct ThisWeekView: View {
         }
     }
 
+    /// 内カメの方式を撮りながら切り替えるボタン（`LensModeButton`）。
+    @ViewBuilder
+    private var modeButton: some View {
+        if camera.status == .ready {
+            LensModeButton(width: flipButtonWidth, isFront: camera.position == .front, dimsBackground: true)
+                .disabled(isCapturing)
+        } else {
+            Color.clear.frame(width: flipButtonWidth, height: 1)
+        }
+    }
+
     private var shutterButton: some View {
-        Button { capture(day: activeDay ?? 0) } label: {
+        Button { shutter(day: activeDay ?? 0) } label: {
             ZStack {
                 Circle()
                     .stroke(Color.white.opacity(0.9), lineWidth: 2)
@@ -408,11 +434,43 @@ struct ThisWeekView: View {
                 Circle()
                     .fill(Color.white)
                     .frame(width: 42, height: 42)
-                    .opacity(isCapturing ? 0.35 : 1)
+                    .opacity(isCapturing && !panorama.isRecording ? 0.35 : 1)
+                if panorama.isRecording {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Palette.live)
+                        .frame(width: 18, height: 18)
+                }
             }
         }
         .buttonStyle(.plain)
-        .disabled(isCapturing)
+        .disabled(isCapturing && !panorama.isRecording)
+    }
+
+    /// シャッター。パノラマがオンなら、1回目でため始め、2回目（または上限）でやめてつなぐ。
+    private func shutter(day: Int) {
+        guard panorama.isArmed else { return capture(day: day) }
+        if panorama.isRecording {
+            finishPanorama(day: day)
+        } else {
+            guard !isCapturing, app.canShoot(dayIndex: day) else { return }
+            isCapturing = true
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+            panorama.start(camera: camera)
+        }
+    }
+
+    private func finishPanorama(day: Int) {
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        let front = camera.position == .front
+        panorama.finish(camera: camera) { data in
+            self.isCapturing = false
+            guard let data else { return }
+            self.flashOpacity = 0.85
+            withAnimation(.easeOut(duration: 0.28)) { self.flashOpacity = 0 }
+            self.app.attachPhoto(data, toDay: day, front: front)
+            self.manualSelection = nil
+            self.now = Date()
+        }
     }
 
     private func capture(day: Int) {

@@ -99,10 +99,8 @@ final class AppViewModel: ObservableObject {
         // 撮り直しは、撮った直後の短い時間だけ（RotashFeatureFlags.retakeWindowSeconds）。
         // RotashFeatureFlags.allowRetake を true にすれば、時間に関係なく撮り直せる。
         if slot.isFilled && !RotashFeatureFlags.allowRetake && !canRetake(slot, now: now) { return false }
-        // 自由撮影は当番の判定そのものを飛ばす＝競合を自分から作る仕掛けなので、
-        // 検証中のビルドでしか効かせない。設定から隠すだけでは、
-        // 以前に入れた値が残っている端末で効き続けてしまう。
-        if freeShooting && RotashFeatureFlags.isTestBuild { return true }
+        // 自由撮影は当番の判定そのものを飛ばす（二人が同じ枠を撮れてしまう）ので、使う人が自分でオンにしたときだけ。
+        if freeShooting { return true }
         guard group.isMyDay(dayIndex, in: group.currentWeek) else { return false }
         // 仮の担当（決定時刻を持たない = まだ誰とも突き合わせていない）では撮らせない。
         // 他にメンバーが居ると分かっているのに自分の判断だけで撮ると、

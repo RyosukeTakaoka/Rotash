@@ -281,3 +281,106 @@ struct LensCameraPreview: UIViewRepresentable {
         init(controller: CameraController) { self.controller = controller }
     }
 }
+
+// MARK: - 撮影画面で共有する、内カメの方式とパノラマの操作
+
+/// 内カメの方式（`RotashLens.FrontMode`）を、撮りながら切り替えるボタン。押すたびに次の方式になる。
+/// 縦持ち・横持ちの撮影画面の両方に置き、設定画面の「内カメの方式」と同じ値を変える。
+/// 方式が効くのは内カメで撮るときだけなので、外カメのときは「内カメ用」と添える。
+struct LensModeButton: View {
+    let width: CGFloat
+    let isFront: Bool
+    var dimsBackground = false
+
+    @AppStorage(RotashLens.frontModeKey) private var storedMode = RotashFeatureFlags.frontLensMode.rawValue
+
+    private var mode: RotashLens.FrontMode {
+        RotashLens.FrontMode(rawValue: storedMode) ?? RotashFeatureFlags.frontLensMode
+    }
+
+    var body: some View {
+        Button {
+            storedMode = mode.next.rawValue
+            UISelectionFeedbackGenerator().selectionChanged()
+        } label: {
+            VStack(spacing: 3) {
+                Text(isFront ? "MODE" : "MODE 内カメ用").rotashLabel(7, color: Palette.dim, tracking: 1)
+                Text(mode.label).rotashLabel(10, color: isFront ? Palette.text : Palette.dim, tracking: 0.6)
+            }
+            .frame(width: width, height: 46)
+            .background(dimsBackground ? Color.black.opacity(0.5) : Color.clear)
+            .overlay(Rectangle().stroke(dimsBackground ? Color.clear : Palette.line, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// パノラマで撮るときの状態（縦持ち・横持ちの撮影画面で共有）。
+///
+/// シャッター1回目でコマをため始め、2回目（または `CameraController.panoramaMaxFrames` に達したとき）に
+/// やめて、`PanoramaStitcher` で1枚につなぐ。つなぐのは重いので、画面のスレッドの外でやる。
+final class PanoramaShooter: ObservableObject {
+    /// パノラマで撮るか。オンのとき、シャッターが「ため始める / やめてつなぐ」になる。
+    @Published var isArmed = false
+    @Published private(set) var isRecording = false
+    @Published private(set) var isStitching = false
+    /// つなげなかったときの知らせ。
+    @Published var note: String?
+
+    func start(camera: CameraController) {
+        note = nil
+        isRecording = true
+        camera.startPanorama()
+    }
+
+    /// ためるのをやめてつなぐ。つないだ JPEG（つなげなければ nil）を画面のスレッドで返す。
+    func finish(camera: CameraController, completion: @escaping (Data?) -> Void) {
+        guard isRecording else { return }
+        isRecording = false
+        isStitching = true
+        let frames = camera.finishPanorama()
+        DispatchQueue.global(qos: .userInitiated).async {
+            let data = PanoramaStitcher.stitch(frames).flatMap { UIImage(cgImage: $0).rotashJPEGData() }
+            DispatchQueue.main.async {
+                self.isStitching = false
+                if data == nil {
+                    self.note = "つなげませんでした（もっとゆっくり）"
+                } else {
+                    self.isArmed = false
+                }
+                completion(data)
+            }
+        }
+    }
+
+    /// シャッターの上に出す文字。パノラマに関係ないときは nil。
+    func status(frameCount: Int) -> String? {
+        if isStitching { return "つなぎ合わせ中…" }
+        if isRecording {
+            return "ゆっくり上か下（左右でも）へ  \(frameCount)/\(CameraController.panoramaMaxFrames)"
+        }
+        if let note { return note }
+        if isArmed { return "PANO：押して動かす" }
+        return nil
+    }
+}
+
+/// パノラマのオン・オフ（映像の出口がある端末だけ出す）。
+struct PanoramaToggle: View {
+    @ObservedObject var shooter: PanoramaShooter
+
+    var body: some View {
+        Button {
+            shooter.isArmed.toggle()
+            shooter.note = nil
+        } label: {
+            Text(shooter.isArmed ? "PANO ●" : "PANO ○")
+                .rotashLabel(9, color: shooter.isArmed ? Palette.live : Palette.dim, tracking: 1.6)
+                .frame(minHeight: 28)
+                .padding(.horizontal, 6)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}

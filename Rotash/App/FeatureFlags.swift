@@ -58,17 +58,16 @@ enum RotashFeatureFlags {
     /// ここを 1.0 に戻せば、これまで撮った写真も含めて元の見え方に戻る。
     /// 1.45 より大きくしても、上下が破綻しないよう 1.45 で止まる（`RotashLens.maxVerticalZoom`）。
     ///
-    /// 検証用ビルドでは、設定画面の「レンズ」から端末ごとに切り替えて見くらべられる。
+    /// 設定画面の「レンズ」から端末ごとに切り替えて見くらべられる。
     static let lensWidening: Double = 1.3
 
     /// 内カメで撮った写真を縮める割合（`RotashLens.Style.front`）。人の形は曲げずに縦横そろえて縮め、
     /// 足りなくなる枠の上下は黒く残す。1.8 なら写真は枠の高さの 56% に収まる。
-    /// 1.0 で従来どおり。検証用ビルドでは設定画面の「内カメ」で切り替えられる。
+    /// 1.0 で従来どおり。設定画面の「内カメ」で切り替えられる。
     static let frontLensWidening: Double = 1.8
 
     /// 内カメで、人を守りながら背景をどう押し込むか（`RotashLens.FrontMode`。試験中）。
-    /// 検証用ビルドでは設定画面と、縦持ちの撮影画面の MODE ボタンで切り替えられる。
-    /// 良いものを選んだら、ここをその方式にして公開版でも使う。
+    /// 設定画面と、撮影画面（縦持ち・横持ち）の MODE ボタンで切り替えられる。ここは最初の値。
     static let frontLensMode: RotashLens.FrontMode = .person
 
     /// 内カメで、枠に入れる写真の横幅（写真全体に対する割合）。縮めるだけで入る幅を超えたぶんを、
@@ -77,20 +76,4 @@ enum RotashFeatureFlags {
 
     /// 内カメで、上下の黒の代わりに写真全体をぼかしたものを敷くか（試験中）。
     static let frontLensBlurFill = false
-
-    /// 検証中のビルドかどうか。TestFlight と開発ビルドで true、App Store 版では false。
-    ///
-    /// 「動きを確かめるための仕掛け」は、確かめている間しか要らない。
-    /// 出したまま公開すると、説明の要るものが増えるだけでなく、
-    /// 自由撮影モードのように **競合を自分から作り出す** ものまで届いてしまう。
-    ///
-    /// TestFlight のアプリは Sandbox のレシートを持つので、それで見分ける。
-    /// 判定に失敗したときは「本番」に倒す（検証用の仕掛けを誤って出さない方に倒す）。
-    static var isTestBuild: Bool {
-        #if DEBUG
-        return true
-        #else
-        return Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
-        #endif
-    }
 }

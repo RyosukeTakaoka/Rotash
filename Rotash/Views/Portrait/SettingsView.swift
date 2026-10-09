@@ -37,9 +37,8 @@ struct SettingsView: View {
                     }
 
                     // 自由撮影モードは当番の判定そのものを飛ばすので、
-                    // 二人が同じ枠を撮れてしまう＝競合を自分から作り出す。
-                    // 検証中のビルドだけに置き、公開するアプリには出さない。
-                    if RotashFeatureFlags.isTestBuild {
+                    // 二人が同じ枠を撮れてしまう＝競合を自分から作り出す。使うときは自分でオンにする。
+                    Group {
                         VStack(alignment: .leading, spacing: 10) {
                             Toggle(isOn: $app.freeShooting) {
                                 Text("自由撮影モード")
@@ -133,13 +132,13 @@ struct SettingsView: View {
                     .lineSpacing(3)
             }
 
-            // 担当表の照合コード。**検証中のビルドだけに出す。**
+            // 担当表の照合コード。
             //
             // 同じ担当表ならどの端末でも同じ6文字になるので、複数台で見くらべれば
             // 食い違いにその場で気づける。ただしこれは「疑いながら使う」ための道具で、
             // 公開するアプリに置くものではない。担当が食い違わないこと自体は
             // AssignmentAudit が受け持っていて、そちらは本番でも常に動いている。
-            if RotashFeatureFlags.isTestBuild, let code = app.assignmentFingerprint {
+            if let code = app.assignmentFingerprint {
                 HStack(spacing: 8) {
                     Text("担当表").rotashLabel(9, color: Palette.faint, tracking: 2)
                     Text(code)
@@ -155,7 +154,7 @@ struct SettingsView: View {
         }
     }
 
-    /// Rotash レンズの広げ具合を見くらべるための切り替え。検証用ビルドだけに出す。
+    /// Rotash レンズの広げ具合を見くらべるための切り替え。
     /// 写真ファイルは加工していないので、切り替えるとこれまでの写真の見え方も一緒に変わる。
     private var lensBlock: some View {
         VStack(alignment: .leading, spacing: 10) {

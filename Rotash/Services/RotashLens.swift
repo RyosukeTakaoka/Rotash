@@ -182,7 +182,7 @@ enum RotashLens {
         setting(for: slot, back: widening, front: frontOptions)
     }
 
-    /// 検証用ビルドで、設定画面から広げ具合を変えたときの保存先。
+    /// 設定画面から広げ具合を変えたときの保存先。
     static let storageKey = "rotash.lensWidening"
 
     struct Preset: Hashable {
@@ -198,7 +198,7 @@ enum RotashLens {
         Preset(label: "1.4", widening: 1.4)
     ]
 
-    /// 内カメの広げ具合を変えたときの保存先（検証用ビルド）。
+    /// 内カメの広げ具合を変えたときの保存先。
     /// 以前の曲げる方式とは見え方がまったく違うので、キーを分けて古い値を引き継がない。
     static let frontStorageKey = "rotash.frontLetterbox"
 
@@ -211,16 +211,16 @@ enum RotashLens {
         Preset(label: "2.0", widening: 2.0)
     ]
 
-    /// 内カメの方式を変えたときの保存先（検証用ビルド）。
+    /// 内カメの方式を変えたときの保存先。
     static let frontModeKey = "rotash.frontLensMode"
 
-    /// 内カメで、枠に入れる横幅を変えたときの保存先（検証用ビルド）。
+    /// 内カメで、枠に入れる横幅を変えたときの保存先。
     static let frontReachKey = "rotash.frontLensReach"
 
-    /// 内カメで、上下の黒をぼかしで埋めるかの保存先（検証用ビルド）。
+    /// 内カメで、上下の黒をぼかしで埋めるかの保存先。
     static let frontBlurKey = "rotash.frontLensBlurFill"
 
-    /// Apple の「内容を見て歪みを直す」補正（撮った写真にだけ効く）を使うかの保存先（検証用ビルド）。
+    /// Apple の「内容を見て歪みを直す」補正（撮った写真にだけ効く）を使うかの保存先。
     static let appleCorrectionKey = "rotash.appleDistortionCorrection"
 
     /// 内カメで選べる「枠に入れる横幅」（写真全体の横幅に対する割合）。
@@ -237,15 +237,14 @@ enum RotashLens {
 
     /// いまの広げ具合。
     ///
-    /// 検証用ビルドでは設定画面の値を使い、公開版では `RotashFeatureFlags.lensWidening` に固定する
-    /// （公開版に「普通に戻す」スイッチを出すかどうかは、検証の結果で決める）。
+    /// 設定画面で選んだ値。まだ選んでいなければ `RotashFeatureFlags.lensWidening`。
     static var widening: Double {
         resolve(stored: UserDefaults.standard.object(forKey: storageKey) as? Double)
     }
 
     /// `@AppStorage` で持っている値から、実際に使う広げ具合を決める。
     static func resolve(stored: Double?) -> Double {
-        guard RotashFeatureFlags.isTestBuild, let stored else { return RotashFeatureFlags.lensWidening }
+        guard let stored else { return RotashFeatureFlags.lensWidening }
         return max(1, stored)
     }
 
@@ -255,18 +254,12 @@ enum RotashLens {
     }
 
     static func resolveFront(stored: Double?) -> Double {
-        guard RotashFeatureFlags.isTestBuild, let stored else { return RotashFeatureFlags.frontLensWidening }
+        guard let stored else { return RotashFeatureFlags.frontLensWidening }
         return max(1, stored)
     }
 
-    /// `@AppStorage` で持っている値から、内カメのレンズの選び方を決める。公開版ではフラグの値に固定。
+    /// `@AppStorage` で持っている値から、内カメのレンズの選び方を決める（無ければフラグの値）。
     static func resolveFront(mode: String?, widening: Double?, reach: Double?, blur: Bool?) -> FrontOptions {
-        guard RotashFeatureFlags.isTestBuild else {
-            return FrontOptions(mode: RotashFeatureFlags.frontLensMode,
-                                widening: RotashFeatureFlags.frontLensWidening,
-                                reach: RotashFeatureFlags.frontLensReach,
-                                fillsWithBlur: RotashFeatureFlags.frontLensBlurFill)
-        }
         return FrontOptions(mode: mode.flatMap(FrontMode.init(rawValue:)) ?? RotashFeatureFlags.frontLensMode,
                             widening: resolveFront(stored: widening),
                             reach: min(1, max(0, reach ?? RotashFeatureFlags.frontLensReach)),

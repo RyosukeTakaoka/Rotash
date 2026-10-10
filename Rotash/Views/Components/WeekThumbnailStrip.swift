@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Memories 用の小さなプレビュー。
-/// 写真がなかった日は空の枠のまま並べる（小さいので記号は足さない）。
+/// 写真がなかった日は暗い枠に「—」を置く（小さい帯では記号は足さない）。
 ///
 /// 既定を薄くしてあるのは、Memories を「リスト」ではなく「積層」に見せるため。
 /// 続いていることを数字（連続週数）で出すと、途切れた瞬間に損失回避が働いて
@@ -27,9 +27,19 @@ struct WeekThumbnailStrip: View {
                         }
                         .animation(.easeInOut(duration: 0.45).delay(Double(slot.dayIndex) * 0.07), value: flipped)
                     } else {
+                        // 写真がなかった日。横画面の7分割と同じく「—」を置く（ある程度の大きさがあるときだけ）。
                         Rectangle()
                             .fill(Palette.surfaceDeep)
                             .overlay(Rectangle().stroke(Palette.line, lineWidth: 1))
+                            .overlay {
+                                GeometryReader { geometry in
+                                    if geometry.size.height >= 40 {
+                                        Text("—")
+                                            .rotashLabel(11, color: Palette.faint, tracking: 0)
+                                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    }
+                                }
+                            }
                     }
                 }
                 .frame(maxWidth: .infinity)

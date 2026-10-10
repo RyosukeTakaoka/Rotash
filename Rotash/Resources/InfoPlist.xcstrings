@@ -24,6 +24,30 @@
           }
         }
       }
+    },
+    "NSPhotoLibraryAddUsageDescription": {
+      "comment": "Privacy - Photo Library Additions Usage Description",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotash saves the image of your piece to Photos when you choose Save Image from the share sheet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共有画面から作品の画像を写真に保存するために使います。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "공유 화면에서 작품 이미지를 사진에 저장할 때 사용해요."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

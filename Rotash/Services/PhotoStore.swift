@@ -37,8 +37,11 @@ final class PhotoStore {
     }
 
     /// 表示用。maxPixel を指定すると縮小して読み込む（Memories の一覧用）。
-    func image(for filename: String, maxPixel: CGFloat? = nil) -> UIImage? {
-        let key = (filename + "@\(Int(maxPixel ?? 0))") as NSString
+    /// - Parameter scale: 画面の倍率（3倍の画面なら 3）。画面のスレッドの外では端末の倍率が取れないので、
+    ///   呼び出し側（画面）から渡す。渡さなければ、少なくとも2倍として読む。
+    func image(for filename: String, maxPixel: CGFloat? = nil, scale: CGFloat? = nil) -> UIImage? {
+        let resolvedScale = scale ?? max(UITraitCollection.current.displayScale, 2)
+        let key = (filename + "@\(Int(maxPixel ?? 0))x\(Int(resolvedScale * 10))") as NSString
         if let cached = cache.object(forKey: key) { return cached }
 
         let fileURL = url(for: filename)
@@ -50,7 +53,7 @@ final class PhotoStore {
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
                 kCGImageSourceShouldCacheImmediately: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxPixel * max(UITraitCollection.current.displayScale, 2)
+                kCGImageSourceThumbnailMaxPixelSize: maxPixel * resolvedScale
             ]
             image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
                 .map { UIImage(cgImage: $0) }

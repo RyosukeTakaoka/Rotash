@@ -15,6 +15,8 @@ struct PhotoImageView: View {
     private var loaded: ((CGSize) -> Void)?
 
     @State private var image: UIImage?
+    /// 画面の倍率。読み込みは裏のスレッドで行うので、画面側で取って渡す。
+    @Environment(\.displayScale) private var displayScale
 
     init(filename: String?, remoteURL: String? = nil, maxPixel: CGFloat? = nil) {
         self.filename = filename
@@ -104,7 +106,11 @@ struct PhotoImageView: View {
         guard let remoteURL,
               let data = try? await CloudinaryClient.download(from: remoteURL),
               let cached = try? PhotoStore.shared.save(data)
-        else { return }
+        else {
+            // 読めなかったら、前に出していた写真（表と裏を入れ替える前の方など）を残さない。
+            image = nil
+            return
+        }
         show(await loadLocal(cached))
     }
 
@@ -115,9 +121,10 @@ struct PhotoImageView: View {
 
     private func loadLocal(_ name: String) async -> UIImage? {
         let pixel = maxPixel
+        let scale = max(displayScale, 1)
         return await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(returning: PhotoStore.shared.image(for: name, maxPixel: pixel))
+                continuation.resume(returning: PhotoStore.shared.image(for: name, maxPixel: pixel, scale: scale))
             }
         }
     }

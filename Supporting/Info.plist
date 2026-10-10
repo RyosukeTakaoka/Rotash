@@ -54,6 +54,8 @@
 	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>7分割の枠の中で写真を撮るためにカメラを使います。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>共有画面から作品の画像を写真に保存するために使います。</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>

@@ -25,6 +25,8 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var groups: [RotashGroup] = []
     /// いま開いているグループ。
     @Published private(set) var currentGroupID: UUID?
+    /// 抜けたけれど、まだサーバーに伝えられていないもの（`PendingLeave`）。
+    private var pendingLeaves: [PendingLeave] = []
 
     /// いま開いているグループ。画面も操作も、ここを相手にする。
     ///
@@ -89,6 +91,7 @@ final class AppViewModel: ObservableObject {
         let library = store.load()
         self.groups = library.groups
         self.currentGroupID = library.currentGroupID ?? library.groups.first?.id
+        self.pendingLeaves = library.pendingLeaves ?? []
         migrateAssignmentsIfNeeded()
         rollWeekIfNeeded()
         for id in groups.map(\.id) { applyAudit(groupID: id) }
@@ -357,14 +360,13 @@ final class AppViewModel: ObservableObject {
     /// いま開いているグループから抜ける（この端末からそのグループと写真を消す）。
     /// ほかのグループに入っていれば、そちらを開く。
     func deleteRotash() {
-        if var current = group {
+        if let current = group {
             // 抜けたことを、ほかのメンバーに伝える（伝わると、まだ来ていない日の当番から外れる）。
-            // この端末からはすぐ消すので、写真の上げ下ろしはせず、印だけをサーバーに載せる。
-            if let index = current.members.firstIndex(where: { $0.id == current.myMemberID }) {
-                current.members[index].leftAt = Date()
-                let leaving = current
-                Task { try? await RotashSyncService.publishLeave(of: leaving) }
-            }
+            // すぐには送らず、同期の最後に送る。同期の途中で送ると、そのあとに届く同期の書き戻しで
+            // 「抜けた」印が消えてしまう。届くまで（通信できないときも）、同期のたびに送り直す。
+            pendingLeaves.append(PendingLeave(inviteCode: current.inviteCode,
+                                              memberID: current.myMemberID,
+                                              leftAt: Date()))
             let weeks = [current.currentWeek] + current.archive
             for week in weeks {
                 for slot in week.slots {
@@ -375,6 +377,7 @@ final class AppViewModel: ObservableObject {
         }
         group = nil
         persist()
+        Task { await sync() }
     }
 
     // MARK: - リンクから入ってくる
@@ -677,7 +680,7 @@ final class AppViewModel: ObservableObject {
     /// サーバーと突き合わせる。未設定なら何もしない（ローカルのみで動き続ける）。
     /// 失敗しても手元のデータはそのままなので、次に開いたときに再試行される。
     func sync(showingError: Bool = false) async {
-        guard RotashSyncService.isEnabled, !groups.isEmpty else { return }
+        guard RotashSyncService.isEnabled, !groups.isEmpty || !pendingLeaves.isEmpty else { return }
 
         // 同期中に撮影されたときなど、重なった要求を捨てずに後から必ず走らせる。
         if isSyncing {
@@ -693,6 +696,8 @@ final class AppViewModel: ObservableObject {
         for id in order {
             await performSync(groupID: id, showingError: showingError)
         }
+        // 抜けた知らせは、この端末の同期がすべて書き終わってから送る（あとから上書きされないように）。
+        await publishPendingLeaves()
         isSyncing = false
 
         if syncAgainWhenFinished {
@@ -768,8 +773,24 @@ final class AppViewModel: ObservableObject {
 
     // MARK: -
 
+    /// まだ伝えられていない「抜けた」知らせを送る。サーバーに載っているのを確かめられたものだけ消し、
+    /// 残りは次の同期でもう一度。2週間たっても確かめられないものは諦める（そのグループはもう使われていない）。
+    private func publishPendingLeaves(now: Date = Date()) async {
+        guard !pendingLeaves.isEmpty else { return }
+        var remaining: [PendingLeave] = []
+        for leave in pendingLeaves where now.timeIntervalSince(leave.leftAt) < 14 * 24 * 60 * 60 {
+            let confirmed = (try? await RotashSyncService.publishLeave(leave)) ?? false
+            if !confirmed { remaining.append(leave) }
+        }
+        guard remaining != pendingLeaves else { return }
+        pendingLeaves = remaining
+        persist()
+    }
+
     private func persist() {
-        store.save(RotashLibrary(groups: groups, currentGroupID: currentGroupID))
+        store.save(RotashLibrary(groups: groups,
+                                 currentGroupID: currentGroupID,
+                                 pendingLeaves: pendingLeaves.isEmpty ? nil : pendingLeaves))
         // 担当が変わりうる操作はすべてここを通る（作成・参加・途中参加・週送り・同期）。
         // 差分で消そうとすると消し忘れた古い名前が朝に届くので、毎回まとめて組み直す。
         NotificationScheduler.reschedule(for: groups)

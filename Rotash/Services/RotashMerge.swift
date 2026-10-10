@@ -141,14 +141,19 @@ enum RotashMerge {
         let myName = local.me?.name ?? ""
         if members.contains(where: { $0.id == local.myMemberID }) {
             merged.myMemberID = local.myMemberID
-        } else if let match = members.first(where: { $0.name.caseInsensitiveCompare(myName) == .orderedSame }) {
+        } else if let match = members.first(where: {
+            // 抜けた人とは結びつけない。同じ名前で入り直した人は、新しいメンバーとして加わる
+            // （結びつけると、ほかの端末が持っている「抜けた」印と食い違い続ける）。
+            $0.isActive && $0.name.caseInsensitiveCompare(myName) == .orderedSame
+        }) {
             merged.myMemberID = match.id
         } else if let me = local.me {
             members.append(me)
         }
         // リモートがまだ知らないローカル側のメンバーも落とさない。
         for member in local.members where !members.contains(where: {
-            $0.name.caseInsensitiveCompare(member.name) == .orderedSame
+            $0.id == member.id || ($0.isActive && member.isActive
+                                   && $0.name.caseInsensitiveCompare(member.name) == .orderedSame)
         }) {
             members.append(member)
         }

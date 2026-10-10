@@ -22,15 +22,20 @@ enum RotashSyncService {
         var failureReason: String?
     }
 
-    /// グループから抜けたことだけをサーバーに伝える。
-    /// 写真の上げ下ろしはしない（抜けた端末からは、すぐにそのグループを消すので）。
-    static func publishLeave(of group: RotashGroup) async throws {
-        guard isEnabled else { return }
-        var working = group
-        if let remote = try await FirestoreClient.fetch(inviteCode: group.inviteCode) {
-            working = RotashMerge.merge(local: group, remote: remote)
-        }
-        try await FirestoreClient.push(RemoteGroupState(group: working))
+    /// グループから抜けたことだけをサーバーに伝える（サーバーの状態に「抜けた」印を付けて書き戻す）。
+    /// 写真の上げ下ろしはしない（抜けた端末には、もうそのグループが無いので）。
+    ///
+    /// - Returns: サーバーに印が載っているのを確かめられたら true。いま書き込んだだけなら false
+    ///   （ほぼ同時にほかの端末が古い状態を書き戻すと消えることがあるので、次の同期でもう一度確かめる）。
+    ///   サーバーにそのグループや本人が無ければ、伝える相手もいないので true。
+    static func publishLeave(_ leave: PendingLeave) async throws -> Bool {
+        guard isEnabled else { throw SyncError.notConfigured }
+        guard var remote = try await FirestoreClient.fetch(inviteCode: leave.inviteCode) else { return true }
+        guard let index = remote.members.firstIndex(where: { $0.id == leave.memberID }) else { return true }
+        if remote.members[index].leftAt != nil { return true }
+        remote.members[index].leftAt = leave.leftAt
+        try await FirestoreClient.push(remote)
+        return false
     }
 
     /// 同期して、突き合わせ後のグループを返す。

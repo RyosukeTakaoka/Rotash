@@ -4,6 +4,16 @@ import Foundation
 struct RotashLibrary: Codable {
     var groups: [RotashGroup] = []
     var currentGroupID: UUID?
+    /// 抜けたけれど、まだサーバーに伝えられていないもの。伝えられるまで、同期のたびに送り直す。
+    var pendingLeaves: [PendingLeave]?
+}
+
+/// グループから抜けたことの知らせ。抜けたグループそのものはもう端末に無いので、
+/// 伝えるのに要るものだけを持っておく。
+struct PendingLeave: Codable, Hashable {
+    var inviteCode: String
+    var memberID: UUID
+    var leftAt: Date
 }
 
 /// 保存層のインターフェース。

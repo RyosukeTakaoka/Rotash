@@ -168,22 +168,36 @@ struct PortraitHomeView: View {
                     .rotashLabel(10, color: Palette.faint, tracking: 0.4)
                     .padding(.bottom, 24)
             } else {
-                // リストではなく積層。日付ラベルを各行から外して帯を密着させると、
-                // 続いていることが「項目数」ではなく「厚み」として見える。
+                // いちばん新しい作品だけを大きく見せ、それより前の週は細い帯で積み重ねる。
                 //
+                // 続いていることは「項目数」ではなく「厚み」として見せる（帯を密着させる）。
                 // 連続週数のような数字は出さない。数字は途切れた瞬間にゼロへ戻り、
                 // 7人のうち誰か1人がコケるだけで壊れる（毎週およそ3割）。
                 // 壊れたときに「お前のせいで切れた」が起きると、共同制作が相互監視に変わる。
                 // 積み上がる一方で減らないものだけを、継続の報酬にする。
-                VStack(spacing: 2) {
-                    ForEach(group.archive) { week in
-                        NavigationLink(value: week) {
-                            WeekThumbnailStrip(week: week)
-                        }
-                        .buttonStyle(.plain)
+                if let latest = group.archive.first {
+                    NavigationLink(value: latest) {
+                        latestCard(latest)
                     }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 18)
                 }
-                .padding(.bottom, 22)
+
+                let older = Array(group.archive.dropFirst())
+                if !older.isEmpty {
+                    Text("これまで")
+                        .rotashLabel(9, color: Palette.faint, tracking: 1.2)
+                        .padding(.bottom, 8)
+                    VStack(spacing: 2) {
+                        ForEach(older) { week in
+                            NavigationLink(value: week) {
+                                WeekThumbnailStrip(week: week, height: 22)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.bottom, 22)
+                }
 
                 Text("タップすると、その週を見られます。")
                     .rotashLabel(9, color: Palette.faint, tracking: 0.4)
@@ -191,6 +205,32 @@ struct PortraitHomeView: View {
             }
         }
         .padding(.horizontal, 24)
+    }
+
+    /// いちばん新しい作品。横画面と同じく7つの枠を横に並べ、その下に名前（無ければ日付）を置く。
+    private func latestCard(_ week: RotashWeek) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            WeekThumbnailStrip(week: week, height: 132)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                if let title = week.title, !title.isEmpty {
+                    Text(title)
+                        .font(Typo.title(15))
+                        .foregroundStyle(Palette.text)
+                        .lineLimit(1)
+                    Text(week.dateRange)
+                        .rotashLabel(9, color: Palette.faint, tracking: 0.8)
+                        .lineLimit(1)
+                } else {
+                    Text(week.dateRange)
+                        .rotashLabel(11, color: Palette.text, tracking: 1)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Text("→")
+                    .rotashLabel(11, color: Palette.faint, tracking: 0)
+            }
+        }
+        .contentShape(Rectangle())
     }
 
     private var onboarding: some View {

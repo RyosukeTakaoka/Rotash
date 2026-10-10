@@ -46,15 +46,6 @@ struct ThisWeekView: View {
         return week.slot(at: activeDay)?.isFilled ?? false
     }
 
-    /// 完成した週の見せ方（余白の中に置き、過去の週を上に重ねる）にするか。
-    ///
-    /// 最後の1枚を撮った直後は、撮り直せる間（30秒）だけ撮っていたときの並びのままにする。
-    /// 撮った瞬間に7分割が縮んで動くと、撮った写真がどこに入ったか見失うため。
-    /// 撮り直せる時間が終わったら、ゆっくり完成の並びに移る。
-    private func showsFinishedLayout(_ week: RotashWeek) -> Bool {
-        week.isFinished && app.retakeWindow(now: now) == nil
-    }
-
     var body: some View {
         ZStack {
             Palette.background.ignoresSafeArea()
@@ -63,13 +54,10 @@ struct ThisWeekView: View {
                 VStack(spacing: 0) {
                     header(week: week)
                     HairLine()
-                    if showsFinishedLayout(week) {
-                        finished(week: week)
-                    } else {
-                        grid(week: week)
-                    }
+                    // 進行中も完成後も、7分割は同じ大きさ・同じ位置のまま。
+                    // 完成したことは、見出しの COMPLETE と、その週の名前（見出しに出る）で伝える。
+                    grid(week: week)
                 }
-                .animation(.easeInOut(duration: 0.6), value: showsFinishedLayout(week))
                 .overlay(alignment: .bottom) { bottomControl(week: week) }
             }
 
@@ -110,8 +98,15 @@ struct ThisWeekView: View {
                 .rotashLabel(12, color: Palette.text, tracking: 3.4)
             Text(week.dateRange)
                 .rotashLabel(10, color: Palette.faint)
-            Text("\(week.filledCount) / \(week.slots.count)")
-                .rotashLabel(10, color: Palette.dim, tracking: 1.4)
+            if week.isFinished {
+                // 完成した週。画面の並びは変えず、ここだけで伝える。
+                Text("COMPLETE")
+                    .rotashLabel(10, color: Palette.live, tracking: 1.8)
+            } else {
+                Text("\(week.filledCount) / \(week.slots.count)")
+                    .rotashLabel(10, color: Palette.dim, tracking: 1.4)
+            }
+            titleArea(week: week)
             Spacer(minLength: 8)
             // 完成を待たずに共有できる。3/7 は「これ何？」を生むが、7/7 は答えなので、
             // 途中のほうがむしろ強い。押し付けはしない — ここに静かに置いておくだけ。
@@ -127,38 +122,14 @@ struct ThisWeekView: View {
     }
 
     // MARK: - 決着した週
+    //
+    // 以前は、完成した週を一回り小さくして余白に置き、上に過去の週の帯を重ねていた。
+    // 「終わった」を見え方の変化で伝え、積み重ねの上に載せるためだったが、
+    // 撮った瞬間に7分割が動き、上の帯も切れた写真に見えて、不具合のように感じられた。
+    // いまは7分割をそのまま残し、見出しの COMPLETE と週の名前だけで伝える。
+    // 積み重ね（過去の週）は Memories で見せる。
 
-    /// 進行中は画面を埋め尽くし、完成形は余白の中に置く。
-    /// 見え方が変わることそのもので「終わった」が伝わるので、
-    /// 「完成しました！」とは書かない。
-    ///
-    /// ただし、終わったことを伝えすぎてもいけない。
-    /// 初期のグループは「◯◯までの7日間」という出来事を理由に立ち上がり、
-    /// その出来事は7日目に終わる。出来事の終わりと作品の完成が同じ日に重なると
-    /// 二重の終止符になり、翌週に戻ってこなくなる。
-    /// だから作品を単独では見せず、**これまでの積み重ねの上に1本載った**形にする。
-    @ViewBuilder
-    private func finished(week: RotashWeek) -> some View {
-        VStack(spacing: 12) {
-            if let archive = app.group?.archive, !archive.isEmpty {
-                VStack(spacing: 2) {
-                    ForEach(Array(archive.prefix(4))) { past in
-                        WeekThumbnailStrip(week: past, height: 9)
-                            .opacity(0.45)
-                    }
-                }
-                .padding(.horizontal, 40)
-            }
-
-            grid(week: week)
-                .padding(.horizontal, 28)
-
-            titleArea(week: week)
-        }
-        .padding(.vertical, 12)
-    }
-
-    /// その週の一行。
+    /// その週の一行（見出しの中に出す）。
     ///
     /// 書けるのは **7枚目を撮った本人だけ**。全員が書けるようにすると、
     /// それはタイトルではなくコメント欄になる。
@@ -167,31 +138,28 @@ struct ThisWeekView: View {
     private func titleArea(week: RotashWeek) -> some View {
         if let title = week.title, !title.isEmpty {
             Text(title)
-                .font(Typo.title(16))
+                .font(Typo.title(13))
                 .foregroundStyle(Palette.text)
                 .lineLimit(1)
-                .padding(.horizontal, 28)
-
-        } else if app.titlableWeek?.id == week.id, app.retakeWindow(now: now) == nil {
-            // 撮り直せるあいだは写真がまだ確定していないので、名前をつける欄は出さない
-            // （画面下の RETAKE ボタンと重なるのも避けられる）。
-            HStack(spacing: 12) {
+        } else if week.isFinished, app.titlableWeek?.id == week.id, app.retakeWindow(now: now) == nil {
+            // 撮り直せるあいだは写真がまだ確定していないので、名前をつける欄は出さない。
+            HStack(spacing: 10) {
                 TextField("", text: $draftTitle,
                           prompt: Text("この1週間に名前をつける"))
                     .textFieldStyle(.plain)
-                    .font(Typo.title(15))
+                    .font(Typo.title(13))
                     .foregroundStyle(Palette.text)
                     .submitLabel(.done)
                     .onSubmit { commitTitle(for: week) }
+                    .frame(maxWidth: 260)
 
                 Button("つける") { commitTitle(for: week) }
-                    .font(Typo.label(11, weight: .semibold))
+                    .font(Typo.label(10, weight: .semibold))
                     .tracking(1.6)
                     .foregroundStyle(draftTitle.trimmingCharacters(in: .whitespaces).isEmpty
                                      ? Palette.faint : Palette.live)
                     .buttonStyle(.plain)
             }
-            .padding(.horizontal, 28)
         }
     }
 

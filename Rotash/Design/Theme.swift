@@ -45,16 +45,51 @@ enum ReverseBadge {
 
 /// 作品（7分割）の1枠の形。縦の画面で作品を小さく見せるときも、横画面で見る作品と同じ形にそろえる。
 enum WorkShape {
-    /// 横画面の7分割の1枠の「幅 ÷ 高さ」。この端末の画面の大きさから求める（`PortraitShootView.cellAspect`）。
+    private static let measuredKey = "rotash.landscapeCellAspect"
+
+    /// 横画面の7分割の1枠の「幅 ÷ 高さ」。
+    ///
+    /// 横画面で実際に測った値（`recordLandscapeCell`）があればそれを使う。
+    /// まだ一度も横にしていなければ、画面の大きさと安全領域（ノッチ・ホームバーのぶん）から見積もる。
     @MainActor static var cellAspect: CGFloat {
-        let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.size
-            ?? CGSize(width: 390, height: 844)
-        let portrait = CGSize(width: min(screen.width, screen.height), height: max(screen.width, screen.height))
-        return PortraitShootView.cellAspect(portraitSize: portrait)
+        let measured = UserDefaults.standard.double(forKey: measuredKey)
+        if measured > 0.05, measured < 2 { return measured }
+        return estimatedCellAspect
     }
 
-    /// 7分割の帯全体の「幅 ÷ 高さ」（枠どうしのすきまは小さいので無視する）。
+    /// 枠が `count` 個の週の1枠の形。週の途中から始めた最初の週は枠が少ないぶん、1枠が横に広い
+    /// （7分割の帯全体の形は変わらない）。
+    @MainActor static func cellAspect(forSlots count: Int) -> CGFloat {
+        cellAspect * 7 / CGFloat(max(1, min(7, count)))
+    }
+
+    /// 7分割の帯全体の「幅 ÷ 高さ」（枠どうしのすきまは小さいので無視する）。枠の数によらず同じ。
     @MainActor static var stripAspect: CGFloat { cellAspect * 7 }
+
+    /// 横画面の7分割（7枠の週）で測った1枠の大きさを覚える。
+    @MainActor static func recordLandscapeCell(width: CGFloat, height: CGFloat) {
+        guard width > 0, height > 0 else { return }
+        let aspect = Double(width / height)
+        if abs(UserDefaults.standard.double(forKey: measuredKey) - aspect) > 0.001 {
+            UserDefaults.standard.set(aspect, forKey: measuredKey)
+        }
+    }
+
+    /// 画面から見積もった1枠の形。横画面の幅＝縦の高さ、高さ＝縦の幅から見出し（約40pt）を引いたもの。
+    /// ノッチのある iPhone は、横にすると左右に安全領域（縦のときの上の余白と同じくらい）と、
+    /// 下にホームバーのぶん（約21pt）が入る。
+    @MainActor private static var estimatedCellAspect: CGFloat {
+        let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+        let screen = scene?.screen.bounds.size ?? CGSize(width: 390, height: 844)
+        let short = min(screen.width, screen.height)
+        let long = max(screen.width, screen.height)
+        let insets = scene?.windows.first?.safeAreaInsets ?? .zero
+        let notch = max(insets.top, insets.left) > 24
+        let side = notch ? max(insets.top, insets.left) : 0
+        let width = max(long - side * 2, 1)
+        let height = max(short - (notch ? 21 : 0) - 40, 1)
+        return (width / 7) / height
+    }
 }
 
 extension UIColor {

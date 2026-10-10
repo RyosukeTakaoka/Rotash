@@ -72,5 +72,7 @@ struct JoinRotashView: View {
                 fromLink = true
             }
         }
+        // 閉じたら、リンクから来たときのコードは使い終わり（次に開いたときに入力できるように）。
+        .onDisappear { app.pendingJoinCode = nil }
     }
 }

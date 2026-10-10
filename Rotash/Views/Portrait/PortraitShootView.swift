@@ -65,7 +65,8 @@ struct PortraitShootView: View {
                                 .padding(.horizontal, 20)
                                 .padding(.bottom, 10)
                         }
-                        mainPane(cellAspect: Self.cellAspect(portraitSize: geometry.size))
+                        // 横画面の7分割の1枠の形（週の途中から始めた週は枠が少なく、1枠が広い）。
+                        mainPane(cellAspect: WorkShape.cellAspect(forSlots: app.group?.currentWeek.slots.count ?? 7))
                             .frame(maxHeight: .infinity)
                         bottomControl
                     }
@@ -171,15 +172,6 @@ struct PortraitShootView: View {
                 .padding(14)
             }
         }
-    }
-
-    /// 横向きにしたときの1枠の「幅 ÷ 高さ」。
-    /// 横向きの画面は、縦向きの高さが横幅に、横幅が高さになる。
-    /// その横幅を7つに割り、高さから見出しの分（約44pt）を引いた形が1枠。
-    static func cellAspect(portraitSize: CGSize) -> CGFloat {
-        let landscapeWidth = max(portraitSize.height, 1)
-        let landscapeHeight = max(portraitSize.width - 44, 1)
-        return (landscapeWidth / 7) / landscapeHeight
     }
 
     @ViewBuilder

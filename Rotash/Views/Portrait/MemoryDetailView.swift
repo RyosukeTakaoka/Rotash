@@ -104,7 +104,7 @@ struct MemoryDetailView: View {
                 VStack(spacing: 6) {
                     // 横画面で見る作品と同じ形の枠にする。
                     Color.clear
-                        .aspectRatio(WorkShape.cellAspect, contentMode: .fit)
+                        .aspectRatio(WorkShape.cellAspect(forSlots: slots.count), contentMode: .fit)
                         .overlay { workCell(slot) }
                         .clipped()
                         .overlay(Rectangle().stroke(slot.dayIndex == currentDay ? Palette.live : Color.clear,
@@ -125,13 +125,12 @@ struct MemoryDetailView: View {
     @ViewBuilder
     private func workCell(_ slot: Slot) -> some View {
         if slot.isFilled {
-            FlipCard(flipped: flipped && slot.hasReverse) {
+            // 左から1枚ずつ裏返る。
+            FlipCard(flipped: flipped && slot.hasReverse, delay: Double(slot.dayIndex) * 0.07) {
                 PhotoImageView(slot: slot, maxPixel: 300)
             } back: {
                 PhotoImageView(reverseOf: slot, maxPixel: 300)
             }
-            // 左から1枚ずつ裏返る。
-            .animation(.easeInOut(duration: 0.45).delay(Double(slot.dayIndex) * 0.07), value: flipped)
         } else {
             // 写真がなかった日。作品の一部としてそのまま残す。
             Rectangle()
@@ -186,11 +185,11 @@ struct MemoryDetailView: View {
                 ZStack {
                     Palette.surfaceDeep
                     // 写真そのものの形で出す（切らずに全体を見せる）。
-                    if showsReverse {
-                        PhotoImageView(reverseOf: slot, maxPixel: 1080).natural()
-                    } else {
-                        PhotoImageView(slot: slot, maxPixel: 1080).natural()
-                    }
+                    // 1つの PhotoImageView のまま中身だけ替える（入れ替えるたびに一瞬暗くならないように）。
+                    PhotoImageView(filename: showsReverse ? slot.reversePhotoFilename : slot.photoFilename,
+                                   remoteURL: showsReverse ? slot.reversePhotoURL : slot.photoURL,
+                                   maxPixel: 1080)
+                        .natural()
                 }
                 if slot.hasReverse {
                     Button {
@@ -203,11 +202,9 @@ struct MemoryDetailView: View {
                         }
                     } label: {
                         Group {
-                            if showsReverse {
-                                PhotoImageView(slot: slot, maxPixel: 300)
-                            } else {
-                                PhotoImageView(reverseOf: slot, maxPixel: 300)
-                            }
+                            PhotoImageView(filename: showsReverse ? slot.photoFilename : slot.reversePhotoFilename,
+                                           remoteURL: showsReverse ? slot.photoURL : slot.reversePhotoURL,
+                                           maxPixel: 300)
                         }
                         .frame(width: 88, height: 88)
                         .clipShape(Circle())

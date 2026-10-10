@@ -10,8 +10,8 @@ struct CreateRotashView: View {
 
     @State private var name = ""
     @State private var myName = ""
-    /// 作り終わったか。作ったあとは招待コードを見せる。
-    @State private var created = false
+    /// 作ったグループの ID。作ったあとは、そのグループの招待コードを見せる。
+    @State private var createdID: UUID?
 
     private var canCreate: Bool {
         !myName.trimmingCharacters(in: .whitespaces).isEmpty
@@ -22,7 +22,7 @@ struct CreateRotashView: View {
             Palette.background.ignoresSafeArea()
             // 作り終わっていれば、作ったグループ（いま開いているグループ）の招待コードを見せる。
             // 掛け持ちできるので、「グループがあるか」では判定できない。
-            if created, let group = app.group {
+            if let createdID, let group = app.groups.first(where: { $0.id == createdID }) {
                 InviteCodeView(group: group) { dismiss() }
             } else {
                 form
@@ -46,8 +46,10 @@ struct CreateRotashView: View {
                     .lineSpacing(5)
 
                 Button("つくる") {
-                    app.createRotash(name: name, memberNames: [myName])
-                    created = true
+                    // 二度押しで2つ作らないように、作ったあとは押せない（下の disabled）。
+                    if createdID == nil {
+                        createdID = app.createRotash(name: name, memberNames: [myName])
+                    }
                 }
                 .buttonStyle(RotashButtonStyle(filled: true))
                 .disabled(!canCreate)

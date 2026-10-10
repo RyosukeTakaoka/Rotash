@@ -22,6 +22,17 @@ enum RotashSyncService {
         var failureReason: String?
     }
 
+    /// グループから抜けたことだけをサーバーに伝える。
+    /// 写真の上げ下ろしはしない（抜けた端末からは、すぐにそのグループを消すので）。
+    static func publishLeave(of group: RotashGroup) async throws {
+        guard isEnabled else { return }
+        var working = group
+        if let remote = try await FirestoreClient.fetch(inviteCode: group.inviteCode) {
+            working = RotashMerge.merge(local: group, remote: remote)
+        }
+        try await FirestoreClient.push(RemoteGroupState(group: working))
+    }
+
     /// 同期して、突き合わせ後のグループを返す。
     static func sync(group: RotashGroup) async throws -> Outcome {
         guard isEnabled else { throw SyncError.notConfigured }

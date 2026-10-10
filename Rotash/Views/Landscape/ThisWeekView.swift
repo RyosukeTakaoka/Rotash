@@ -210,6 +210,13 @@ struct ThisWeekView: View {
                         .clipped()
                 }
             }
+            // 縦の画面（Memories など）で作品を同じ形に描けるよう、7枠の週で実際の1枠の形を覚えておく。
+            .onAppear {
+                if count == 7 { WorkShape.recordLandscapeCell(width: cellWidth, height: geometry.size.height) }
+            }
+            .onChange(of: geometry.size) { _, _ in
+                if count == 7 { WorkShape.recordLandscapeCell(width: cellWidth, height: geometry.size.height) }
+            }
             .overlay(alignment: .topLeading) {
                 // 撮る間だけ、今日の枠にライブビューを出す。ピンチで横に広げられる。
                 if let activeDay, let index = sorted.firstIndex(where: { $0.dayIndex == activeDay }) {
@@ -344,7 +351,8 @@ struct ThisWeekView: View {
                 manualSelection = day
             }
         }
-        .onLongPressGesture(minimumDuration: 0.2) {
+        // 押してすぐ離すと全画面、少し長く押すと裏返す。短すぎると、ふつうに押したつもりでも裏返る。
+        .onLongPressGesture(minimumDuration: 0.3) {
             guard !isActive, slot.hasReverse else { return }
             toggleFlip(day)
         }
@@ -361,13 +369,9 @@ struct ThisWeekView: View {
     /// 枠の下に添える丸。撮るときのシャッターの丸と同じ形。押すとその枠が裏返る（長押しと同じ）。
     private func reverseBadge(slot: Slot, showsFront: Bool, diameter: CGFloat) -> some View {
         Button { toggleFlip(slot.dayIndex) } label: {
-            Group {
-                if showsFront {
-                    PhotoImageView(slot: slot, maxPixel: 240)
-                } else {
-                    PhotoImageView(reverseOf: slot, maxPixel: 240)
-                }
-            }
+            PhotoImageView(filename: showsFront ? slot.photoFilename : slot.reversePhotoFilename,
+                           remoteURL: showsFront ? slot.photoURL : slot.reversePhotoURL,
+                           maxPixel: 240)
             .frame(width: diameter, height: diameter)
             .clipShape(Circle())
             .overlay(Circle().stroke(Color.white, lineWidth: 2))
@@ -393,23 +397,18 @@ struct ThisWeekView: View {
                     .ignoresSafeArea()
                     .onTapGesture { closeViewer() }
 
-                Group {
-                    if showsReverse {
-                        PhotoImageView(reverseOf: slot, maxPixel: 1600).natural()
-                    } else {
-                        PhotoImageView(slot: slot, maxPixel: 1600).natural()
-                    }
-                }
+                // 1つの PhotoImageView のまま中身だけ替える（作り直すと、入れ替えるたびに一瞬暗くなる）。
+                // 読む大きさは画面に出る大きさまで（4:3 を画面の高さいっぱいに出すとき、横は高さの 4/3）。
+                PhotoImageView(filename: showsReverse ? slot.reversePhotoFilename : slot.photoFilename,
+                               remoteURL: showsReverse ? slot.reversePhotoURL : slot.photoURL,
+                               maxPixel: (fullHeight * 4 / 3).rounded())
+                    .natural()
                 .overlay(alignment: .bottomTrailing) {
                     if slot.hasReverse {
                         Button { swapViewer() } label: {
-                            Group {
-                                if showsReverse {
-                                    PhotoImageView(slot: slot, maxPixel: 480)
-                                } else {
-                                    PhotoImageView(reverseOf: slot, maxPixel: 480)
-                                }
-                            }
+                            PhotoImageView(filename: showsReverse ? slot.photoFilename : slot.reversePhotoFilename,
+                                           remoteURL: showsReverse ? slot.photoURL : slot.reversePhotoURL,
+                                           maxPixel: diameter)
                             .frame(width: diameter, height: diameter)
                             .clipShape(Circle())
                             .overlay(Circle().stroke(Color.white, lineWidth: 3))
@@ -421,7 +420,7 @@ struct ThisWeekView: View {
                 }
                 // 写真を長押ししても、表と裏が入れ替わる（7分割の枠と同じ）。
                 .contentShape(Rectangle())
-                .onLongPressGesture(minimumDuration: 0.2) {
+                .onLongPressGesture(minimumDuration: 0.3) {
                     guard slot.hasReverse else { return }
                     swapViewer()
                 }

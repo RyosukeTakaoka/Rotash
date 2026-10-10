@@ -20,12 +20,11 @@ struct WeekThumbnailStrip: View {
             ForEach(week.slots.sorted(by: { $0.dayIndex < $1.dayIndex })) { slot in
                 Group {
                     if slot.isFilled {
-                        FlipCard(flipped: flipped && slot.hasReverse) {
+                        FlipCard(flipped: flipped && slot.hasReverse, delay: Double(slot.dayIndex) * 0.07) {
                             PhotoImageView(slot: slot, maxPixel: 160)
                         } back: {
                             PhotoImageView(reverseOf: slot, maxPixel: 160)
                         }
-                        .animation(.easeInOut(duration: 0.45).delay(Double(slot.dayIndex) * 0.07), value: flipped)
                     } else {
                         // 写真がなかった日。横画面の7分割と同じく「—」を置く（ある程度の大きさがあるときだけ）。
                         Rectangle()
@@ -33,7 +32,8 @@ struct WeekThumbnailStrip: View {
                             .overlay(Rectangle().stroke(Palette.line, lineWidth: 1))
                             .overlay {
                                 GeometryReader { geometry in
-                                    if geometry.size.height >= 40 {
+                                    // 「その日には写真がなかった」と決まった日だけ（今日や、まだ来ていない日には出さない）。
+                                    if week.state(of: slot) == .noShot, geometry.size.height >= 40 {
                                         Text("—")
                                             .rotashLabel(11, color: Palette.faint, tracking: 0)
                                             .frame(maxWidth: .infinity, maxHeight: .infinity)

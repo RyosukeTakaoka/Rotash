@@ -169,7 +169,11 @@ struct PortraitHomeView: View {
                 Button { app.activeSheet = .create } label: {
                     Label("新しいグループをつくる", systemImage: "plus")
                 }
-                Button { app.activeSheet = .join } label: {
+                Button {
+                    // 前にリンクから開いたときのコードが残っていると、入力できない画面になるので消す。
+                    app.pendingJoinCode = nil
+                    app.activeSheet = .join
+                } label: {
                     Label("招待コードで参加", systemImage: "person.badge.plus")
                 }
             }

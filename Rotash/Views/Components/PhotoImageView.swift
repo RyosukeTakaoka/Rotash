@@ -128,26 +128,52 @@ struct PhotoImageView: View {
 ///
 /// 裏は、はじめて裏返すまで作らない。見えない裏まで7枚ぶん読み込むと、
 /// カメラを動かしている横持ちの画面でメモリを大きく使うため。
+///
+/// 回すのはカードの中で行う（`shown`）。はじめて裏返すときは、まず裏を伏せた向きのまま作り、
+/// 次の瞬間に回し始める。同時に作ると、裏が回らずにふっと現れるだけになるため。
 struct FlipCard<Front: View, Back: View>: View {
     var flipped: Bool
+    /// 回り始めるまでの待ち時間（左から1枚ずつ裏返すときに使う）。
+    var delay: Double = 0
     @ViewBuilder var front: () -> Front
     @ViewBuilder var back: () -> Back
 
-    @State private var backBuilt = false
+    @State private var backBuilt: Bool
+    @State private var shown: Bool
+
+    init(flipped: Bool,
+         delay: Double = 0,
+         @ViewBuilder front: @escaping () -> Front,
+         @ViewBuilder back: @escaping () -> Back) {
+        self.flipped = flipped
+        self.delay = delay
+        self.front = front
+        self.back = back
+        _backBuilt = State(initialValue: flipped)
+        _shown = State(initialValue: flipped)
+    }
 
     var body: some View {
         ZStack {
             front()
-                .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
-                .opacity(flipped ? 0 : 1)
-            if backBuilt || flipped {
+                .rotation3DEffect(.degrees(shown ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
+                .opacity(shown ? 0 : 1)
+            if backBuilt {
                 back()
-                    .rotation3DEffect(.degrees(flipped ? 0 : -180), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
-                    .opacity(flipped ? 1 : 0)
+                    .rotation3DEffect(.degrees(shown ? 0 : -180), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
+                    .opacity(shown ? 1 : 0)
             }
         }
         .onChange(of: flipped) { _, isFlipped in
-            if isFlipped { backBuilt = true }
+            let animation = Animation.easeInOut(duration: 0.45).delay(delay)
+            if isFlipped && !backBuilt {
+                backBuilt = true
+                DispatchQueue.main.async {
+                    withAnimation(animation) { shown = true }
+                }
+            } else {
+                withAnimation(animation) { shown = isFlipped }
+            }
         }
     }
 }

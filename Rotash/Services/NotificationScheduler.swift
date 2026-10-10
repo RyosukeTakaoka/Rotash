@@ -6,7 +6,7 @@ import UserNotifications
 /// 担当は週の開始時点で内部的に決まっているので、**その週の分をまとめて予約するだけ**で済む。
 /// サーバーも APNs も要らない。
 ///
-/// 送るのは2種類だけで、上限は 1日2通。
+/// 送るのは2種類だけで、上限は 1日2通（グループを掛け持ちしていても、朝の1通にまとめる）。
 ///
 ///   朝 8:00     「今日は MINA」          … 全員に。日次ループの起点
 ///   日曜 21:00  「今週の Rotash」        … 週に1度だけ。作品が決着する日
@@ -53,11 +53,14 @@ enum NotificationScheduler {
     ///
     /// 途中参加で未来の担当が入れ替わることがあるので、**必ず全部消してから入れ直す**。
     /// 差分で消そうとすると、消し忘れた古い名前がそのまま朝に届く。
-    /// 掛け持ちしているときは、グループごとに予約する（どのグループの当番か分かるよう、題名にグループ名を出す）。
+    /// 掛け持ちしているときは、同じ時刻の通知を1通にまとめる（グループの数だけ朝に届くと、うるさい上に
+    /// iOS の予約できる上限（64件）にもすぐ届く）。本文に「グループ名: 担当」を1行ずつ並べる。
     static func reschedule(for groups: [RotashGroup], now: Date = Date()) {
         // 予約する内容はクロージャに入る前に作っておく
         // （グループの状態をクロージャへ持ち込まないため）。
-        let next = groups.flatMap { requests(for: $0, now: now, showsGroupName: groups.count > 1) }
+        let next = groups.count > 1
+            ? combinedRequests(for: groups, now: now)
+            : groups.flatMap { requests(for: $0, now: now) }
 
         let center = UNUserNotificationCenter.current()
         center.getPendingNotificationRequests { pending in
@@ -71,11 +74,50 @@ enum NotificationScheduler {
         }
     }
 
-    /// 予約する内容。副作用が無いので、そのまま確かめられる。
-    /// - Parameter showsGroupName: 題名をグループ名にするか（掛け持ちしているとき）。
-    static func requests(for group: RotashGroup,
-                         now: Date = Date(),
-                         showsGroupName: Bool = false) -> [UNNotificationRequest] {
+    /// 掛け持ちしているときの予約。朝は日ごとに1通（各グループの今日の担当を1行ずつ）、日曜の夜も1通。
+    static func combinedRequests(for groups: [RotashGroup], now: Date = Date()) -> [UNNotificationRequest] {
+        let calendar = Calendar.rotash
+        var mornings: [Date: [String]] = [:]
+        var weekEnds = Set<Date>()
+
+        for group in groups {
+            let week = group.currentWeek
+            for slot in week.slots.sorted(by: { $0.dayIndex < $1.dayIndex }) {
+                guard let name = group.member(forDay: slot.dayIndex, in: week)?.name,
+                      let date = fireDate(dayIndex: slot.dayIndex, weekStart: week.startDate,
+                                          hour: morningHour, calendar: calendar),
+                      date > now
+                else { continue }
+                mornings[date, default: []].append("\(group.name): \(name.uppercased())")
+            }
+            if let date = fireDate(dayIndex: 6, weekStart: week.startDate, hour: weekEndHour, calendar: calendar),
+               date > now {
+                weekEnds.insert(date)
+            }
+        }
+
+        var result: [UNNotificationRequest] = []
+        for (date, lines) in mornings.sorted(by: { $0.key < $1.key }) {
+            let content = UNMutableNotificationContent()
+            content.title = "TODAY"
+            content.body = lines.joined(separator: "\n")
+            content.sound = .default
+            result.append(request(id: "\(prefix)\(stamp(date))",
+                                  date: date, content: content, calendar: calendar))
+        }
+        for date in weekEnds.sorted() {
+            let content = UNMutableNotificationContent()
+            content.title = "THIS WEEK"
+            content.body = String(localized: "今週の Rotash")
+            content.sound = .default
+            result.append(request(id: "\(weekEndPrefix)\(stamp(date))",
+                                  date: date, content: content, calendar: calendar))
+        }
+        return result
+    }
+
+    /// 予約する内容（グループが1つのとき）。副作用が無いので、そのまま確かめられる。
+    static func requests(for group: RotashGroup, now: Date = Date()) -> [UNNotificationRequest] {
         let calendar = Calendar.rotash
         let week = group.currentWeek
         var result: [UNNotificationRequest] = []
@@ -90,7 +132,7 @@ enum NotificationScheduler {
             else { continue }
 
             let content = UNMutableNotificationContent()
-            content.title = showsGroupName ? group.name : "TODAY"
+            content.title = "TODAY"
             content.body = String(localized: "今日は \(name.uppercased())")
             content.sound = .default
 
@@ -108,7 +150,7 @@ enum NotificationScheduler {
                                calendar: calendar),
            date > now {
             let content = UNMutableNotificationContent()
-            content.title = showsGroupName ? group.name : "THIS WEEK"
+            content.title = "THIS WEEK"
             content.body = String(localized: "今週の Rotash")
             content.sound = .default
 

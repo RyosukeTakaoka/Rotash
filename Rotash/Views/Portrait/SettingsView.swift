@@ -142,7 +142,8 @@ struct SettingsView: View {
             Text("メンバー（この順に当番がまわります）")
                 .rotashLabel(9, color: Palette.faint, tracking: 1)
 
-            ForEach(Array(group.members.enumerated()), id: \.element.id) { index, member in
+            // 抜けた人は当番に入らないので、ここには出さない（過去の作品には名前が残る）。
+            ForEach(Array(group.activeMembers.enumerated()), id: \.element.id) { index, member in
                 HStack(spacing: 12) {
                     Text(String(format: "%02d", index + 1)).rotashLabel(10, color: Palette.faint)
                     Text(member.name).rotashLabel(12, color: Palette.text, tracking: 0.6)

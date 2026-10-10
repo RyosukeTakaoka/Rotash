@@ -14,6 +14,12 @@ struct ThisWeekView: View {
     /// 長押しで裏返している枠（曜日）。裏はいつでも見られる。
     @State private var flippedDays: Set<Int> = []
     @State private var flashOpacity: Double = 0
+    /// 撮るときの大きい画面の幅が、今日の枠の幅の何倍か。1 は元の7分割の枠のまま（はじめはこれ）。
+    /// ピンチで広げたり縮めたりできる。いちばん広いのは7分割の横幅いっぱい。
+    /// 撮った写真（表）は、この画面に映っている範囲に切り抜いて保存する（写したくない物は画面の外に出せる）。
+    @State private var liveScale: CGFloat = 1
+    /// ピンチを始めたときの liveScale。ピンチの倍率はこれに掛ける。
+    @State private var pinchBaseScale: CGFloat?
     @State private var draftTitle = ""
     /// 撮り直せる残り時間を数えるための「いま」。撮り直せるあいだだけ進める。
     /// 表示を描き直すきっかけとして使う。撮れるかどうかの判定そのものは常に本物の現在時刻で行う。
@@ -198,14 +204,39 @@ struct ThisWeekView: View {
                 }
             }
             .overlay(alignment: .topLeading) {
-                // 撮る間だけ、今日の枠を写真と同じ横長の形に広げてライブビューを出す。
+                // 撮る間だけ、今日の枠にライブビューを出す。ピンチで横に広げられる。
                 if let activeDay, let index = sorted.firstIndex(where: { $0.dayIndex == activeDay }) {
+                    let cellCenterX = CGFloat(index) * (cellWidth + spacing) + cellWidth / 2
                     expandedLive(day: activeDay,
-                                 cellCenterX: CGFloat(index) * (cellWidth + spacing) + cellWidth / 2,
-                                 cellWidth: cellWidth,
-                                 area: geometry.size)
+                                 frame: liveFrame(cellCenterX: cellCenterX, cellWidth: cellWidth, area: geometry.size),
+                                 cellCenterX: cellCenterX,
+                                 cellWidth: cellWidth)
                 }
             }
+            .overlay(alignment: .trailing) {
+                // シャッターなどは、広げた画面ではなく7分割の右端に置く（画面が細いときも押せるように）。
+                // 丸より上の空いた所の真ん中に来るようにする（日曜は丸とシャッターが同じ右端に来るため）。
+                if let activeDay, let index = sorted.firstIndex(where: { $0.dayIndex == activeDay }) {
+                    let cellCenterX = CGFloat(index) * (cellWidth + spacing) + cellWidth / 2
+                    let frame = liveFrame(cellCenterX: cellCenterX, cellWidth: cellWidth, area: geometry.size)
+                    shootControls(day: activeDay, aspect: frame.width / max(1, frame.height))
+                        .padding(.trailing, 16)
+                        .padding(.bottom, cellWidth * ReverseBadge.widthRatio + ReverseBadge.bottomInset)
+                }
+            }
+            // 指でつまむように縮めると元の枠に近づき、広げると画面いっぱいに近づく。
+            // どこから始めてもよいように、7分割全体で受ける（タップや長押しはそのまま枠に届く）。
+            .simultaneousGesture(
+                MagnifyGesture()
+                    .onChanged { value in
+                        guard activeDay != nil, cellWidth > 0 else { return }
+                        let base = pinchBaseScale ?? liveScale
+                        if pinchBaseScale == nil { pinchBaseScale = base }
+                        let widest = max(1, geometry.size.width / cellWidth)
+                        liveScale = min(widest, max(1, base * value.magnification))
+                    }
+                    .onEnded { _ in pinchBaseScale = nil }
+            )
         }
         .background(Palette.background)
     }
@@ -288,9 +319,8 @@ struct ThisWeekView: View {
         .overlay(Rectangle().stroke(isActive ? Palette.live : Color.clear, lineWidth: 2))
         .contentShape(Rectangle())
         .onTapGesture {
-            if isActive {
-                capture(day: day)
-            } else if shootable {
+            // 撮っている枠は上にライブビュー（expandedLive）が重なっていて、押すとそちらで撮る。
+            if !isActive, shootable {
                 manualSelection = day
             }
         }
@@ -323,59 +353,61 @@ struct ThisWeekView: View {
         .allowsHitTesting(false)
     }
 
-    /// 撮る間だけ、今日の枠を写真と同じ横長の形（枠と同じ高さ）に広げたライブビュー。
-    ///
-    /// 保存される写真の範囲をそのまま映し、サムネ（今日の枠）に入る範囲を線で示す。
-    /// 今日の枠の真ん中に重ねるので、線はちょうど今日の枠の位置に来る（端の曜日は内側に寄せる）。
-    /// 近くの日は撮る間だけ隠れ、撮り終わると7分割に戻る。押すと撮る。
-    ///
-    /// 裏（もう一方のカメラ）は、今日の枠の下（撮ったあと裏の丸が添えられる所）に同じ大きさの丸で、
-    /// シャッターは右端に置く。撮るときに見ている丸が、そのまま枠の下の丸になる。
-    private func expandedLive(day: Int, cellCenterX: CGFloat, cellWidth: CGFloat, area: CGSize) -> some View {
-        let frameAspect = max(0.3, camera.frameAspect)
-        let width = min(area.width, area.height / frameAspect)
+    /// 撮るときの大きい画面の位置と大きさ（7分割の中の座標）。高さは枠と同じで、幅だけ liveScale で変わる。
+    /// 今日の枠の真ん中に重ね、端の曜日は内側に寄せる。
+    private func liveFrame(cellCenterX: CGFloat, cellWidth: CGFloat, area: CGSize) -> CGRect {
+        let width = min(area.width, max(cellWidth, cellWidth * liveScale))
         let x = min(max(0, cellCenterX - width / 2), max(0, area.width - width))
-        let region = ThumbnailGuide.centerCrop(imageAspect: width / max(1, area.height),
-                                               cellAspect: cellWidth / max(1, area.height))
-        let badgeDiameter = cellWidth * ReverseBadge.widthRatio
+        return CGRect(x: x, y: 0, width: width, height: area.height)
+    }
+
+    /// 撮る間のライブビュー。はじめは今日の枠と同じ大きさで、ピンチで横に広げられる（`liveScale`）。
+    ///
+    /// 映っている範囲がそのまま保存される写真になる（撮ったあと、この形に切り抜く）。
+    /// 広げているときは、サムネ（今日の枠）に入る範囲を線で示す。
+    /// 近くの日は広げている間だけ隠れ、撮り終わると7分割に戻る。押すと撮る。
+    ///
+    /// 裏（もう一方のカメラ）は、今日の枠の下（撮ったあと裏の丸が添えられる所）に同じ大きさの丸で出す。
+    /// 広げても縮めても丸は変わらない。撮るときに見ている丸が、そのまま枠の下の丸になる。
+    private func expandedLive(day: Int, frame: CGRect, cellCenterX: CGFloat, cellWidth: CGFloat) -> some View {
+        let region = ThumbnailGuide.centerCrop(imageAspect: frame.width / max(1, frame.height),
+                                               cellAspect: cellWidth / max(1, frame.height))
+        let aspect = frame.width / max(1, frame.height)
         return ZStack {
             liveContent
-            ThumbnailGuide(region: region)
+            if frame.width > cellWidth + 1 {
+                ThumbnailGuide(region: region)
+            }
         }
-        .frame(width: width, height: area.height)
+        .frame(width: frame.width, height: frame.height)
         .clipped()
         .overlay(Rectangle().stroke(Palette.live, lineWidth: 2))
         .contentShape(Rectangle())
-        .onTapGesture { capture(day: day) }
+        .onTapGesture { capture(day: day, aspect: aspect) }
         .overlay(alignment: .bottom) {
             // 丸を押すと表と裏が入れ替わる（FLIP と同じ）。
             Button { camera.switchCamera() } label: {
-                ReverseLiveCircle(camera: camera, diameter: badgeDiameter)
+                ReverseLiveCircle(camera: camera, diameter: cellWidth * ReverseBadge.widthRatio)
             }
             .buttonStyle(.plain)
             .disabled(isCapturing)
             .padding(.bottom, ReverseBadge.bottomInset)
             // 広げた画面の中での、今日の枠の真ん中に合わせる。
-            .offset(x: cellCenterX - x - width / 2)
+            .offset(x: cellCenterX - frame.minX - frame.width / 2)
         }
-        .overlay(alignment: .trailing) {
-            // 丸より上の空いた所の真ん中に置く（端の曜日では、丸とシャッターが同じ右端に来るため）。
-            shootControls(day: day)
-                .padding(.trailing, 16)
-                .padding(.bottom, badgeDiameter + ReverseBadge.bottomInset)
-        }
-        .offset(x: x)
+        .offset(x: frame.minX)
     }
 
-    /// ライブビューの右端に縦に並べる、撮るための操作。上から SHOOT / RETAKE の表示、シャッター、FLIP。
-    private func shootControls(day: Int) -> some View {
+    /// 7分割の右端に縦に並べる、撮るための操作。上から SHOOT / RETAKE の表示、シャッター、FLIP。
+    /// - Parameter aspect: いまの大きい画面の「幅 ÷ 高さ」。撮った写真をこの形に切り抜く。
+    private func shootControls(day: Int, aspect: CGFloat) -> some View {
         VStack(spacing: 10) {
             Text(isRetake ? "RETAKE\(retakeCountdown(for: day))" : "SHOOT")
                 .rotashLabel(9, color: Palette.live, tracking: 3)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
                 .background(Color.black.opacity(0.5))
-            ShutterButton(diameter: 64, isBusy: isCapturing) { capture(day: day) }
+            ShutterButton(diameter: 64, isBusy: isCapturing) { capture(day: day, aspect: aspect) }
             flipButton
         }
     }
@@ -467,7 +499,9 @@ struct ThisWeekView: View {
         }
     }
 
-    private func capture(day: Int) {
+    /// - Parameter aspect: 撮るときの大きい画面の「幅 ÷ 高さ」。表の写真を、映っていた範囲に切り抜く。
+    ///   nil なら切り抜かない。
+    private func capture(day: Int, aspect: CGFloat? = nil) {
         guard !isCapturing, app.canShoot(dayIndex: day) else { return }
         isCapturing = true
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
@@ -479,8 +513,12 @@ struct ThisWeekView: View {
             Task { @MainActor in
                 self.flashOpacity = 0.85
                 withAnimation(.easeOut(duration: 0.28)) { self.flashOpacity = 0 }
-                if let main {
-                    self.app.attachPhoto(main, toDay: day, front: front,
+                if let captured = main {
+                    // 画面に映っていた範囲だけを残す。重い処理なので、画面を止めないよう裏で行う。
+                    let photo = await Task.detached(priority: .userInitiated) {
+                        aspect.flatMap { PhotoStore.centerCropped(captured, toAspect: $0) } ?? captured
+                    }.value
+                    self.app.attachPhoto(photo, toDay: day, front: front,
                                          reverse: reverse, reverseFront: reverseFront)
                     self.manualSelection = nil
                     self.flippedDays.remove(day)

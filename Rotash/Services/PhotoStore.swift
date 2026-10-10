@@ -64,6 +64,32 @@ final class PhotoStore {
     }
 }
 
+extension PhotoStore {
+    /// JPEG を、真ん中を残して「幅 ÷ 高さ」が aspect の形に切り抜く。
+    /// 横持ちで撮るとき、画面に映っていた範囲だけを写真として残すために使う（プレビューも真ん中を残して映している）。
+    /// 形がほぼ同じなら元のまま返す。読めなければ nil。
+    static func centerCropped(_ data: Data, toAspect aspect: CGFloat, quality: CGFloat = 0.92) -> Data? {
+        guard aspect > 0, let image = UIImage(data: data), image.size.width > 0, image.size.height > 0
+        else { return nil }
+        // size は EXIF の向きを反映した後の大きさ。draw も向きを反映して描くので、見たままの向きで切れる。
+        let size = image.size
+        let current = size.width / size.height
+        if abs(current - aspect) / aspect < 0.01 { return data }
+        let crop = current > aspect
+            ? CGSize(width: (size.height * aspect).rounded(.down), height: size.height)
+            : CGSize(width: size.width, height: (size.width / aspect).rounded(.down))
+        guard crop.width >= 1, crop.height >= 1 else { return nil }
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = image.scale
+        format.opaque = true
+        let cropped = UIGraphicsImageRenderer(size: crop, format: format).image { _ in
+            image.draw(at: CGPoint(x: (crop.width - size.width) / 2, y: (crop.height - size.height) / 2))
+        }
+        return cropped.jpegData(compressionQuality: quality)
+    }
+}
+
 extension UIImage {
     /// EXIF の向きを焼き込んで .up にした JPEG を返す。横長のまま保存する（縦への変換はしない）。
     func rotashJPEGData(quality: CGFloat = 0.92) -> Data? {

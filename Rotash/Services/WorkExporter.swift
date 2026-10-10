@@ -366,10 +366,13 @@ enum WorkExporter {
                             width: diameter, height: diameter)
         }
 
+        // 撮るときの丸と同じく、丸いっぱいに広げず写真全体を丸の幅に収める（余る所は黒）。
         context.saveGState()
         context.addEllipse(in: circle)
         context.clip()
-        image.draw(in: aspectFillRect(imageSize: image.size, in: circle))
+        UIColor.black.setFill()
+        UIRectFill(circle)
+        image.draw(in: aspectFitRect(imageSize: image.size, in: circle))
         context.restoreGState()
 
         let ring: CGFloat = 4
@@ -488,6 +491,16 @@ enum WorkExporter {
                                                   tracking: tracking,
                                                   monospaced: monospaced))
             .size().width
+    }
+
+    static func aspectFitRect(imageSize: CGSize, in rect: CGRect) -> CGRect {
+        guard imageSize.width > 0, imageSize.height > 0 else { return rect }
+        let scale = min(rect.width / imageSize.width, rect.height / imageSize.height)
+        let drawSize = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+        return CGRect(x: rect.midX - drawSize.width / 2,
+                      y: rect.midY - drawSize.height / 2,
+                      width: drawSize.width,
+                      height: drawSize.height)
     }
 
     static func aspectFillRect(imageSize: CGSize, in rect: CGRect) -> CGRect {

@@ -308,10 +308,11 @@ struct ThisWeekView: View {
         GeometryReader { geometry in
             let diameter = geometry.size.width * 0.62
             Group {
+                // 撮るときの丸（ReverseLiveCircle）と同じく、写真全体を丸の幅に収める。
                 if showsFront {
-                    PhotoImageView(slot: slot, maxPixel: 240)
+                    PhotoImageView(slot: slot, maxPixel: 240).fitted()
                 } else {
-                    PhotoImageView(reverseOf: slot, maxPixel: 240)
+                    PhotoImageView(reverseOf: slot, maxPixel: 240).fitted()
                 }
             }
             .frame(width: diameter, height: diameter)
@@ -328,6 +329,9 @@ struct ThisWeekView: View {
     /// 保存される写真の範囲をそのまま映し、サムネ（今日の枠）に入る範囲を線で示す。
     /// 今日の枠の真ん中に重ねるので、線はちょうど今日の枠の位置に来る（端の曜日は内側に寄せる）。
     /// 近くの日は撮る間だけ隠れ、撮り終わると7分割に戻る。押すと撮る。
+    ///
+    /// 裏（もう一方のカメラ）は下の真ん中の丸に、シャッターは右端に置く。
+    /// 丸は、撮ったあと枠の下に添えられる裏の丸と同じ見え方（写る範囲を削らずに縮める）。
     private func expandedLive(day: Int, cellCenterX: CGFloat, cellWidth: CGFloat, area: CGSize) -> some View {
         let frameAspect = max(0.3, camera.frameAspect)
         let width = min(area.width, area.height / frameAspect)
@@ -343,7 +347,33 @@ struct ThisWeekView: View {
         .overlay(Rectangle().stroke(Palette.live, lineWidth: 2))
         .contentShape(Rectangle())
         .onTapGesture { capture(day: day) }
+        .overlay(alignment: .bottom) {
+            // 丸を押すと表と裏が入れ替わる（FLIP と同じ）。
+            Button { camera.switchCamera() } label: {
+                ReverseLiveCircle(camera: camera, diameter: min(area.height * 0.42, width * 0.3))
+            }
+            .buttonStyle(.plain)
+            .disabled(isCapturing)
+            .padding(.bottom, 12)
+        }
+        .overlay(alignment: .trailing) {
+            shootControls(day: day)
+                .padding(.trailing, 16)
+        }
         .offset(x: x)
+    }
+
+    /// ライブビューの右端に縦に並べる、撮るための操作。上から SHOOT / RETAKE の表示、シャッター、FLIP。
+    private func shootControls(day: Int) -> some View {
+        VStack(spacing: 10) {
+            Text(isRetake ? "RETAKE\(retakeCountdown(for: day))" : "SHOOT")
+                .rotashLabel(9, color: Palette.live, tracking: 3)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Color.black.opacity(0.5))
+            ShutterButton(diameter: 64, isBusy: isCapturing) { capture(day: day) }
+            flipButton
+        }
     }
 
     @ViewBuilder
@@ -382,21 +412,9 @@ struct ThisWeekView: View {
     // 今日の担当が誰かも、各枠に既に名前が出ているので改めて言葉にしない。
     @ViewBuilder
     private func bottomControl(week: RotashWeek) -> some View {
-        if let activeDay {
-            VStack(spacing: 8) {
-                Text(isRetake ? "RETAKE\(retakeCountdown(for: activeDay))" : "SHOOT")
-                    .rotashLabel(9, color: Palette.live, tracking: 3)
-
-                // FLIP は狭い枠の隅だと押しづらいので、シャッターの横に置いて
-                // 指の届く大きさ（44pt 以上）にしている。
-                // 反対側に同じ幅の余白を入れて、シャッターは中央のままにする。
-                HStack(spacing: 20) {
-                    flipButton
-                    shutterButton
-                    Color.clear.frame(width: flipButtonWidth, height: 1)
-                }
-            }
-            .padding(.bottom, 12)
+        if activeDay != nil {
+            // 撮る間の操作（シャッター・FLIP）は、広げたライブビューの右端に出している（shootControls）。
+            EmptyView()
         } else if let window = app.retakeWindow(now: now) {
             // 撮った直後。写真を見て「事故った」と思ったら、ここから撮り直せる。
             // 押すとその枠にライブビューが戻る。時間が切れたら黙って消える。
@@ -445,19 +463,12 @@ struct ThisWeekView: View {
         }
     }
 
-    /// シャッター。裏（もう一方のカメラ）が中に映る丸いカメラ（`CameraShutter`）。
-    private var shutterButton: some View {
-        CameraShutter(camera: camera, diameter: 64, isBusy: isCapturing) {
-            capture(day: activeDay ?? 0)
-        }
-    }
-
     private func capture(day: Int) {
         guard !isCapturing, app.canShoot(dayIndex: day) else { return }
         isCapturing = true
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
 
-        // 表は大きい画面（枠）側、裏はシャッター側。どちらが内カメかは FLIP しだい。
+        // 表は大きい画面（枠）側、裏は丸の側。どちらが内カメかは FLIP しだい。
         let front = camera.position == .front
         let reverseFront = camera.reversePosition == .front
         camera.captureBoth(fallbackSeed: day) { main, reverse in

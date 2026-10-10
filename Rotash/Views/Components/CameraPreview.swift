@@ -87,8 +87,6 @@ struct LiveLayerView: UIViewRepresentable {
 struct CameraShutter: View {
     @ObservedObject var camera: CameraController
     var diameter: CGFloat = 92
-    /// パノラマのコマをためている最中（止めるための四角を重ねる）。
-    var isRecording = false
     var isBusy = false
     let action: () -> Void
 
@@ -108,25 +106,32 @@ struct CameraShutter: View {
                 Circle()
                     .stroke(Color.white.opacity(0.95), lineWidth: 3)
                     .frame(width: diameter, height: diameter)
-                if isRecording {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Palette.live)
-                        .frame(width: diameter * 0.26, height: diameter * 0.26)
-                }
             }
             .frame(width: diameter, height: diameter)
-            .opacity(isBusy && !isRecording ? 0.35 : 1)
+            .opacity(isBusy ? 0.35 : 1)
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .disabled(isBusy && !isRecording)
+        .disabled(isBusy)
     }
 }
 
 /// 大きい画面に重ねる、「7分割の枠（サムネ）に入る範囲」の線。範囲の外は少し暗くする。
-/// - Parameter region: 写真全体を 0〜1 とした、サムネに入る範囲（`RotashLens.coveredRegion`）。
+/// - Parameter region: 写真全体を 0〜1 とした、サムネに入る範囲（`centerCrop`）。
 struct ThumbnailGuide: View {
     let region: CGRect
+
+    /// 写真（縦横比 imageAspect = 幅 ÷ 高さ）を、枠（cellAspect）いっぱいに収めたとき（aspectFill）に
+    /// 枠に入る範囲。写真の真ん中を枠の形に切り出した所になる。
+    static func centerCrop(imageAspect: CGFloat, cellAspect: CGFloat) -> CGRect {
+        guard imageAspect > 0, cellAspect > 0 else { return CGRect(x: 0, y: 0, width: 1, height: 1) }
+        if cellAspect < imageAspect {
+            let width = cellAspect / imageAspect
+            return CGRect(x: (1 - width) / 2, y: 0, width: width, height: 1)
+        }
+        let height = imageAspect / cellAspect
+        return CGRect(x: 0, y: (1 - height) / 2, width: 1, height: height)
+    }
 
     var body: some View {
         GeometryReader { geometry in

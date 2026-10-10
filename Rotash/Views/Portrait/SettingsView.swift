@@ -9,12 +9,6 @@ struct SettingsView: View {
     @State private var confirmDelete = false
     @State private var showImporter = false
     @State private var batonPayload: SharePayload?
-    @AppStorage(RotashLens.storageKey) private var lensWidening = RotashFeatureFlags.lensWidening
-    @AppStorage(RotashLens.frontStorageKey) private var frontLensWidening = RotashFeatureFlags.frontLensWidening
-    @AppStorage(RotashLens.frontModeKey) private var frontLensMode = RotashFeatureFlags.frontLensMode.rawValue
-    @AppStorage(RotashLens.frontReachKey) private var frontLensReach = RotashFeatureFlags.frontLensReach
-    @AppStorage(RotashLens.appleCorrectionKey) private var appleDistortionCorrection = false
-    @AppStorage(RotashLens.frontBlurKey) private var frontLensBlur = RotashFeatureFlags.frontLensBlurFill
 
     var body: some View {
         ZStack {
@@ -51,10 +45,6 @@ struct SettingsView: View {
                                 .rotashLabel(9, color: Palette.faint, tracking: 0.4)
                                 .lineSpacing(4)
                         }
-
-                        HairLine()
-
-                        lensBlock
 
                         HairLine()
                     }
@@ -151,77 +141,6 @@ struct SettingsView: View {
                     .rotashLabel(9, color: Palette.faint, tracking: 0.4)
                     .lineSpacing(3)
             }
-        }
-    }
-
-    /// Rotash レンズの広げ具合を見くらべるための切り替え。
-    /// 写真ファイルは加工していないので、切り替えるとこれまでの写真の見え方も一緒に変わる。
-    private var lensBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("レンズ").rotashLabel(11, color: Palette.text, tracking: 1)
-
-            Text("外カメ（疑似広角）").rotashLabel(9, color: Palette.dim, tracking: 1)
-            Picker("外カメ", selection: $lensWidening) {
-                ForEach(RotashLens.presets, id: \.self) { preset in
-                    Text(preset.label).tag(preset.widening)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            Text("内カメの方式（試験中）").rotashLabel(9, color: Palette.dim, tracking: 1)
-                .padding(.top, 4)
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(RotashLens.FrontMode.allCases) { mode in
-                    Button { frontLensMode = mode.rawValue } label: {
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            Text(frontLensMode == mode.rawValue ? "●" : "○")
-                                .rotashLabel(9, color: Palette.text)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(mode.label).rotashLabel(10, color: Palette.text, tracking: 0.6)
-                                Text(mode.detail).rotashLabel(8, color: Palette.faint, tracking: 0.3)
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.vertical, 7)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            Text("内カメの縮め方（上下の黒）").rotashLabel(9, color: Palette.dim, tracking: 1)
-                .padding(.top, 4)
-            Picker("内カメの縮め方", selection: $frontLensWidening) {
-                ForEach(RotashLens.frontPresets, id: \.self) { preset in
-                    Text(preset.label).tag(preset.widening)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            Text("内カメで枠に入れる横幅（写真全体に対して）").rotashLabel(9, color: Palette.dim, tracking: 1)
-                .padding(.top, 4)
-            Picker("内カメの横幅", selection: $frontLensReach) {
-                ForEach(RotashLens.reachPresets, id: \.self) { preset in
-                    Text(preset.label).tag(preset.widening)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            Toggle(isOn: $frontLensBlur) {
-                Text("内カメの上下の黒を、写真のぼかしで埋める")
-                    .rotashLabel(9, color: Palette.dim, tracking: 0.6)
-            }
-            .padding(.top, 4)
-
-            Toggle(isOn: $appleDistortionCorrection) {
-                Text("Apple の歪み補正（撮った写真だけ・対応カメラのみ）")
-                    .rotashLabel(9, color: Palette.dim, tracking: 0.6)
-            }
-            .padding(.top, 4)
-
-            Text("撮る前のライブビューにも同じようにかかります（Apple の歪み補正だけは撮った写真にだけ効きます）。外カメは形を変えずに縮めて上下の端を伸ばします。内カメは人の形を変えずに縮めて上下を黒くし、選んだ方式で人のいない所を横に押し込みます。縦持ちの撮影画面の MODE でも方式を切り替えられます。「普通」はこれまでと同じ見え方です。")
-                .rotashLabel(9, color: Palette.faint, tracking: 0.4)
-                .lineSpacing(4)
         }
     }
 

@@ -403,8 +403,8 @@ final class AppViewModel: ObservableObject {
 
     /// - Parameters:
     ///   - data: 表の写真（撮るときに大きい画面に映っていた方）。
-    ///   - front: 表を内カメで撮ったか。表示するときのレンズの方式を決めるために残す。
-    ///   - reverse: 裏の写真（シャッター側の丸に映っていた方）。撮れなかったとき・パノラマは nil。
+    ///   - front: 表を内カメで撮ったか。
+    ///   - reverse: 裏の写真（シャッター側の丸に映っていた方）。撮れなかったときは nil。
     ///   - reverseFront: 裏を内カメで撮ったか。
     func attachPhoto(_ data: Data, toDay dayIndex: Int, front: Bool = false,
                      reverse: Data? = nil, reverseFront: Bool = true) {

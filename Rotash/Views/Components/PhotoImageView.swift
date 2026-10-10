@@ -9,8 +9,6 @@ struct PhotoImageView: View {
     var filename: String?
     var remoteURL: String?
     var maxPixel: CGFloat?
-    /// かける Rotash レンズ（7分割の枠用）。既定はかけない。
-    var lens: RotashLens.Setting = .plain
 
     @State private var image: UIImage?
 
@@ -20,19 +18,17 @@ struct PhotoImageView: View {
         self.maxPixel = maxPixel
     }
 
-    init(slot: Slot, maxPixel: CGFloat? = nil, lens: RotashLens.Setting = .plain) {
+    init(slot: Slot, maxPixel: CGFloat? = nil) {
         self.filename = slot.photoFilename
         self.remoteURL = slot.photoURL
         self.maxPixel = maxPixel
-        self.lens = lens
     }
 
     /// その日の裏の写真（撮るときにシャッター側の丸に映っていた方）。
-    init(reverseOf slot: Slot, maxPixel: CGFloat? = nil, lens: RotashLens.Setting = .plain) {
+    init(reverseOf slot: Slot, maxPixel: CGFloat? = nil) {
         self.filename = slot.reversePhotoFilename
         self.remoteURL = slot.reversePhotoURL
         self.maxPixel = maxPixel
-        self.lens = lens
     }
 
     var body: some View {
@@ -45,13 +41,9 @@ struct PhotoImageView: View {
                 // overlay の中身はレイアウトに影響しないので、この形なら常に枠ぴったりになる。
                 Color.clear
                     .overlay {
-                        if lens.isActive, let cgImage = image.cgImage, image.imageOrientation == .up {
-                            LensPhotoView(image: cgImage, setting: lens)
-                        } else {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                        }
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
                     }
                     .clipped()
             }

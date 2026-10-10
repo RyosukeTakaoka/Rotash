@@ -26,40 +26,11 @@ struct PortraitShootView: View {
     @State private var showsReverseLarge = false
 
     @State private var isCapturing = false
-    /// パノラマで撮るときの状態（試験中）。
-    @StateObject private var panorama = PanoramaShooter()
     @State private var flashOpacity: Double = 0
     /// 撮ったあと、撮り直すためにライブビューへ戻しているか。
     @State private var retaking = false
     /// 撮り直しの残り秒数を数えるための「いま」。ThisWeekView と同じ考え方。
     @State private var now = Date()
-    /// 横向きの7分割と同じ疑似広角をかける。ここで見えた絵が、横にしたときの枠にそのまま入るように。
-    @AppStorage(RotashLens.storageKey) private var storedLensWidening = RotashFeatureFlags.lensWidening
-    @AppStorage(RotashLens.frontStorageKey) private var storedFrontLensWidening = RotashFeatureFlags.frontLensWidening
-    @AppStorage(RotashLens.frontModeKey) private var storedFrontLensMode = RotashFeatureFlags.frontLensMode.rawValue
-    @AppStorage(RotashLens.frontReachKey) private var storedFrontLensReach = RotashFeatureFlags.frontLensReach
-    @AppStorage(RotashLens.frontBlurKey) private var storedFrontLensBlur = RotashFeatureFlags.frontLensBlurFill
-
-    /// 内カメのレンズの選び方（方式・縮める割合・押し込む横幅）。
-    private var frontLens: RotashLens.FrontOptions {
-        RotashLens.resolveFront(mode: storedFrontLensMode,
-                                widening: storedFrontLensWidening,
-                                reach: storedFrontLensReach,
-                                blur: storedFrontLensBlur)
-    }
-
-    private func lens(for slot: Slot) -> RotashLens.Setting {
-        RotashLens.setting(for: slot,
-                           back: RotashLens.resolve(stored: storedLensWidening),
-                           front: frontLens)
-    }
-
-    /// ライブビューのレンズ。内カメなら上下を黒くして横を広げ、外カメなら疑似広角。
-    private var liveLens: RotashLens.Setting {
-        RotashLens.setting(isFront: camera.position == .front,
-                           back: RotashLens.resolve(stored: storedLensWidening),
-                           front: frontLens)
-    }
     private let clock = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     private var day: Int { app.todayIndex }
@@ -106,9 +77,6 @@ struct PortraitShootView: View {
         .onAppear { syncCamera() }
         .onDisappear { camera.stop() }
         .onChange(of: showsLive) { _, _ in syncCamera() }
-        .onChange(of: camera.panoramaFrameCount) { _, count in
-            if panorama.isRecording, count >= CameraController.panoramaMaxFrames { finishPanorama() }
-        }
         .onReceive(clock) { date in
             if let deadline = app.latestRetakeDeadline, now <= deadline { now = date }
         }
@@ -149,10 +117,7 @@ struct PortraitShootView: View {
             ZStack {
                 if showsLive {
                     liveContent
-                    ThumbnailGuide(region: RotashLens.coveredRegion(
-                        imageSize: CGSize(width: aspect * 1000, height: 1000),
-                        in: CGSize(width: cellAspect * 1000, height: 1000),
-                        setting: liveLens))
+                    ThumbnailGuide(region: ThumbnailGuide.centerCrop(imageAspect: aspect, cellAspect: cellAspect))
                 } else if let slot, slot.isFilled {
                     capturedContent(slot, aspect: aspect, cellAspect: cellAspect)
                 } else {
@@ -175,10 +140,7 @@ struct PortraitShootView: View {
                 PhotoImageView(reverseOf: slot, maxPixel: 1080)
             } else {
                 PhotoImageView(slot: slot, maxPixel: 1080)
-                ThumbnailGuide(region: RotashLens.coveredRegion(
-                    imageSize: CGSize(width: aspect * 1000, height: 1000),
-                    in: CGSize(width: cellAspect * 1000, height: 1000),
-                    setting: lens(for: slot)))
+                ThumbnailGuide(region: ThumbnailGuide.centerCrop(imageAspect: aspect, cellAspect: cellAspect))
             }
             if slot.hasReverse {
                 Button { showsReverseLarge.toggle() } label: {
@@ -213,7 +175,7 @@ struct PortraitShootView: View {
     private var liveContent: some View {
         switch camera.status {
         case .ready:
-            // 大きい画面は、保存される写真の範囲をそのまま映す（レンズはサムネにかかる。範囲は線で示す）。
+            // 大きい画面は、保存される写真の範囲をそのまま映す（サムネに入る範囲は線で示す）。
             if camera.isDual, let layer = camera.livePreviewLayer(for: camera.position) {
                 LiveLayerView(layer: layer)
             } else {
@@ -244,16 +206,13 @@ struct PortraitShootView: View {
     private var bottomControl: some View {
         VStack(spacing: 10) {
             if showsLive {
-                HStack(spacing: 14) {
-                    Text(shootLabel)
-                        .rotashLabel(9, color: Palette.live, tracking: 3)
-                    panoramaToggle
-                }
+                Text(isFilled ? "RETAKE\(retakeCountdown)" : "SHOOT")
+                    .rotashLabel(9, color: Palette.live, tracking: 3)
                 HStack(spacing: 24) {
                     flipButton
-                    CameraShutter(camera: camera, diameter: 96,
-                                  isRecording: panorama.isRecording, isBusy: isCapturing) { shutter() }
-                    modeButton
+                    CameraShutter(camera: camera, diameter: 96, isBusy: isCapturing) { capture() }
+                    // FLIP と左右をそろえ、シャッターを真ん中に置く。
+                    Color.clear.frame(width: 62, height: 1)
                 }
             } else if isFilled, app.canShoot(dayIndex: day, now: now) {
                 // 撮った直後。事故ったと思ったら、ここから撮り直せる。
@@ -306,62 +265,6 @@ struct PortraitShootView: View {
             .disabled(isCapturing)
         } else {
             Color.clear.frame(width: 62, height: 1)
-        }
-    }
-
-    /// 内カメの方式を、撮りながら切り替えて見くらべるためのボタン（`LensModeButton`）。
-    @ViewBuilder
-    private var modeButton: some View {
-        if camera.status == .ready {
-            LensModeButton(width: 62, isFront: camera.position == .front)
-                .disabled(isCapturing)
-        } else {
-            Color.clear.frame(width: 62, height: 1)
-        }
-    }
-
-    // MARK: - パノラマ（試験中）
-
-    /// シャッターの上の文字。パノラマ中は、動かし方とたまったコマの数を出す。
-    private var shootLabel: String {
-        panorama.status(frameCount: camera.panoramaFrameCount)
-            ?? (isFilled ? "RETAKE\(retakeCountdown)" : "SHOOT")
-    }
-
-    /// パノラマのオン・オフ（映像の出口がある端末だけ）。
-    @ViewBuilder
-    private var panoramaToggle: some View {
-        if camera.supportsLensPreview, camera.status == .ready {
-            PanoramaToggle(shooter: panorama)
-                .disabled(isCapturing)
-        }
-    }
-
-    /// シャッター。パノラマがオンなら、1回目でため始め、2回目（または上限）でやめてつなぐ。
-    private func shutter() {
-        guard panorama.isArmed else { return capture() }
-        if panorama.isRecording {
-            finishPanorama()
-        } else {
-            guard !isCapturing, app.canShoot(dayIndex: day) else { return }
-            isCapturing = true
-            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-            panorama.start(camera: camera)
-        }
-    }
-
-    private func finishPanorama() {
-        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-        let target = day
-        let front = camera.position == .front
-        panorama.finish(camera: camera) { data in
-            self.isCapturing = false
-            guard let data else { return }
-            self.flashOpacity = 0.85
-            withAnimation(.easeOut(duration: 0.28)) { self.flashOpacity = 0 }
-            self.app.attachPhoto(data, toDay: target, front: front)
-            self.retaking = false
-            self.now = Date()
         }
     }
 

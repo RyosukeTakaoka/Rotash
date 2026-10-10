@@ -13,8 +13,6 @@ struct ThisWeekView: View {
     @State private var isCapturing = false
     /// 長押しで裏返している枠（曜日）。裏はいつでも見られる。
     @State private var flippedDays: Set<Int> = []
-    /// パノラマで撮るときの状態（試験中）。
-    @StateObject private var panorama = PanoramaShooter()
     @State private var flashOpacity: Double = 0
     @State private var draftTitle = ""
     /// 撮り直せる残り時間を数えるための「いま」。撮り直せるあいだだけ進める。
@@ -23,42 +21,6 @@ struct ThisWeekView: View {
     /// 撮り直しの残り秒数を数える時計。`body` の中で作ると描き直すたびに作り直されて刻まなくなるので、
     /// プロパティとして持つ（ThisWeekView 自体が作り直されたときだけ新しくなる）。
     private let clock = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
-    /// 設定画面で変えた Rotash レンズの広げ具合。
-    @AppStorage(RotashLens.storageKey) private var storedLensWidening = RotashFeatureFlags.lensWidening
-    @AppStorage(RotashLens.frontStorageKey) private var storedFrontLensWidening = RotashFeatureFlags.frontLensWidening
-    @AppStorage(RotashLens.frontModeKey) private var storedFrontLensMode = RotashFeatureFlags.frontLensMode.rawValue
-    @AppStorage(RotashLens.frontReachKey) private var storedFrontLensReach = RotashFeatureFlags.frontLensReach
-    @AppStorage(RotashLens.frontBlurKey) private var storedFrontLensBlur = RotashFeatureFlags.frontLensBlurFill
-
-    /// 内カメのレンズの選び方（方式・縮める割合・押し込む横幅）。
-    private var frontLens: RotashLens.FrontOptions {
-        RotashLens.resolveFront(mode: storedFrontLensMode,
-                                widening: storedFrontLensWidening,
-                                reach: storedFrontLensReach,
-                                blur: storedFrontLensBlur)
-    }
-
-    /// 保存済みの写真にかけるレンズ（撮ったカメラで方式が変わる）。
-    private func lens(for slot: Slot) -> RotashLens.Setting {
-        RotashLens.setting(for: slot,
-                           back: RotashLens.resolve(stored: storedLensWidening),
-                           front: frontLens)
-    }
-
-    /// 裏の写真にかけるレンズ（裏を撮ったカメラで方式が変わる）。
-    private func reverseLens(for slot: Slot) -> RotashLens.Setting {
-        RotashLens.reverseSetting(for: slot,
-                                  back: RotashLens.resolve(stored: storedLensWidening),
-                                  front: frontLens)
-    }
-
-    /// ライブビューにかけるレンズ。いま使っているカメラで決まる（撮ったあとの表示と同じになる）。
-    private var liveLens: RotashLens.Setting {
-        RotashLens.setting(isFront: camera.position == .front,
-                           back: RotashLens.resolve(stored: storedLensWidening),
-                           front: frontLens)
-    }
-
     private var week: RotashWeek? { app.group?.currentWeek }
 
     /// いま撮影対象になっている枠（= ライブビューが出ている枠）。
@@ -103,11 +65,6 @@ struct ThisWeekView: View {
         .onAppear { syncCamera() }
         .onDisappear { camera.stop() }
         .onChange(of: activeDay) { _, _ in syncCamera() }
-        .onChange(of: camera.panoramaFrameCount) { _, count in
-            if panorama.isRecording, count >= CameraController.panoramaMaxFrames, let day = activeDay {
-                finishPanorama(day: day)
-            }
-        }
         // 撮り直せる時間のあいだだけ時計を進め、残り秒数と「時間切れでカメラを閉じる」を画面に反映する。
         .onReceive(clock) { date in
             // 「いま撮り直せるか」ではなく「締め切りがまだ来ていないか」で進める。
@@ -232,11 +189,21 @@ struct ThisWeekView: View {
             let count = max(week.slots.count, 1)
             let spacing: CGFloat = 1
             let cellWidth = (geometry.size.width - spacing * CGFloat(count - 1)) / CGFloat(count)
+            let sorted = week.slots.sorted(by: { $0.dayIndex < $1.dayIndex })
             HStack(spacing: spacing) {
-                ForEach(week.slots.sorted(by: { $0.dayIndex < $1.dayIndex })) { slot in
+                ForEach(sorted) { slot in
                     cell(slot: slot, week: week)
                         .frame(width: cellWidth, height: geometry.size.height)
                         .clipped()
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                // 撮る間だけ、今日の枠を写真と同じ横長の形に広げてライブビューを出す。
+                if let activeDay, let index = sorted.firstIndex(where: { $0.dayIndex == activeDay }) {
+                    expandedLive(day: activeDay,
+                                 cellCenterX: CGFloat(index) * (cellWidth + spacing) + cellWidth / 2,
+                                 cellWidth: cellWidth,
+                                 area: geometry.size)
                 }
             }
         }
@@ -255,17 +222,17 @@ struct ThisWeekView: View {
 
         return ZStack {
             if isActive {
-                // 撮影中／撮り直し中は自分の写真より優先してライブビューを見せる。
-                liveContent
+                // 撮影中／撮り直し中のライブビューは、この枠を広げた `expandedLive` に出す
+                // （カメラの映像は1か所にしか置けないので、ここには出さない）。
+                Palette.surfaceDeep
             } else if slot.isFilled {
-                // ライブビューと同じレンズをかける。撮るときに見えた絵のまま枠に残る。
                 // 元の写真（約1200万画素）をそのまま7枚読むとメモリを大きく使うので、
                 // 枠の高さに足りる大きさに縮めて読む（720pt → 3倍の画面で 2160px）。
                 // 長押しすると裏（撮るときシャッター側に映っていた方）に裏返る。
                 FlipCard(flipped: flippedDays.contains(day) && slot.hasReverse) {
-                    PhotoImageView(slot: slot, maxPixel: 720, lens: lens(for: slot))
+                    PhotoImageView(slot: slot, maxPixel: 720)
                 } back: {
-                    PhotoImageView(reverseOf: slot, maxPixel: 720, lens: reverseLens(for: slot))
+                    PhotoImageView(reverseOf: slot, maxPixel: 720)
                 }
             } else {
                 Palette.surface
@@ -315,7 +282,7 @@ struct ThisWeekView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             if isActive {
-                shutter(day: day)
+                capture(day: day)
             } else if shootable {
                 manualSelection = day
             }
@@ -329,13 +296,34 @@ struct ThisWeekView: View {
         }
     }
 
+    /// 撮る間だけ、今日の枠を写真と同じ横長の形（枠と同じ高さ）に広げたライブビュー。
+    ///
+    /// 保存される写真の範囲をそのまま映し、サムネ（今日の枠）に入る範囲を線で示す。
+    /// 今日の枠の真ん中に重ねるので、線はちょうど今日の枠の位置に来る（端の曜日は内側に寄せる）。
+    /// 近くの日は撮る間だけ隠れ、撮り終わると7分割に戻る。押すと撮る。
+    private func expandedLive(day: Int, cellCenterX: CGFloat, cellWidth: CGFloat, area: CGSize) -> some View {
+        let frameAspect = max(0.3, camera.frameAspect)
+        let width = min(area.width, area.height / frameAspect)
+        let x = min(max(0, cellCenterX - width / 2), max(0, area.width - width))
+        let region = ThumbnailGuide.centerCrop(imageAspect: width / max(1, area.height),
+                                               cellAspect: cellWidth / max(1, area.height))
+        return ZStack {
+            liveContent
+            ThumbnailGuide(region: region)
+        }
+        .frame(width: width, height: area.height)
+        .clipped()
+        .overlay(Rectangle().stroke(Palette.live, lineWidth: 2))
+        .contentShape(Rectangle())
+        .onTapGesture { capture(day: day) }
+        .offset(x: x)
+    }
+
     @ViewBuilder
     private var liveContent: some View {
         switch camera.status {
         case .ready:
-            if liveLens.isActive, camera.supportsLensPreview {
-                LensCameraPreview(controller: camera, setting: liveLens)
-            } else if camera.isDual, let layer = camera.livePreviewLayer(for: camera.position) {
+            if camera.isDual, let layer = camera.livePreviewLayer(for: camera.position) {
                 // 同時撮影では、カメラごとのレイヤーで映す（ふつうのプレビューはつなげない）。
                 LiveLayerView(layer: layer)
             } else {
@@ -369,16 +357,8 @@ struct ThisWeekView: View {
     private func bottomControl(week: RotashWeek) -> some View {
         if let activeDay {
             VStack(spacing: 8) {
-                HStack(spacing: 12) {
-                    Text(panorama.status(frameCount: camera.panoramaFrameCount)
-                         ?? (isRetake ? "RETAKE\(retakeCountdown(for: activeDay))" : "SHOOT"))
-                        .rotashLabel(9, color: Palette.live, tracking: 3)
-                    if camera.supportsLensPreview, camera.status == .ready {
-                        PanoramaToggle(shooter: panorama)
-                            .background(Color.black.opacity(0.5))
-                            .disabled(isCapturing)
-                    }
-                }
+                Text(isRetake ? "RETAKE\(retakeCountdown(for: activeDay))" : "SHOOT")
+                    .rotashLabel(9, color: Palette.live, tracking: 3)
 
                 // FLIP は狭い枠の隅だと押しづらいので、シャッターの横に置いて
                 // 指の届く大きさ（44pt 以上）にしている。
@@ -386,7 +366,7 @@ struct ThisWeekView: View {
                 HStack(spacing: 20) {
                     flipButton
                     shutterButton
-                    modeButton
+                    Color.clear.frame(width: flipButtonWidth, height: 1)
                 }
             }
             .padding(.bottom, 12)
@@ -438,49 +418,10 @@ struct ThisWeekView: View {
         }
     }
 
-    /// 内カメの方式を撮りながら切り替えるボタン（`LensModeButton`）。
-    @ViewBuilder
-    private var modeButton: some View {
-        if camera.status == .ready {
-            LensModeButton(width: flipButtonWidth, isFront: camera.position == .front, dimsBackground: true)
-                .disabled(isCapturing)
-        } else {
-            Color.clear.frame(width: flipButtonWidth, height: 1)
-        }
-    }
-
     /// シャッター。裏（もう一方のカメラ）が中に映る丸いカメラ（`CameraShutter`）。
     private var shutterButton: some View {
-        CameraShutter(camera: camera, diameter: 64,
-                      isRecording: panorama.isRecording, isBusy: isCapturing) {
-            shutter(day: activeDay ?? 0)
-        }
-    }
-
-    /// シャッター。パノラマがオンなら、1回目でため始め、2回目（または上限）でやめてつなぐ。
-    private func shutter(day: Int) {
-        guard panorama.isArmed else { return capture(day: day) }
-        if panorama.isRecording {
-            finishPanorama(day: day)
-        } else {
-            guard !isCapturing, app.canShoot(dayIndex: day) else { return }
-            isCapturing = true
-            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-            panorama.start(camera: camera)
-        }
-    }
-
-    private func finishPanorama(day: Int) {
-        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-        let front = camera.position == .front
-        panorama.finish(camera: camera) { data in
-            self.isCapturing = false
-            guard let data else { return }
-            self.flashOpacity = 0.85
-            withAnimation(.easeOut(duration: 0.28)) { self.flashOpacity = 0 }
-            self.app.attachPhoto(data, toDay: day, front: front)
-            self.manualSelection = nil
-            self.now = Date()
+        CameraShutter(camera: camera, diameter: 64, isBusy: isCapturing) {
+            capture(day: activeDay ?? 0)
         }
     }
 

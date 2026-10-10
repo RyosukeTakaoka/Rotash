@@ -8,7 +8,7 @@ import SwiftUI
 /// そのまま帰ってこなくなる。数字ではなく厚みで見せる。
 ///
 /// `flipped` にすると、左から順に1枚ずつ裏返って裏の7分割になる（週が終わった作品の「裏」）。
-/// 裏の写真が無い日（古い写真・パノラマ）は表のまま残る。
+/// 裏の写真が無い日（古い写真）は表のまま残る。
 struct WeekThumbnailStrip: View {
     let week: RotashWeek
     var height: CGFloat = 16

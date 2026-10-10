@@ -67,15 +67,14 @@ struct Slot: Identifiable, Codable, Hashable {
     /// 同期で「同じ人の同じ1枚の、新しい版」を見分けるために使う（`RotashMerge`）。
     /// 時刻で比べないのは、サーバーの日付が秒までしか無く、1秒以内の撮り直しを見分けられないため。
     var retakeCount: Int?
-    /// 内カメで撮った写真か。内カメの写真だけレンズの方式を変える（`RotashLens.setting(for:)`）。
-    /// 記録の無い古い写真は nil（外カメ扱い）。写真と一緒に同期で相手に届く。
+    /// 表を内カメで撮ったか。記録の無い古い写真は nil。写真と一緒に同期で相手に届く。
     var capturedWithFront: Bool?
     /// 裏の写真（撮るときにシャッター側の丸に映っていた方）。表は大きい画面に映っていた方。
     /// 7分割と共有画像に出すのは表だけで、裏は枠を長押ししたとき・週が終わって作品を裏返したときに見える。
-    /// どちらが内カメかでは決めない（FLIP で入れ替えられるので）。記録の無い古い写真やパノラマは nil。
+    /// どちらが内カメかでは決めない（FLIP で入れ替えられるので）。記録の無い古い写真は nil。
     var reversePhotoFilename: String?
     var reversePhotoURL: String?
-    /// 裏の写真を内カメで撮ったか（裏にかけるレンズの方式を決める）。
+    /// 裏の写真を内カメで撮ったか。
     var reverseCapturedWithFront: Bool?
     var takenByMemberID: UUID?
 

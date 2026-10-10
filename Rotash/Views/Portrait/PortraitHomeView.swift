@@ -185,13 +185,13 @@ struct PortraitHomeView: View {
 
                 let older = Array(group.archive.dropFirst())
                 if !older.isEmpty {
-                    Text("これまで")
-                        .rotashLabel(9, color: Palette.faint, tracking: 1.2)
-                        .padding(.bottom, 8)
-                    VStack(spacing: 2) {
+                    HairLine()
+                        .padding(.bottom, 18)
+                    // それより前の週は、少し小さく・少し薄く積む。右に日付だけ添える。
+                    VStack(spacing: 12) {
                         ForEach(older) { week in
                             NavigationLink(value: week) {
-                                WeekThumbnailStrip(week: week, height: 22)
+                                olderRow(week)
                             }
                             .buttonStyle(.plain)
                         }
@@ -207,28 +207,39 @@ struct PortraitHomeView: View {
         .padding(.horizontal, 24)
     }
 
-    /// いちばん新しい作品。横画面と同じく7つの枠を横に並べ、その下に名前（無ければ日付）を置く。
+    /// いちばん新しい作品。横画面と同じく7つの枠を横に並べて大きく出し、その下に名前と日付を置く。
     private func latestCard(_ week: RotashWeek) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            WeekThumbnailStrip(week: week, height: 132)
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                if let title = week.title, !title.isEmpty {
-                    Text(title)
-                        .font(Typo.title(15))
-                        .foregroundStyle(Palette.text)
-                        .lineLimit(1)
-                    Text(week.dateRange)
-                        .rotashLabel(9, color: Palette.faint, tracking: 0.8)
-                        .lineLimit(1)
-                } else {
-                    Text(week.dateRange)
-                        .rotashLabel(11, color: Palette.text, tracking: 1)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-                Text("→")
-                    .rotashLabel(11, color: Palette.faint, tracking: 0)
+        VStack(alignment: .leading, spacing: 0) {
+            WeekThumbnailStrip(week: week, height: 230)
+                .padding(.bottom, 16)
+            if let title = week.title, !title.isEmpty {
+                Text(title)
+                    .font(Typo.title(22))
+                    .tracking(0.5)
+                    .foregroundStyle(Palette.text)
+                    .lineLimit(1)
+                    .padding(.bottom, 8)
             }
+            Text(week.dateRange)
+                .rotashLabel(11, color: Palette.dim, tracking: 1.6)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    /// 前の週の1行。7分割を小さく、右に日付（始まりと終わりの2行）。
+    private func olderRow(_ week: RotashWeek) -> some View {
+        HStack(alignment: .center, spacing: 14) {
+            WeekThumbnailStrip(week: week, height: 72)
+                .opacity(0.85)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(RotashDateFormat.day.string(from: week.displayStartDate))
+                    .rotashLabel(9, color: Palette.faint, tracking: 0.6)
+                Text("- " + RotashDateFormat.day.string(from: week.endDate))
+                    .rotashLabel(9, color: Palette.faint, tracking: 0.6)
+            }
+            .fixedSize()
         }
         .contentShape(Rectangle())
     }

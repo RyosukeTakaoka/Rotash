@@ -44,7 +44,9 @@ struct MemoryDetailView: View {
                     HairLine()
                     dayViewer
                         .padding(.top, 18)
-                        .padding(.bottom, 26)
+                        .padding(.bottom, 20)
+                    HairLine()
+                        .padding(.bottom, 22)
                     shareButton
                 }
                 .padding(.horizontal, 24)
@@ -103,11 +105,11 @@ struct MemoryDetailView: View {
                     workCell(slot)
                         .frame(maxWidth: .infinity)
                         .frame(height: 150)
-                        .overlay(Rectangle().stroke(slot.dayIndex == currentDay ? Palette.text : Color.clear,
+                        .overlay(Rectangle().stroke(slot.dayIndex == currentDay ? Palette.live : Color.clear,
                                                     lineWidth: 1.5))
                     Text(RotashDay.label(for: slot.dayIndex))
                         .rotashLabel(8,
-                                     color: slot.dayIndex == currentDay ? Palette.text : Palette.faint,
+                                     color: slot.dayIndex == currentDay ? Palette.live : Palette.faint,
                                      tracking: 0.8)
                 }
                 .contentShape(Rectangle())
@@ -227,22 +229,33 @@ struct MemoryDetailView: View {
         }
     }
 
-    /// 大きい写真の下の一行。曜日・担当者・撮った時刻。終わった週なので担当者はすべて公開してよい。
+    /// 大きい写真の下の一行。「水 10.08 · RYOSUKE · 19:42」のように、曜日と日付・担当者・撮った時刻。
+    /// 終わった週なので担当者はすべて公開してよい。
     private func dayCaption(_ slot: Slot) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(RotashDay.label(for: slot.dayIndex))
-                .rotashLabel(11, color: Palette.text, tracking: 1.8)
-            if let name = assigneeName(for: slot) {
-                Text(name.uppercased())
-                    .rotashLabel(10, color: Palette.dim, tracking: 0.8)
-            }
-            Spacer()
-            if let capturedAt = slot.capturedAt {
-                Text(RotashDateFormat.time.string(from: capturedAt))
-                    .rotashLabel(10, color: Palette.faint, tracking: 1)
-            }
-        }
+        Text(captionText(slot))
+            .rotashLabel(11, color: Palette.dim, tracking: 1.2)
+            .frame(maxWidth: .infinity)
     }
+
+    private func captionText(_ slot: Slot) -> String {
+        let weekdays = ["月", "火", "水", "木", "金", "土", "日"]
+        var parts: [String] = []
+        let weekday = weekdays.indices.contains(slot.dayIndex) ? weekdays[slot.dayIndex] : ""
+        if let date = Calendar.rotash.date(byAdding: .day, value: slot.dayIndex, to: week.startDate) {
+            parts.append("\(weekday) \(Self.monthDay.string(from: date))")
+        } else {
+            parts.append(weekday)
+        }
+        if let name = assigneeName(for: slot) { parts.append(name.uppercased()) }
+        if let capturedAt = slot.capturedAt { parts.append(RotashDateFormat.time.string(from: capturedAt)) }
+        return parts.joined(separator: " · ")
+    }
+
+    private static let monthDay: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM.dd"
+        return formatter
+    }()
 
     // MARK: - 共有
 
@@ -251,11 +264,12 @@ struct MemoryDetailView: View {
             WorkShareButton(week: week) {
                 Text("SHARE")
                     .font(Typo.label(13, weight: .semibold))
-                    .tracking(2)
-                    .foregroundStyle(Palette.background)
+                    .tracking(3)
+                    .foregroundStyle(Palette.live)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Palette.text)
+                    .padding(.vertical, 15)
+                    .overlay(Rectangle().stroke(Palette.live, lineWidth: 1))
+                    .contentShape(Rectangle())
             }
             Text("加工はしません。画面のまま1枚にして書き出します。")
                 .rotashLabel(9, color: Palette.faint, tracking: 0.4)

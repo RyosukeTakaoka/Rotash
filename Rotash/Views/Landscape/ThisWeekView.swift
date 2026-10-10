@@ -20,6 +20,10 @@ struct ThisWeekView: View {
     @State private var liveScale: CGFloat = 1
     /// ピンチを始めたときの liveScale。ピンチの倍率はこれに掛ける。
     @State private var pinchBaseScale: CGFloat?
+    /// 全画面で大きく見ている日（写真のある枠を押すと開く）。
+    @State private var viewerDay: Int?
+    /// 全画面で、丸を押して大きい写真と丸を入れ替えているか。
+    @State private var viewerSwapped = false
     @State private var draftTitle = ""
     /// 撮り直せる残り時間を数えるための「いま」。撮り直せるあいだだけ進める。
     /// 表示を描き直すきっかけとして使う。撮れるかどうかの判定そのものは常に本物の現在時刻で行う。
@@ -59,6 +63,12 @@ struct ThisWeekView: View {
                     grid(week: week)
                 }
                 .overlay(alignment: .bottom) { bottomControl(week: week) }
+            }
+
+            if let viewerDay, let slot = week?.slot(at: viewerDay), slot.isFilled {
+                photoViewer(slot)
+                    .transition(.opacity)
+                    .zIndex(1)
             }
 
             Color.white
@@ -305,37 +315,127 @@ struct ThisWeekView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             // 撮っている枠は上にライブビュー（expandedLive）が重なっていて、押すとそちらで撮る。
-            if !isActive, shootable {
+            guard !isActive else { return }
+            if slot.isFilled {
+                // 写真のある枠は、全画面で大きく見る（撮り直しは下の RETAKE から）。
+                viewerSwapped = false
+                withAnimation(.easeOut(duration: 0.2)) { viewerDay = day }
+            } else if shootable {
                 manualSelection = day
             }
         }
-        .onLongPressGesture(minimumDuration: 0.35) {
+        .onLongPressGesture(minimumDuration: 0.2) {
             guard !isActive, slot.hasReverse else { return }
-            UISelectionFeedbackGenerator().selectionChanged()
-            withAnimation(.easeInOut(duration: 0.45)) {
-                if flippedDays.contains(day) { flippedDays.remove(day) } else { flippedDays.insert(day) }
-            }
+            toggleFlip(day)
         }
     }
 
-    /// 枠の下に添える丸。撮るときのシャッターの丸と同じ形。
+    /// その日の枠を裏返す（長押し、または枠の下の丸を押す）。
+    private func toggleFlip(_ day: Int) {
+        UISelectionFeedbackGenerator().selectionChanged()
+        withAnimation(.easeInOut(duration: 0.45)) {
+            if flippedDays.contains(day) { flippedDays.remove(day) } else { flippedDays.insert(day) }
+        }
+    }
+
+    /// 枠の下に添える丸。撮るときのシャッターの丸と同じ形。押すとその枠が裏返る（長押しと同じ）。
     private func reverseBadge(slot: Slot, showsFront: Bool) -> some View {
         GeometryReader { geometry in
             let diameter = geometry.size.width * ReverseBadge.widthRatio
-            Group {
-                if showsFront {
-                    PhotoImageView(slot: slot, maxPixel: 240)
-                } else {
-                    PhotoImageView(reverseOf: slot, maxPixel: 240)
+            Button { toggleFlip(slot.dayIndex) } label: {
+                Group {
+                    if showsFront {
+                        PhotoImageView(slot: slot, maxPixel: 240)
+                    } else {
+                        PhotoImageView(reverseOf: slot, maxPixel: 240)
+                    }
                 }
+                .frame(width: diameter, height: diameter)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                .contentShape(Circle())
             }
-            .frame(width: diameter, height: diameter)
-            .clipShape(Circle())
-            .overlay(Circle().stroke(Color.white, lineWidth: 2))
+            .buttonStyle(.plain)
             .frame(width: geometry.size.width, height: diameter)
         }
         .aspectRatio(1 / ReverseBadge.widthRatio, contentMode: .fit)
-        .allowsHitTesting(false)
+    }
+
+    // MARK: - 全画面で見る
+
+    /// 写真のある枠を押したときの全画面。写真そのものの形で大きく出し、右下の丸（もう一方のカメラ）を押すと入れ替わる。
+    /// 背景か「×」を押すと閉じる。
+    private func photoViewer(_ slot: Slot) -> some View {
+        let day = slot.dayIndex
+        // 枠を裏返している日は裏から見せる。丸を押すと、さらに入れ替わる。
+        let showsReverse = slot.hasReverse && (flippedDays.contains(day) != viewerSwapped)
+        return ZStack {
+            Color.black.opacity(0.94)
+                .ignoresSafeArea()
+                .onTapGesture { closeViewer() }
+
+            Group {
+                if showsReverse {
+                    PhotoImageView(reverseOf: slot, maxPixel: 1600).natural()
+                } else {
+                    PhotoImageView(slot: slot, maxPixel: 1600).natural()
+                }
+            }
+            .padding(.vertical, 44)
+            .padding(.horizontal, 60)
+            .overlay(alignment: .bottomTrailing) {
+                if slot.hasReverse {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { viewerSwapped.toggle() }
+                    } label: {
+                        Group {
+                            if showsReverse {
+                                PhotoImageView(slot: slot, maxPixel: 360)
+                            } else {
+                                PhotoImageView(reverseOf: slot, maxPixel: 360)
+                            }
+                        }
+                        .frame(width: 110, height: 110)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Color.white, lineWidth: 3))
+                        .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 76)
+                    .padding(.bottom, 56)
+                }
+            }
+
+            VStack {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(RotashDay.label(for: day))
+                        .rotashLabel(11, color: Palette.text, tracking: 1.8)
+                    if let name = app.revealedAssignee(forDay: day)?.name {
+                        Text(name.uppercased())
+                            .rotashLabel(10, color: Palette.dim, tracking: 0.8)
+                    }
+                    if let capturedAt = slot.capturedAt {
+                        Text(RotashDateFormat.time.string(from: capturedAt))
+                            .rotashLabel(10, color: Palette.faint, tracking: 1)
+                    }
+                    Spacer()
+                    Button { closeViewer() } label: {
+                        Text("×")
+                            .rotashLabel(18, color: Palette.text, tracking: 0)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 24)
+                Spacer()
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private func closeViewer() {
+        withAnimation(.easeOut(duration: 0.2)) { viewerDay = nil }
     }
 
     /// 撮るときの大きい画面の位置と大きさ（7分割の中の座標）。高さは枠と同じで、幅だけ liveScale で変わる。

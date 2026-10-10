@@ -249,7 +249,7 @@ enum WorkExporter {
 
         // 写真は枠いっぱいに収める（画面の PhotoImageView と同じ scaledToFill）。
         // 横長の枠は画面とほぼ同じ比率なので、切れ方も画面で見たときと同じになる。
-        // 共有画像に出すのは表（撮るとき大きい画面に映っていた方）だけ。
+        // 写真は表（撮るとき大きい画面に映っていた方）。裏は下に丸で添える（drawReverseBadge）。
         if let image = photo(for: slot),
            let context = UIGraphicsGetCurrentContext() {
             context.saveGState()
@@ -262,7 +262,8 @@ enum WorkExporter {
                          color: .rotashFaint, tracking: 0)
         }
 
-        drawLabelScrim(in: rect)
+        drawLabelScrim(in: rect, layout: layout)
+        drawReverseBadge(slot: slot, in: rect, layout: layout)
 
         // 未来の担当者は誰にも見せていない。共有画像でも同じ扱いにする。
         // ここを漏らすと、Rotash 最大の資産（次に誰が撮るか分からないこと）が
@@ -284,7 +285,7 @@ enum WorkExporter {
         }
     }
 
-    /// 曜日と担当者名。横長は画面と同じく中央そろえ、縦長は帯なので左そろえ。
+    /// 曜日と担当者名。横長は画面と同じく枠の上に中央そろえ、縦長は帯なので左そろえ。
     private static func drawFrameLabels(day: String,
                                         name: String?,
                                         isFilled: Bool,
@@ -294,14 +295,12 @@ enum WorkExporter {
 
         switch layout.format {
         case .screen:
-            let nameHeight = name == nil ? 0 : layout.nameLabel * 1.25
-            let gap: CGFloat = name == nil ? 0 : 7
-            let dayTop = rect.maxY - layout.labelInset - nameHeight - gap - layout.dayLabel * 1.25
-
+            // 曜日は枠の上、裏の丸は枠の下。真ん中（写真の主役が来るところ）は空けておく。
+            let dayTop = rect.minY + layout.labelInset
             drawCentered(day, in: rect, atTop: dayTop,
                          size: layout.dayLabel, color: dayColor, tracking: 3.4)
             if let name {
-                drawCentered(name, in: rect, atTop: rect.maxY - layout.labelInset - nameHeight,
+                drawCentered(name, in: rect, atTop: dayTop + layout.dayLabel * 1.25 + 7,
                              size: layout.nameLabel, color: .rotashFaint, tracking: 1.8)
             }
 
@@ -316,25 +315,68 @@ enum WorkExporter {
         }
     }
 
-    /// ラベルが明るい写真に埋もれないように、枠の下だけ薄く落とす。
-    /// 画面の 0.62 から下へ黒を重ねるグラデーションと同じ。
-    private static func drawLabelScrim(in rect: CGRect) {
+    /// ラベルが明るい写真に埋もれないように、ラベルのある側だけ薄く落とす。
+    /// 横長は枠の上（画面と同じく上から 0.3 まで）、縦長は帯の下（0.62 から下）。
+    private static func drawLabelScrim(in rect: CGRect, layout: Layout) {
         guard let context = UIGraphicsGetCurrentContext() else { return }
-        let band = CGRect(x: rect.minX,
-                          y: rect.minY + rect.height * 0.62,
-                          width: rect.width,
-                          height: rect.height * 0.38)
+        let band: CGRect
+        let start: CGPoint
+        let end: CGPoint
+        switch layout.format {
+        case .screen:
+            band = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height * 0.3)
+            start = CGPoint(x: band.minX, y: band.maxY)
+            end = CGPoint(x: band.minX, y: band.minY)
+        case .story:
+            band = CGRect(x: rect.minX, y: rect.minY + rect.height * 0.62,
+                          width: rect.width, height: rect.height * 0.38)
+            start = CGPoint(x: band.minX, y: band.minY)
+            end = CGPoint(x: band.minX, y: band.maxY)
+        }
         let colors = [UIColor(white: 0, alpha: 0).cgColor, UIColor(white: 0, alpha: 0.62).cgColor]
         guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
                                         colors: colors as CFArray,
                                         locations: [0, 1]) else { return }
         context.saveGState()
         context.clip(to: band)
-        context.drawLinearGradient(gradient,
-                                   start: CGPoint(x: band.minX, y: band.minY),
-                                   end: CGPoint(x: band.minX, y: band.maxY),
-                                   options: [])
+        context.drawLinearGradient(gradient, start: start, end: end, options: [])
         context.restoreGState()
+    }
+
+    /// 裏の写真を丸にして添える。撮るときのシャッターの丸と同じ形（白いふち）。
+    /// 横長は枠の下の真ん中、縦長は帯の右端。裏の写真が無い日は何も描かない。
+    private static func drawReverseBadge(slot: Slot, in rect: CGRect, layout: Layout) {
+        guard RotashFeatureFlags.shareShowsReverseBadge,
+              slot.isFilled,
+              let image = reversePhoto(for: slot),
+              let context = UIGraphicsGetCurrentContext()
+        else { return }
+
+        let circle: CGRect
+        switch layout.format {
+        case .screen:
+            let diameter = rect.width * 0.62
+            circle = CGRect(x: rect.midX - diameter / 2,
+                            y: rect.maxY - layout.labelInset - diameter,
+                            width: diameter, height: diameter)
+        case .story:
+            let diameter = rect.height * 0.62
+            circle = CGRect(x: rect.maxX - layout.labelInset - diameter,
+                            y: rect.midY - diameter / 2,
+                            width: diameter, height: diameter)
+        }
+
+        context.saveGState()
+        context.addEllipse(in: circle)
+        context.clip()
+        image.draw(in: aspectFillRect(imageSize: image.size, in: circle))
+        context.restoreGState()
+
+        let ring: CGFloat = 4
+        UIColor.white.setStroke()
+        let path = UIBezierPath(ovalIn: circle.insetBy(dx: -ring / 2, dy: -ring / 2))
+        path.lineWidth = ring
+        path.stroke()
     }
 
     private static func drawFooter(week: RotashWeek, layout: Layout) {
@@ -372,6 +414,12 @@ enum WorkExporter {
     private static func photo(for slot: Slot) -> UIImage? {
         guard let filename = slot.photoFilename else { return nil }
         return PhotoStore.shared.image(for: filename)
+    }
+
+    /// その枠の裏の写真。丸に入れるだけなので、小さく読む。
+    private static func reversePhoto(for slot: Slot) -> UIImage? {
+        guard let filename = slot.reversePhotoFilename else { return nil }
+        return PhotoStore.shared.image(for: filename, maxPixel: 600)
     }
 
     // MARK: - 描画の道具

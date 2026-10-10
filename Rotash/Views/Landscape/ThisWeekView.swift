@@ -245,13 +245,14 @@ struct ThisWeekView: View {
                     .rotashLabel(13, color: Palette.faint, tracking: 0)
             }
 
-            LinearGradient(colors: [.clear, .black.opacity(0.55)],
-                           startPoint: UnitPoint(x: 0.5, y: 0.62),
-                           endPoint: .bottom)
+            // 曜日と名前は枠の上、裏の丸は枠の下に置き、真ん中（写真の主役が来るところ）を空けておく。
+            // 共有画像（WorkExporter）も同じ並びにしてある。
+            LinearGradient(colors: [.black.opacity(0.55), .clear],
+                           startPoint: .top,
+                           endPoint: UnitPoint(x: 0.5, y: 0.3))
                 .allowsHitTesting(false)
 
             VStack(spacing: 0) {
-                Spacer(minLength: 0)
                 VStack(spacing: 3) {
                     Text(RotashDay.label(for: day))
                         .rotashLabel(10,
@@ -264,7 +265,13 @@ struct ThisWeekView: View {
                             .minimumScaleFactor(0.6)
                     }
                 }
-                .padding(.bottom, 10)
+                .padding(.top, 12)
+                Spacer(minLength: 0)
+                if slot.isFilled, slot.hasReverse, !isActive {
+                    // 大きく出ていない方を丸で添える。裏返すと、丸には表が入る。
+                    reverseBadge(slot: slot, showsFront: flippedDays.contains(day))
+                        .padding(.bottom, 10)
+                }
             }
 
             if isToday {
@@ -294,6 +301,26 @@ struct ThisWeekView: View {
                 if flippedDays.contains(day) { flippedDays.remove(day) } else { flippedDays.insert(day) }
             }
         }
+    }
+
+    /// 枠の下に添える丸。撮るときのシャッターの丸と同じ形。
+    private func reverseBadge(slot: Slot, showsFront: Bool) -> some View {
+        GeometryReader { geometry in
+            let diameter = geometry.size.width * 0.62
+            Group {
+                if showsFront {
+                    PhotoImageView(slot: slot, maxPixel: 240)
+                } else {
+                    PhotoImageView(reverseOf: slot, maxPixel: 240)
+                }
+            }
+            .frame(width: diameter, height: diameter)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(Color.white, lineWidth: 2))
+            .frame(width: geometry.size.width, height: diameter)
+        }
+        .aspectRatio(1 / 0.62, contentMode: .fit)
+        .allowsHitTesting(false)
     }
 
     /// 撮る間だけ、今日の枠を写真と同じ横長の形（枠と同じ高さ）に広げたライブビュー。

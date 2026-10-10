@@ -70,7 +70,7 @@ struct Slot: Identifiable, Codable, Hashable {
     /// 表を内カメで撮ったか。記録の無い古い写真は nil。写真と一緒に同期で相手に届く。
     var capturedWithFront: Bool?
     /// 裏の写真（撮るときにシャッター側の丸に映っていた方）。表は大きい画面に映っていた方。
-    /// 7分割と共有画像に出すのは表だけで、裏は枠を長押ししたとき・週が終わって作品を裏返したときに見える。
+    /// 7分割と共有画像では表を大きく、裏を枠の下の丸に出す。枠を長押しすると裏返って裏が大きくなる。
     /// どちらが内カメかでは決めない（FLIP で入れ替えられるので）。記録の無い古い写真は nil。
     var reversePhotoFilename: String?
     var reversePhotoURL: String?

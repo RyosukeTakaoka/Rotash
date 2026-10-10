@@ -83,9 +83,12 @@ final class CameraController: NSObject, ObservableObject {
     }
 
     func stop() {
-        sessionQueue.async { [weak self] in
-            guard let self, self.session.isRunning else { return }
-            self.session.stopRunning()
+        // self ではなく session を持っていく。画面を縦にして ThisWeekView が消えると、
+        // この処理が走る前に CameraController が先に消えることがあり、そのときもカメラを止めるため。
+        let session = self.session
+        sessionQueue.async {
+            guard session.isRunning else { return }
+            session.stopRunning()
         }
     }
 
@@ -235,11 +238,20 @@ final class CameraController: NSObject, ObservableObject {
     }
 
     /// 同時撮影で使えるフォーマットのうち、映像が横 1280 以下でいちばん大きいものにする（重さを下げる）。
+    /// 写真が撮れるもの（supportedMaxPhotoDimensions が空でない）に限り、4:3 があればそれを選ぶ
+    /// （16:9 になると、写る形が変わってしまうため）。
     private static func useLighterFormat(_ device: AVCaptureDevice) {
         let candidates = device.formats.filter {
-            $0.isMultiCamSupported && CMVideoFormatDescriptionGetDimensions($0.formatDescription).width <= 1280
+            $0.isMultiCamSupported
+                && !$0.supportedMaxPhotoDimensions.isEmpty
+                && CMVideoFormatDescriptionGetDimensions($0.formatDescription).width <= 1280
         }
-        guard let lighter = candidates.max(by: {
+        func isFourByThree(_ format: AVCaptureDevice.Format) -> Bool {
+            let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+            return dims.height > 0 && abs(Double(dims.width) / Double(dims.height) - 4.0 / 3.0) < 0.01
+        }
+        let preferred = candidates.contains(where: isFourByThree) ? candidates.filter(isFourByThree) : candidates
+        guard let lighter = preferred.max(by: {
             CMVideoFormatDescriptionGetDimensions($0.formatDescription).width
                 < CMVideoFormatDescriptionGetDimensions($1.formatDescription).width
         }), (try? device.lockForConfiguration()) != nil else { return }
@@ -335,22 +347,33 @@ final class CameraController: NSObject, ObservableObject {
     ///
     /// 同時撮影では両方のカメラが動いているので、役割を入れ替えるだけ（一瞬で終わる）。
     /// 同時撮影できない端末では、動かしているカメラそのものを切り替える。
-    /// - Parameter completion: 切り替え終わったら画面のスレッドで呼ぶ。
-    func switchCamera(completion: (() -> Void)? = nil) {
+    /// - Parameter completion: 終わったら画面のスレッドで呼ぶ（切り替えられなかったときも必ず呼ぶ）。
+    ///   引数は、実際に切り替えられたか。
+    func switchCamera(completion: ((Bool) -> Void)? = nil) {
         if isDual {
             position = reversePosition
             if let rig = rigs[position] { frameAspect = Self.aspect(of: rig.device) }
-            completion?()
+            completion?(true)
             return
         }
         sessionQueue.async { [weak self] in
-            guard let self, self.isConfigured else { return }
+            guard let self else {
+                DispatchQueue.main.async { completion?(false) }
+                return
+            }
             let newPosition: AVCaptureDevice.Position = self.position == .back ? .front : .back
 
-            guard let newDevice = self.device(for: newPosition),
+            // 呼び出し側は completion を待っている（撮影中はシャッターを止めている）ので、
+            // 切り替えられないときも黙って抜けずに知らせる。
+            guard self.isConfigured,
+                  let newDevice = self.device(for: newPosition),
                   let newInput = try? AVCaptureDeviceInput(device: newDevice)
-            else { return }
+            else {
+                DispatchQueue.main.async { completion?(false) }
+                return
+            }
 
+            var switched = false
             self.session.beginConfiguration()
             if let oldInput = self.currentInput {
                 self.session.removeInput(oldInput)
@@ -360,6 +383,7 @@ final class CameraController: NSObject, ObservableObject {
                 self.currentInput = newInput
                 self.device = newDevice
                 self.configureDevice(newDevice, photoOutput: self.output, multiCam: false)
+                switched = true
             } else if let oldInput = self.currentInput {
                 // 追加できなかった場合は元に戻す。
                 self.session.addInput(oldInput)
@@ -368,10 +392,11 @@ final class CameraController: NSObject, ObservableObject {
 
             let aspect = Self.aspect(of: self.device ?? newDevice)
             DispatchQueue.main.async {
-                self.position = newPosition
+                // 切り替えられなかったときは、どちらのカメラかの記録を変えない（表・裏を取り違えないように）。
+                if switched { self.position = newPosition }
                 self.frameAspect = aspect
                 self.bindRotationCoordinator()
-                completion?()
+                completion?(switched)
             }
         }
     }
@@ -459,8 +484,9 @@ final class CameraController: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             let group = DispatchGroup()
-            var results: [AVCaptureDevice.Position: Data] = [:]
-            let lock = NSLock()
+            // 2台の写真を受け取る入れ物。notify のクロージャは別のスレッドで動く扱いになり、
+            // そこから var を読むとコンパイルエラーになりうるので、クラスに入れて let で持つ。
+            let results = CaptureResults()
             for rig in [mainRig, reverseRig] {
                 if let angle = rig.rotationCoordinator?.videoRotationAngleForHorizonLevelCapture,
                    let connection = rig.photoOutput.connection(with: .video),
@@ -474,9 +500,7 @@ final class CameraController: NSObject, ObservableObject {
                 group.enter()
                 let position = rig.device.position
                 let processor = PhotoProcessor { data in
-                    lock.lock()
-                    if let data { results[position] = data }
-                    lock.unlock()
+                    results.set(data, for: position)
                     group.leave()
                 }
                 self.processors.append(processor)
@@ -484,7 +508,7 @@ final class CameraController: NSObject, ObservableObject {
             }
             group.notify(queue: .main) {
                 self.sessionQueue.async { self.processors.removeAll() }
-                completion(results[mainRig.device.position], results[reverseRig.device.position])
+                completion(results.data(for: mainRig.device.position), results.data(for: reverseRig.device.position))
             }
         }
     }
@@ -493,11 +517,14 @@ final class CameraController: NSObject, ObservableObject {
     private func captureSequentially(fallbackSeed: Int, completion: @escaping (Data?, Data?) -> Void) {
         capture(fallbackSeed: fallbackSeed) { [weak self] main in
             guard let self else { return completion(main, nil) }
-            self.switchCamera {
+            self.switchCamera { switched in
+                // もう一方のカメラに切り替えられなければ、裏は無しで表だけ残す
+                // （同じカメラでもう1枚撮って「裏」にすると、表と同じ写真になってしまう）。
+                guard switched else { return completion(main, nil) }
                 // 切り替えた直後は明るさやピントが合っていないので、少しだけ待つ。
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
                     self.capture(fallbackSeed: fallbackSeed) { reverse in
-                        self.switchCamera {
+                        self.switchCamera { _ in
                             completion(main, reverse)
                         }
                     }
@@ -518,10 +545,12 @@ final class CameraController: NSObject, ObservableObject {
 
         sessionQueue.async { [weak self] in
             guard let self else { return }
-            if let angle,
-               let connection = self.output.connection(with: .video),
-               connection.isVideoRotationAngleSupported(angle) {
-                connection.videoRotationAngle = angle
+            if let connection = self.output.connection(with: .video) {
+                if let angle, connection.isVideoRotationAngleSupported(angle) {
+                    connection.videoRotationAngle = angle
+                }
+                // 画面のプレビューと同じく、内カメは鏡写しで残す（同時撮影の端末とそろえる）。
+                Self.setMirrored(connection, self.device?.position == .front)
             }
             let settings = AVCapturePhotoSettings()
             settings.flashMode = .off
@@ -571,6 +600,25 @@ private final class Rig {
         self.input = input
         previewLayer = AVCaptureVideoPreviewLayer(sessionWithNoConnection: session)
         previewLayer.videoGravity = .resizeAspectFill
+    }
+}
+
+/// 同時撮影で、2台のカメラの写真を集める入れ物。2台の写真は別々のスレッドで届くので、鍵をかけて出し入れする。
+private final class CaptureResults: @unchecked Sendable {
+    private var store: [AVCaptureDevice.Position: Data] = [:]
+    private let lock = NSLock()
+
+    func set(_ data: Data?, for position: AVCaptureDevice.Position) {
+        guard let data else { return }
+        lock.lock()
+        store[position] = data
+        lock.unlock()
+    }
+
+    func data(for position: AVCaptureDevice.Position) -> Data? {
+        lock.lock()
+        defer { lock.unlock() }
+        return store[position]
     }
 }
 

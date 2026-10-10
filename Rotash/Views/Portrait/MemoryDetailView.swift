@@ -164,7 +164,8 @@ struct MemoryDetailView: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .aspectRatio(3.0 / 4.0, contentMode: .fit)
+            // ふだんの写真（横持ちで撮る）は横長の 4:3 なので、その形に合わせる。縦で撮った写真は左右に余白が出る。
+            .aspectRatio(4.0 / 3.0, contentMode: .fit)
 
             if let slot = week.slot(at: currentDay) {
                 dayCaption(slot)

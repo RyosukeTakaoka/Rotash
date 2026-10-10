@@ -30,25 +30,6 @@ struct SettingsView: View {
                         HairLine()
                     }
 
-                    // 自由撮影モードは当番の判定そのものを飛ばすので、
-                    // 二人が同じ枠を撮れてしまう＝競合を自分から作り出す。使うときは自分でオンにする。
-                    Group {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Toggle(isOn: $app.freeShooting) {
-                                Text("自由撮影モード")
-                                    .rotashLabel(11, color: Palette.text, tracking: 1)
-                            }
-                            .toggleStyle(.switch)
-                            .tint(Palette.live)
-
-                            Text("当番日でなくても好きな枠を撮れます。体験を試すとき用。")
-                                .rotashLabel(9, color: Palette.faint, tracking: 0.4)
-                                .lineSpacing(4)
-                        }
-
-                        HairLine()
-                    }
-
                     VStack(alignment: .leading, spacing: 8) {
                         Text("ROTASH について").rotashLabel(9, color: Palette.faint, tracking: 2)
                         Text("撮るのは1日にひとりだけ。見るのはいつでも全員。\n7枚そろうと、その週の作品が完成します。\n完成した作品は Memories に残ります。")

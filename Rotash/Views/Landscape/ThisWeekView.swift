@@ -495,7 +495,7 @@ struct ThisWeekView: View {
             ShutterButton(diameter: 64, isBusy: isCapturing) { capture(day: day) }
             flipButton
         }
-        // ボタンのすきまを押したときに、下にある枠（自由撮影では別の日）が選ばれないように受け止める。
+        // ボタンのすきまを押したときに、下にある枠が選ばれないように受け止める。
         .contentShape(Rectangle())
         .onTapGesture {}
     }

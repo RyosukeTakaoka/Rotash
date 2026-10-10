@@ -23,11 +23,6 @@ final class AppViewModel: ObservableObject {
 
     @Published private(set) var group: RotashGroup?
 
-    /// 検証用。ONにすると当番日以外の空き枠も撮れる（体験確認を優先するためのMVP用スイッチ）。
-    @Published var freeShooting: Bool {
-        didSet { UserDefaults.standard.set(freeShooting, forKey: Keys.freeShooting) }
-    }
-
     @Published var alertMessage: String?
 
     /// 縦画面で開いているシート。
@@ -52,13 +47,8 @@ final class AppViewModel: ObservableObject {
 
     private let store: RotashStore
 
-    private enum Keys {
-        static let freeShooting = "rotash.freeShooting"
-    }
-
     init(store: RotashStore = FileRotashStore()) {
         self.store = store
-        self.freeShooting = UserDefaults.standard.bool(forKey: Keys.freeShooting)
         self.group = store.load()
         migrateAssignmentsIfNeeded()
         rollWeekIfNeeded()
@@ -99,8 +89,6 @@ final class AppViewModel: ObservableObject {
         // 撮り直しは、撮った直後の短い時間だけ（RotashFeatureFlags.retakeWindowSeconds）。
         // RotashFeatureFlags.allowRetake を true にすれば、時間に関係なく撮り直せる。
         if slot.isFilled && !RotashFeatureFlags.allowRetake && !canRetake(slot, now: now) { return false }
-        // 自由撮影は当番の判定そのものを飛ばす（二人が同じ枠を撮れてしまう）ので、使う人が自分でオンにしたときだけ。
-        if freeShooting { return true }
         guard group.isMyDay(dayIndex, in: group.currentWeek) else { return false }
         // 仮の担当（決定時刻を持たない = まだ誰とも突き合わせていない）では撮らせない。
         // 他にメンバーが居ると分かっているのに自分の判断だけで撮ると、
@@ -139,8 +127,7 @@ final class AppViewModel: ObservableObject {
 
     /// いま撮り直せる枠と、その締め切り。画面の残り秒数と RETAKE ボタンに使う。
     ///
-    /// 今日の枠に限らず今週の枠から探すのは、自由撮影モードで他の日を撮った直後にも
-    /// 同じように撮り直せるようにするため。複数あるときは、いちばん最近撮った枠。
+    /// 今週の枠から探す（撮り直しを許す設定では今日以外の枠もありうる）。複数あるときは、いちばん最近撮った枠。
     /// 週の最後の1枚を撮って週が「完成」になった直後も、ここは撮り直せる枠を返す。
     func retakeWindow(now: Date = Date()) -> (dayIndex: Int, deadline: Date)? {
         guard let group else { return nil }

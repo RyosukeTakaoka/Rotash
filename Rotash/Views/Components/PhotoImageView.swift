@@ -9,8 +9,6 @@ struct PhotoImageView: View {
     var filename: String?
     var remoteURL: String?
     var maxPixel: CGFloat?
-    /// 枠いっぱいに広げず、写真全体が収まるように縮めるか（裏の丸で使う）。
-    private var fits = false
 
     @State private var image: UIImage?
 
@@ -43,29 +41,15 @@ struct PhotoImageView: View {
                 // overlay の中身はレイアウトに影響しないので、この形なら常に枠ぴったりになる。
                 Color.clear
                     .overlay {
-                        if fits {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFit()
-                        } else {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                        }
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
                     }
                     .clipped()
             }
         }
         .clipped()
         .task(id: taskID) { await load() }
-    }
-
-    /// 写る範囲を削らず、写真全体が収まるように縮めて出す。余る所は暗い地のまま。
-    /// 裏の丸は、撮るときの丸（`ReverseLiveCircle`）と同じく、丸いっぱいに広げずにこれで出す。
-    func fitted() -> PhotoImageView {
-        var copy = self
-        copy.fits = true
-        return copy
     }
 
     private var taskID: String {

@@ -95,8 +95,7 @@ struct CameraShutter: View {
             ZStack {
                 if camera.isDual, camera.status == .ready,
                    let layer = camera.livePreviewLayer(for: camera.reversePosition) {
-                    // 写る範囲を削らずに縮めて映す（ReverseLiveCircle と同じ考え方）。
-                    LiveLayerView(layer: layer, gravity: .resizeAspect)
+                    LiveLayerView(layer: layer)
                         .frame(width: diameter - 8, height: diameter - 8)
                         .clipShape(Circle())
                 } else {
@@ -119,9 +118,8 @@ struct CameraShutter: View {
 
 /// 裏（もう一方のカメラ）をライブで映す丸。
 ///
-/// 丸いっぱいに広げる（aspectFill）と、4:3 の横の 1/4 が切れて、実際に写る範囲より狭く見える。
-/// なので写真全体が丸の幅に収まるように**縮めて**映す（上下に余る所は黒）。
-/// 7分割の枠の下に添える裏の丸（`PhotoImageView.fitted()`）と同じ見え方になる。
+/// 映すのは、裏のカメラの映像に入るいちばん大きな丸（直径＝映像の短い辺）を、この丸の大きさに縮めたもの
+/// （`ReverseBadge`）。撮ったあと7分割の枠の下に添えられる裏の丸と、同じ大きさ・同じ見え方になる。
 /// 同時撮影できない端末では裏をライブで映せないので、何も出さない。
 struct ReverseLiveCircle: View {
     @ObservedObject var camera: CameraController
@@ -130,7 +128,7 @@ struct ReverseLiveCircle: View {
     var body: some View {
         if camera.isDual, camera.status == .ready,
            let layer = camera.livePreviewLayer(for: camera.reversePosition) {
-            LiveLayerView(layer: layer, gravity: .resizeAspect)
+            LiveLayerView(layer: layer)
                 .frame(width: diameter, height: diameter)
                 .clipShape(Circle())
                 .overlay(Circle().stroke(Color.white, lineWidth: 3))

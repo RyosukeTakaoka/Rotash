@@ -270,7 +270,7 @@ struct ThisWeekView: View {
                 if slot.isFilled, slot.hasReverse, !isActive {
                     // 大きく出ていない方を丸で添える。裏返すと、丸には表が入る。
                     reverseBadge(slot: slot, showsFront: flippedDays.contains(day))
-                        .padding(.bottom, 10)
+                        .padding(.bottom, ReverseBadge.bottomInset)
                 }
             }
 
@@ -306,13 +306,12 @@ struct ThisWeekView: View {
     /// 枠の下に添える丸。撮るときのシャッターの丸と同じ形。
     private func reverseBadge(slot: Slot, showsFront: Bool) -> some View {
         GeometryReader { geometry in
-            let diameter = geometry.size.width * 0.62
+            let diameter = geometry.size.width * ReverseBadge.widthRatio
             Group {
-                // 撮るときの丸（ReverseLiveCircle）と同じく、写真全体を丸の幅に収める。
                 if showsFront {
-                    PhotoImageView(slot: slot, maxPixel: 240).fitted()
+                    PhotoImageView(slot: slot, maxPixel: 240)
                 } else {
-                    PhotoImageView(reverseOf: slot, maxPixel: 240).fitted()
+                    PhotoImageView(reverseOf: slot, maxPixel: 240)
                 }
             }
             .frame(width: diameter, height: diameter)
@@ -320,7 +319,7 @@ struct ThisWeekView: View {
             .overlay(Circle().stroke(Color.white, lineWidth: 2))
             .frame(width: geometry.size.width, height: diameter)
         }
-        .aspectRatio(1 / 0.62, contentMode: .fit)
+        .aspectRatio(1 / ReverseBadge.widthRatio, contentMode: .fit)
         .allowsHitTesting(false)
     }
 
@@ -330,14 +329,15 @@ struct ThisWeekView: View {
     /// 今日の枠の真ん中に重ねるので、線はちょうど今日の枠の位置に来る（端の曜日は内側に寄せる）。
     /// 近くの日は撮る間だけ隠れ、撮り終わると7分割に戻る。押すと撮る。
     ///
-    /// 裏（もう一方のカメラ）は下の真ん中の丸に、シャッターは右端に置く。
-    /// 丸は、撮ったあと枠の下に添えられる裏の丸と同じ見え方（写る範囲を削らずに縮める）。
+    /// 裏（もう一方のカメラ）は、今日の枠の下（撮ったあと裏の丸が添えられる所）に同じ大きさの丸で、
+    /// シャッターは右端に置く。撮るときに見ている丸が、そのまま枠の下の丸になる。
     private func expandedLive(day: Int, cellCenterX: CGFloat, cellWidth: CGFloat, area: CGSize) -> some View {
         let frameAspect = max(0.3, camera.frameAspect)
         let width = min(area.width, area.height / frameAspect)
         let x = min(max(0, cellCenterX - width / 2), max(0, area.width - width))
         let region = ThumbnailGuide.centerCrop(imageAspect: width / max(1, area.height),
                                                cellAspect: cellWidth / max(1, area.height))
+        let badgeDiameter = cellWidth * ReverseBadge.widthRatio
         return ZStack {
             liveContent
             ThumbnailGuide(region: region)
@@ -350,15 +350,19 @@ struct ThisWeekView: View {
         .overlay(alignment: .bottom) {
             // 丸を押すと表と裏が入れ替わる（FLIP と同じ）。
             Button { camera.switchCamera() } label: {
-                ReverseLiveCircle(camera: camera, diameter: min(area.height * 0.42, width * 0.3))
+                ReverseLiveCircle(camera: camera, diameter: badgeDiameter)
             }
             .buttonStyle(.plain)
             .disabled(isCapturing)
-            .padding(.bottom, 12)
+            .padding(.bottom, ReverseBadge.bottomInset)
+            // 広げた画面の中での、今日の枠の真ん中に合わせる。
+            .offset(x: cellCenterX - x - width / 2)
         }
         .overlay(alignment: .trailing) {
+            // 丸より上の空いた所の真ん中に置く（端の曜日では、丸とシャッターが同じ右端に来るため）。
             shootControls(day: day)
                 .padding(.trailing, 16)
+                .padding(.bottom, badgeDiameter + ReverseBadge.bottomInset)
         }
         .offset(x: x)
     }

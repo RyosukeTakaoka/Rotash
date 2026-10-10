@@ -17,6 +17,17 @@ enum Palette {
     static let live = Color(uiColor: .rotashLive)
 }
 
+/// 裏（もう一方のカメラ）の丸の決まりごと。撮るときの丸・枠の下の丸・共有画像の丸で同じにする。
+///
+/// 丸の中身は、写真（4:3）の中に入るいちばん大きな丸（直径＝写真の短い辺）を縮めたもの。
+/// 丸いっぱいに広げる（aspectFill）と、ちょうどこれになり、上下に黒い帯も出ない。
+enum ReverseBadge {
+    /// 丸の直径を、7分割の1枠の幅の何倍にするか。
+    static let widthRatio: CGFloat = 0.8
+    /// 丸を枠の下の端からどれだけ離すか（pt）。
+    static let bottomInset: CGFloat = 10
+}
+
 extension UIColor {
     static let rotashBackground = UIColor(white: 0.04, alpha: 1)
     static let rotashSurface = UIColor(white: 0.10, alpha: 1)

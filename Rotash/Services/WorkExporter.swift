@@ -355,24 +355,22 @@ enum WorkExporter {
         let circle: CGRect
         switch layout.format {
         case .screen:
-            let diameter = rect.width * 0.62
+            let diameter = rect.width * ReverseBadge.widthRatio
             circle = CGRect(x: rect.midX - diameter / 2,
                             y: rect.maxY - layout.labelInset - diameter,
                             width: diameter, height: diameter)
         case .story:
-            let diameter = rect.height * 0.62
+            let diameter = rect.height * ReverseBadge.widthRatio
             circle = CGRect(x: rect.maxX - layout.labelInset - diameter,
                             y: rect.midY - diameter / 2,
                             width: diameter, height: diameter)
         }
 
-        // 撮るときの丸と同じく、丸いっぱいに広げず写真全体を丸の幅に収める（余る所は黒）。
+        // 撮るときの丸と同じく、写真に入るいちばん大きな丸を縮めて入れる（丸いっぱいに広げる）。
         context.saveGState()
         context.addEllipse(in: circle)
         context.clip()
-        UIColor.black.setFill()
-        UIRectFill(circle)
-        image.draw(in: aspectFitRect(imageSize: image.size, in: circle))
+        image.draw(in: aspectFillRect(imageSize: image.size, in: circle))
         context.restoreGState()
 
         let ring: CGFloat = 4
@@ -491,16 +489,6 @@ enum WorkExporter {
                                                   tracking: tracking,
                                                   monospaced: monospaced))
             .size().width
-    }
-
-    static func aspectFitRect(imageSize: CGSize, in rect: CGRect) -> CGRect {
-        guard imageSize.width > 0, imageSize.height > 0 else { return rect }
-        let scale = min(rect.width / imageSize.width, rect.height / imageSize.height)
-        let drawSize = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
-        return CGRect(x: rect.midX - drawSize.width / 2,
-                      y: rect.midY - drawSize.height / 2,
-                      width: drawSize.width,
-                      height: drawSize.height)
     }
 
     static func aspectFillRect(imageSize: CGSize, in rect: CGRect) -> CGRect {

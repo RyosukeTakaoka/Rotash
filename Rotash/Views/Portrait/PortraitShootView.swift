@@ -146,9 +146,9 @@ struct PortraitShootView: View {
                 Button { showsReverseLarge.toggle() } label: {
                     Group {
                         if large {
-                            PhotoImageView(slot: slot, maxPixel: 300).fitted()
+                            PhotoImageView(slot: slot, maxPixel: 300)
                         } else {
-                            PhotoImageView(reverseOf: slot, maxPixel: 300).fitted()
+                            PhotoImageView(reverseOf: slot, maxPixel: 300)
                         }
                     }
                     .frame(width: 96, height: 96)

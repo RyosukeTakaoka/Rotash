@@ -299,7 +299,9 @@ final class CameraController: NSObject, ObservableObject {
                 device.activeFormat = format
             }
 
-            // ズームで狭めない（仮想カメラでなければ最小は 1.0）。
+            // ズームで狭めない（仮想カメラでなければ最小は 1.0）。外カメは超広角（0.5倍）のカメラそのもの、
+            // 内カメはセンサーいっぱい（標準カメラで自撮りを広くしたときの広さ）になる。
+            // 指のピンチはライブビューの広さを変えるのに使うので、ズームは付けない。
             device.videoZoomFactor = max(device.minAvailableVideoZoomFactor, 1.0)
 
             if device.isFocusModeSupported(.continuousAutoFocus) {
@@ -328,7 +330,11 @@ final class CameraController: NSObject, ObservableObject {
     }
 
     /// 同時撮影で使うフォーマット。同時撮影で使えて写真が撮れるもののうち、
-    /// 4:3（写真と同じ形）で、映像が横 1920 以下のいちばん大きいもの。無ければ同時撮影で使える何か。
+    /// 4:3（写真と同じ形）で、映像が横 1920 以下のもの。その中で**いちばん広く写る**（画角が大きい）もの、
+    /// 同じなら映像が大きいもの。無ければ同時撮影で使える何か。
+    ///
+    /// フォーマットによってはセンサーの一部だけを使って狭く写るので、画角で選ぶ。
+    /// 内カメはこれで、iPhone の標準カメラで自撮りを広くしたときと同じ、センサーいっぱいの広さになる。
     private static func multiCamFormat(of device: AVCaptureDevice) -> AVCaptureDevice.Format? {
         func dims(_ format: AVCaptureDevice.Format) -> CMVideoDimensions {
             CMVideoFormatDescriptionGetDimensions(format.formatDescription)
@@ -338,7 +344,10 @@ final class CameraController: NSObject, ObservableObject {
             let d = dims($0)
             return d.width <= 1920 && d.height > 0 && abs(Double(d.width) / Double(d.height) - 4.0 / 3.0) < 0.05
         }
-        return (preferred.isEmpty ? usable : preferred).max { dims($0).width < dims($1).width }
+        return (preferred.isEmpty ? usable : preferred).max {
+            if abs($0.videoFieldOfView - $1.videoFieldOfView) > 0.5 { return $0.videoFieldOfView < $1.videoFieldOfView }
+            return dims($0).width < dims($1).width
+        }
     }
 
     // MARK: - 前面 / 背面切り替え（自撮り対応）

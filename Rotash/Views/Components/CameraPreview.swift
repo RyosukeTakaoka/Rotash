@@ -179,6 +179,36 @@ struct ThumbnailGuide: View {
         return CGRect(x: 0, y: (1 - height) / 2, width: 1, height: height)
     }
 
+    /// 写真を画面いっぱいに映した（aspectFill）大きい画面の中で、7分割のサムネに入る範囲。0〜1 の割合。
+    ///
+    /// サムネは、保存した写真（photoAspect）の真ん中を、枠の形（cellAspect）に切り出した所。
+    /// 大きい画面が写真より横長だと写真は上下が切れて映る（少し寄って見える）ので、
+    /// サムネの範囲も画面の上下からはみ出す。はみ出した分は画面の端で切る。
+    /// - Parameters:
+    ///   - view: 大きい画面の大きさ。
+    ///   - photoAspect: 保存する写真の「幅 ÷ 高さ」。
+    ///   - cellAspect: 7分割の1枠の「幅 ÷ 高さ」。
+    static func thumbnailRegion(view: CGSize, photoAspect: CGFloat, cellAspect: CGFloat) -> CGRect {
+        let full = CGRect(x: 0, y: 0, width: 1, height: 1)
+        guard view.width > 0, view.height > 0, photoAspect > 0, cellAspect > 0 else { return full }
+        let viewAspect = view.width / view.height
+        // 映っている写真の大きさ（画面の高さ・幅を 1 とした割合）。
+        let shownHeight = viewAspect > photoAspect ? viewAspect / photoAspect : 1
+        let shownWidth = shownHeight * photoAspect / viewAspect
+        // その写真の真ん中を枠の形に切り出した範囲。
+        let width: CGFloat
+        let height: CGFloat
+        if cellAspect < photoAspect {
+            height = shownHeight
+            width = shownHeight * cellAspect / viewAspect
+        } else {
+            width = shownWidth
+            height = shownWidth * viewAspect / cellAspect
+        }
+        return CGRect(x: (1 - width) / 2, y: (1 - height) / 2, width: width, height: height)
+            .intersection(full)
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let size = geometry.size

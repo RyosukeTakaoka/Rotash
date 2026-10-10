@@ -78,7 +78,7 @@ struct PhotoImageView: View {
         .task(id: taskID) { await load() }
     }
 
-    /// 写真を切り抜かず、写真そのものの縦横比で出す（横持ちで撮った写真は、映っていた範囲の形で保存されるため）。
+    /// 写真を切り抜かず、写真そのものの縦横比で出す（Memories や撮ったあとの確認で、全体を見せるため）。
     func natural() -> PhotoImageView {
         var copy = self
         copy.keepsAspect = true

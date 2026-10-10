@@ -46,6 +46,15 @@ struct ThisWeekView: View {
         return week.slot(at: activeDay)?.isFilled ?? false
     }
 
+    /// 完成した週の見せ方（余白の中に置き、過去の週を上に重ねる）にするか。
+    ///
+    /// 最後の1枚を撮った直後は、撮り直せる間（30秒）だけ撮っていたときの並びのままにする。
+    /// 撮った瞬間に7分割が縮んで動くと、撮った写真がどこに入ったか見失うため。
+    /// 撮り直せる時間が終わったら、ゆっくり完成の並びに移る。
+    private func showsFinishedLayout(_ week: RotashWeek) -> Bool {
+        week.isFinished && app.retakeWindow(now: now) == nil
+    }
+
     var body: some View {
         ZStack {
             Palette.background.ignoresSafeArea()
@@ -54,12 +63,13 @@ struct ThisWeekView: View {
                 VStack(spacing: 0) {
                     header(week: week)
                     HairLine()
-                    if week.isFinished {
+                    if showsFinishedLayout(week) {
                         finished(week: week)
                     } else {
                         grid(week: week)
                     }
                 }
+                .animation(.easeInOut(duration: 0.6), value: showsFinishedLayout(week))
                 .overlay(alignment: .bottom) { bottomControl(week: week) }
             }
 

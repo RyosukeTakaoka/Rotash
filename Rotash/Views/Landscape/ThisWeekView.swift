@@ -11,6 +11,8 @@ struct ThisWeekView: View {
 
     @State private var manualSelection: Int?
     @State private var isCapturing = false
+    /// 長押しで裏返している枠（曜日）。裏はいつでも見られる。
+    @State private var flippedDays: Set<Int> = []
     /// パノラマで撮るときの状態（試験中）。
     @StateObject private var panorama = PanoramaShooter()
     @State private var flashOpacity: Double = 0
@@ -41,6 +43,13 @@ struct ThisWeekView: View {
         RotashLens.setting(for: slot,
                            back: RotashLens.resolve(stored: storedLensWidening),
                            front: frontLens)
+    }
+
+    /// 裏の写真にかけるレンズ（裏を撮ったカメラで方式が変わる）。
+    private func reverseLens(for slot: Slot) -> RotashLens.Setting {
+        RotashLens.reverseSetting(for: slot,
+                                  back: RotashLens.resolve(stored: storedLensWidening),
+                                  front: frontLens)
     }
 
     /// ライブビューにかけるレンズ。いま使っているカメラで決まる（撮ったあとの表示と同じになる）。
@@ -252,7 +261,12 @@ struct ThisWeekView: View {
                 // ライブビューと同じレンズをかける。撮るときに見えた絵のまま枠に残る。
                 // 元の写真（約1200万画素）をそのまま7枚読むとメモリを大きく使うので、
                 // 枠の高さに足りる大きさに縮めて読む（720pt → 3倍の画面で 2160px）。
-                PhotoImageView(slot: slot, maxPixel: 720, lens: lens(for: slot))
+                // 長押しすると裏（撮るときシャッター側に映っていた方）に裏返る。
+                FlipCard(flipped: flippedDays.contains(day) && slot.hasReverse) {
+                    PhotoImageView(slot: slot, maxPixel: 720, lens: lens(for: slot))
+                } back: {
+                    PhotoImageView(reverseOf: slot, maxPixel: 720, lens: reverseLens(for: slot))
+                }
             } else {
                 Palette.surface
             }
@@ -306,6 +320,13 @@ struct ThisWeekView: View {
                 manualSelection = day
             }
         }
+        .onLongPressGesture(minimumDuration: 0.35) {
+            guard !isActive, slot.hasReverse else { return }
+            UISelectionFeedbackGenerator().selectionChanged()
+            withAnimation(.easeInOut(duration: 0.45)) {
+                if flippedDays.contains(day) { flippedDays.remove(day) } else { flippedDays.insert(day) }
+            }
+        }
     }
 
     @ViewBuilder
@@ -314,6 +335,9 @@ struct ThisWeekView: View {
         case .ready:
             if liveLens.isActive, camera.supportsLensPreview {
                 LensCameraPreview(controller: camera, setting: liveLens)
+            } else if camera.isDual, let layer = camera.livePreviewLayer(for: camera.position) {
+                // 同時撮影では、カメラごとのレイヤーで映す（ふつうのプレビューはつなげない）。
+                LiveLayerView(layer: layer)
             } else {
                 CameraPreview(controller: camera)
             }
@@ -425,25 +449,12 @@ struct ThisWeekView: View {
         }
     }
 
+    /// シャッター。裏（もう一方のカメラ）が中に映る丸いカメラ（`CameraShutter`）。
     private var shutterButton: some View {
-        Button { shutter(day: activeDay ?? 0) } label: {
-            ZStack {
-                Circle()
-                    .stroke(Color.white.opacity(0.9), lineWidth: 2)
-                    .frame(width: 54, height: 54)
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: 42, height: 42)
-                    .opacity(isCapturing && !panorama.isRecording ? 0.35 : 1)
-                if panorama.isRecording {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Palette.live)
-                        .frame(width: 18, height: 18)
-                }
-            }
+        CameraShutter(camera: camera, diameter: 64,
+                      isRecording: panorama.isRecording, isBusy: isCapturing) {
+            shutter(day: activeDay ?? 0)
         }
-        .buttonStyle(.plain)
-        .disabled(isCapturing && !panorama.isRecording)
     }
 
     /// シャッター。パノラマがオンなら、1回目でため始め、2回目（または上限）でやめてつなぐ。
@@ -478,13 +489,18 @@ struct ThisWeekView: View {
         isCapturing = true
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
 
-        camera.capture(fallbackSeed: day) { data in
+        // 表は大きい画面（枠）側、裏はシャッター側。どちらが内カメかは FLIP しだい。
+        let front = camera.position == .front
+        let reverseFront = camera.reversePosition == .front
+        camera.captureBoth(fallbackSeed: day) { main, reverse in
             Task { @MainActor in
                 self.flashOpacity = 0.85
                 withAnimation(.easeOut(duration: 0.28)) { self.flashOpacity = 0 }
-                if let data {
-                    self.app.attachPhoto(data, toDay: day, front: self.camera.position == .front)
+                if let main {
+                    self.app.attachPhoto(main, toDay: day, front: front,
+                                         reverse: reverse, reverseFront: reverseFront)
                     self.manualSelection = nil
+                    self.flippedDays.remove(day)
                 }
                 // 撮り直しの残り秒数をここから数え始める。撮った時刻（attachPhoto の中で決まる）より
                 // 前に合わせると、残りが一瞬 31 秒に見えるので、保存が終わってから合わせる。

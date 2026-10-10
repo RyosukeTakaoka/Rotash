@@ -31,6 +31,7 @@ enum RotashMerge {
     private static func adopted(_ slot: Slot) -> Slot {
         var adopted = slot
         adopted.photoFilename = nil
+        adopted.reversePhotoFilename = nil
         return adopted
     }
 
@@ -218,6 +219,7 @@ struct RemoteGroupState: Codable {
         var shared = week
         for index in shared.slots.indices {
             shared.slots[index].photoFilename = nil
+            shared.slots[index].reversePhotoFilename = nil
         }
         return shared
     }

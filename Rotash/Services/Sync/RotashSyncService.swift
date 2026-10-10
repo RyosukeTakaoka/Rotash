@@ -67,6 +67,20 @@ enum RotashSyncService {
         var updated = week
         for index in updated.slots.indices {
             let slot = updated.slots[index]
+
+            // 裏の写真も同じように上げる（表より先に上げても困らないので、独立に扱う）。
+            if slot.reversePhotoURL == nil,
+               let filename = slot.reversePhotoFilename,
+               let data = PhotoStore.shared.data(for: filename) {
+                do {
+                    updated.slots[index].reversePhotoURL = try await CloudinaryClient.upload(data: data,
+                                                                                             filename: filename)
+                } catch {
+                    failures += 1
+                    if failureReason == nil { failureReason = error.localizedDescription }
+                }
+            }
+
             guard slot.photoURL == nil,
                   let filename = slot.photoFilename,
                   let data = PhotoStore.shared.data(for: filename)
@@ -96,6 +110,12 @@ enum RotashSyncService {
     private static func cacheMissingPhotos(in week: inout RotashWeek) async {
         for index in week.slots.indices {
             let slot = week.slots[index]
+            if let urlString = slot.reversePhotoURL,
+               !(slot.reversePhotoFilename.map(PhotoStore.shared.exists) ?? false),
+               let data = try? await CloudinaryClient.download(from: urlString),
+               let filename = try? PhotoStore.shared.save(data) {
+                week.slots[index].reversePhotoFilename = filename
+            }
             guard let urlString = slot.photoURL else { continue }
             if let filename = slot.photoFilename, PhotoStore.shared.exists(filename) { continue }
 

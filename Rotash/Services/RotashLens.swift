@@ -177,9 +177,26 @@ enum RotashLens {
         setting(isFront: slot.capturedWithFront ?? false, back: back, front: front)
     }
 
+    /// 裏の写真にかけるレンズ。裏の記録が無ければ内カメ扱い（裏は最初は内カメなので）。
+    static func reverseSetting(for slot: Slot, back: Double, front: FrontOptions) -> Setting {
+        setting(isFront: slot.reverseCapturedWithFront ?? true, back: back, front: front)
+    }
+
     /// 画面の外（共有画像など）で使う、いまの設定での写真のレンズ。
     static func currentSetting(for slot: Slot) -> Setting {
         setting(for: slot, back: widening, front: frontOptions)
+    }
+
+    /// サムネ（7分割の枠）に、写真のどの範囲が入るか（写真全体を 0〜1 とした範囲）。
+    /// 撮影画面の大きなライブビューに、その範囲を線で示すのに使う。
+    static func coveredRegion(imageSize: CGSize, in size: CGSize, setting: Setting) -> CGRect {
+        if setting.frontMode != nil,
+           let frame = frontFrame(imageSize: imageSize, in: size, setting: setting, pixelScale: 1) {
+            return CGRect(x: frame.windowMinX, y: frame.sourceY, width: frame.window, height: frame.sourceHeight)
+        }
+        let union = bands(imageSize: imageSize, in: size, setting: setting, pixelScale: 1)
+            .reduce(CGRect.null) { $0.union($1.source) }
+        return union.isNull ? CGRect(x: 0, y: 0, width: 1, height: 1) : union
     }
 
     /// 設定画面から広げ具合を変えたときの保存先。

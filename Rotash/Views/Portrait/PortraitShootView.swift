@@ -4,24 +4,26 @@ import UIKit
 
 /// 縦持ちで撮る画面（試験中。`RotashFeatureFlags.allowsPortraitShooting`）。
 ///
-/// # なぜ縦で撮るのか
+/// # 表と裏を同時に撮る
 ///
-/// 7分割の枠は縦に細長い。スマホを横にして撮ると、カメラの写す範囲は横長なので、
-/// 枠に入るのは写真の横幅の2割ほどしかない。撮る瞬間だけ縦にすれば、
-/// カメラの向きと枠の向きがそろい、**曲げずに**横も縦も約1.3倍広く写る。
-/// さらに横向きの7分割と同じ疑似広角（`RotashLens`）をかけるので、見え方は横で撮った写真とそろう。
+/// 大きい画面に映っている方が「表」（7分割のサムネと共有画像に出る）、
+/// シャッターの丸に映っている方が「裏」（枠を長押ししたとき・週が終わって作品を裏返したときに見える）。
+/// 最初は表が外カメ、裏が内カメで、FLIP で入れ替えられる。どちらが内カメかでは決めない。
+/// シャッターを押すと、表と裏を同じ瞬間に撮る（`CameraController.captureBoth`）。
 ///
 /// # 何を見せるか
 ///
-/// ライブビューは全画面にしない（IMPLEMENTATION_PLAN の NEVER「カメラ全画面」）。
-/// 横向きの7分割と同じ形の枠の中にだけ出し、左に前日の写真、右に翌日の枠を並べる。
-/// 撮る人が「前の日の写真に返して撮る」関係は、これで縦でも保たれる。
-/// 7枚すべては見せない（縦では今週の作品を見せないという入口の約束を崩さないため）。
+/// 大きい画面には、保存される写真の範囲をそのまま映し、7分割の枠（サムネ）に入る範囲を線で示す。
+/// 枠の大きさのままだと、シャッターを「カメラ」にするには狭すぎるため。
+/// 上には今週の7分割を小さく出し、前の日の写真を見ながら撮れるようにしておく
+/// （「前の日の写真に返して撮る」関係を、縦の撮影画面でも保つ）。未来の担当者は出さない。
 struct PortraitShootView: View {
 
     @EnvironmentObject private var app: AppViewModel
-    /// 縦で撮るのは自撮りが多いので、前面カメラから始める。
-    @StateObject private var camera = CameraController(position: .front)
+    /// 最初は表（大きい画面）が外カメ、裏（シャッターの丸）が内カメ。
+    @StateObject private var camera = CameraController(position: .back)
+    /// 撮ったあとの表示で、裏を大きく出しているか（丸を押すと入れ替わる）。
+    @State private var showsReverseLarge = false
 
     @State private var isCapturing = false
     /// パノラマで撮るときの状態（試験中）。
@@ -84,7 +86,12 @@ struct PortraitShootView: View {
                 } else {
                     VStack(spacing: 0) {
                         topBar
-                        strips(in: geometry.size)
+                        if let week = app.group?.currentWeek {
+                            WeekThumbnailStrip(week: week, height: 44)
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 10)
+                        }
+                        mainPane(cellAspect: Self.cellAspect(portraitSize: geometry.size))
                             .frame(maxHeight: .infinity)
                         bottomControl
                     }
@@ -130,24 +137,66 @@ struct PortraitShootView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - 枠
+    // MARK: - 大きい画面
 
-    /// 前日 | 今日（ライブビュー） | 翌日。
-    /// 今日の枠は、横向きの7分割の1枠と同じ縦横比にする。ここで見えた範囲が、
-    /// 横にしたときの枠にそのまま入る。
-    private func strips(in size: CGSize) -> some View {
+    /// 撮る前はライブビュー、撮ったあとはその日の写真。どちらも保存される写真の範囲をそのまま見せ、
+    /// サムネに入る範囲を線で示す。
+    private func mainPane(cellAspect: CGFloat) -> some View {
         GeometryReader { area in
-            let aspect = Self.cellAspect(portraitSize: size)
-            let height = area.size.height
-            let width = min(height * aspect, area.size.width * 0.62)
-            let side = max(0, (area.size.width - width) / 2 - 1)
-
-            HStack(spacing: 1) {
-                neighbor(day - 1).frame(width: side, height: height)
-                todayCell.frame(width: width, height: height)
-                neighbor(day + 1).frame(width: side, height: height)
+            let aspect = max(0.3, camera.frameAspect)
+            let width = min(area.size.width - 40, area.size.height * aspect)
+            let height = width / aspect
+            ZStack {
+                if showsLive {
+                    liveContent
+                    ThumbnailGuide(region: RotashLens.coveredRegion(
+                        imageSize: CGSize(width: aspect * 1000, height: 1000),
+                        in: CGSize(width: cellAspect * 1000, height: 1000),
+                        setting: liveLens))
+                } else if let slot, slot.isFilled {
+                    capturedContent(slot, aspect: aspect, cellAspect: cellAspect)
+                } else {
+                    Palette.surface
+                }
             }
-            .frame(width: area.size.width, height: height)
+            .frame(width: width, height: height)
+            .clipped()
+            .overlay(Rectangle().stroke(showsLive ? Palette.live : Color.clear, lineWidth: 2))
+            .frame(width: area.size.width, height: area.size.height)
+        }
+    }
+
+    /// 撮ったあと。表を大きく、裏を右下の丸に出す。丸を押すと大小が入れ替わる（裏はいつでも見られる）。
+    @ViewBuilder
+    private func capturedContent(_ slot: Slot, aspect: CGFloat, cellAspect: CGFloat) -> some View {
+        let large = showsReverseLarge && slot.hasReverse
+        ZStack(alignment: .bottomTrailing) {
+            if large {
+                PhotoImageView(reverseOf: slot, maxPixel: 1080)
+            } else {
+                PhotoImageView(slot: slot, maxPixel: 1080)
+                ThumbnailGuide(region: RotashLens.coveredRegion(
+                    imageSize: CGSize(width: aspect * 1000, height: 1000),
+                    in: CGSize(width: cellAspect * 1000, height: 1000),
+                    setting: lens(for: slot)))
+            }
+            if slot.hasReverse {
+                Button { showsReverseLarge.toggle() } label: {
+                    Group {
+                        if large {
+                            PhotoImageView(slot: slot, maxPixel: 300)
+                        } else {
+                            PhotoImageView(reverseOf: slot, maxPixel: 300)
+                        }
+                    }
+                    .frame(width: 96, height: 96)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.white, lineWidth: 3))
+                    .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(14)
+            }
         }
     }
 
@@ -160,28 +209,13 @@ struct PortraitShootView: View {
         return (landscapeWidth / 7) / landscapeHeight
     }
 
-    private var todayCell: some View {
-        ZStack {
-            if showsLive {
-                liveContent
-            } else if let slot, slot.isFilled {
-                PhotoImageView(slot: slot, maxPixel: 720, lens: lens(for: slot))
-            } else {
-                Palette.surface
-            }
-        }
-        .clipped()
-        .overlay(Rectangle().stroke(showsLive ? Palette.live : Color.clear, lineWidth: 2))
-        .contentShape(Rectangle())
-        .onTapGesture { if showsLive { shutter() } }
-    }
-
     @ViewBuilder
     private var liveContent: some View {
         switch camera.status {
         case .ready:
-            if liveLens.isActive, camera.supportsLensPreview {
-                LensCameraPreview(controller: camera, setting: liveLens)
+            // 大きい画面は、保存される写真の範囲をそのまま映す（レンズはサムネにかかる。範囲は線で示す）。
+            if camera.isDual, let layer = camera.livePreviewLayer(for: camera.position) {
+                LiveLayerView(layer: layer)
             } else {
                 CameraPreview(controller: camera)
             }
@@ -204,25 +238,6 @@ struct PortraitShootView: View {
         }
     }
 
-    /// 隣の日。前日は写真（あれば）、翌日はまだ空いた枠。
-    /// 未来の担当者はここでも出さない。
-    @ViewBuilder
-    private func neighbor(_ index: Int) -> some View {
-        if let week = app.group?.currentWeek, let slot = week.slot(at: index) {
-            ZStack {
-                if slot.isFilled {
-                    PhotoImageView(slot: slot, maxPixel: 480, lens: lens(for: slot))
-                        .opacity(0.8)
-                } else {
-                    Palette.surface
-                }
-            }
-            .clipped()
-        } else {
-            Palette.background
-        }
-    }
-
     // MARK: - 下
 
     @ViewBuilder
@@ -234,9 +249,10 @@ struct PortraitShootView: View {
                         .rotashLabel(9, color: Palette.live, tracking: 3)
                     panoramaToggle
                 }
-                HStack(spacing: 20) {
+                HStack(spacing: 24) {
                     flipButton
-                    shutterButton
+                    CameraShutter(camera: camera, diameter: 96,
+                                  isRecording: panorama.isRecording, isBusy: isCapturing) { shutter() }
                     modeButton
                 }
             } else if isFilled, app.canShoot(dayIndex: day, now: now) {
@@ -260,7 +276,7 @@ struct PortraitShootView: View {
                     .frame(height: 46)
             }
         }
-        .frame(height: 120)
+        .frame(height: 150)
         .padding(.bottom, 8)
     }
 
@@ -302,27 +318,6 @@ struct PortraitShootView: View {
         } else {
             Color.clear.frame(width: 62, height: 1)
         }
-    }
-
-    private var shutterButton: some View {
-        Button { shutter() } label: {
-            ZStack {
-                Circle()
-                    .stroke(Color.white.opacity(0.9), lineWidth: 2)
-                    .frame(width: 64, height: 64)
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: 50, height: 50)
-                    .opacity(isCapturing && !panorama.isRecording ? 0.35 : 1)
-                if panorama.isRecording {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Palette.live)
-                        .frame(width: 22, height: 22)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(isCapturing && !panorama.isRecording)
     }
 
     // MARK: - パノラマ（試験中）
@@ -372,19 +367,24 @@ struct PortraitShootView: View {
 
     // MARK: - 撮影
 
+    /// 表と裏を撮る。表は大きい画面側、裏はシャッター側（どちらが内カメかは FLIP しだい）。
     private func capture() {
         guard !isCapturing, app.canShoot(dayIndex: day) else { return }
         isCapturing = true
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         let target = day
+        let front = camera.position == .front
+        let reverseFront = camera.reversePosition == .front
 
-        camera.capture(fallbackSeed: target) { data in
+        camera.captureBoth(fallbackSeed: target) { main, reverse in
             Task { @MainActor in
                 self.flashOpacity = 0.85
                 withAnimation(.easeOut(duration: 0.28)) { self.flashOpacity = 0 }
-                if let data {
-                    self.app.attachPhoto(data, toDay: target, front: self.camera.position == .front)
+                if let main {
+                    self.app.attachPhoto(main, toDay: target, front: front,
+                                         reverse: reverse, reverseFront: reverseFront)
                     self.retaking = false
+                    self.showsReverseLarge = false
                 }
                 // 撮った時刻（attachPhoto の中で決まる）のあとで合わせる。先だと残りが一瞬 31 に見える。
                 self.now = Date()

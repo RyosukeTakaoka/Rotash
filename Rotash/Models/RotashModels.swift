@@ -70,11 +70,21 @@ struct Slot: Identifiable, Codable, Hashable {
     /// 内カメで撮った写真か。内カメの写真だけレンズの方式を変える（`RotashLens.setting(for:)`）。
     /// 記録の無い古い写真は nil（外カメ扱い）。写真と一緒に同期で相手に届く。
     var capturedWithFront: Bool?
+    /// 裏の写真（撮るときにシャッター側の丸に映っていた方）。表は大きい画面に映っていた方。
+    /// 7分割と共有画像に出すのは表だけで、裏は枠を長押ししたとき・週が終わって作品を裏返したときに見える。
+    /// どちらが内カメかでは決めない（FLIP で入れ替えられるので）。記録の無い古い写真やパノラマは nil。
+    var reversePhotoFilename: String?
+    var reversePhotoURL: String?
+    /// 裏の写真を内カメで撮ったか（裏にかけるレンズの方式を決める）。
+    var reverseCapturedWithFront: Bool?
     var takenByMemberID: UUID?
 
     /// 写真がある枠かどうか。
     /// 他の端末で撮られてまだダウンロードしていない状態も「写真がある」として扱う。
     var isFilled: Bool { photoFilename != nil || photoURL != nil }
+
+    /// 裏の写真があるか（他の端末で撮られてまだダウンロードしていない状態も含む）。
+    var hasReverse: Bool { reversePhotoFilename != nil || reversePhotoURL != nil }
 }
 
 // MARK: - Week (= 1 作品)

@@ -6,6 +6,8 @@ struct MemoryDetailView: View {
     let week: RotashWeek
     @EnvironmentObject private var app: AppViewModel
     @Environment(\.dismiss) private var dismiss
+    /// 作品を裏返しているか。終わった週なので、表も裏もいつでも見られる。
+    @State private var flipped = false
 
     var body: some View {
         ZStack {
@@ -44,8 +46,23 @@ struct MemoryDetailView: View {
                             .padding(.bottom, 18)
                     }
 
-                    WeekThumbnailStrip(week: week, height: 78)
-                        .padding(.bottom, 26)
+                    WeekThumbnailStrip(week: week, height: 78, flipped: flipped)
+                        .contentShape(Rectangle())
+                        .onTapGesture { flipped.toggle() }
+                        .padding(.bottom, 10)
+
+                    if week.slots.contains(where: { $0.hasReverse }) {
+                        Button { flipped.toggle() } label: {
+                            Text(flipped ? "↺ 表に戻す" : "↻ 裏返す")
+                                .rotashLabel(10, color: Palette.text, tracking: 1.6)
+                                .frame(minHeight: 36)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.bottom, 16)
+                    } else {
+                        Color.clear.frame(height: 16)
+                    }
 
                     HairLine()
 
@@ -83,8 +100,31 @@ struct MemoryDetailView: View {
     private func photoRow(_ slot: Slot) -> some View {
         ZStack(alignment: .bottomLeading) {
             if slot.isFilled {
-                PhotoImageView(slot: slot, maxPixel: 900)
-                    .aspectRatio(4.0 / 3.0, contentMode: .fit)
+                // 裏返しているときは裏を大きく、もう一方を右下の丸に出す。
+                let large = flipped && slot.hasReverse
+                Group {
+                    if large {
+                        PhotoImageView(reverseOf: slot, maxPixel: 900)
+                    } else {
+                        PhotoImageView(slot: slot, maxPixel: 900)
+                    }
+                }
+                .aspectRatio(4.0 / 3.0, contentMode: .fit)
+                .overlay(alignment: .bottomTrailing) {
+                    if slot.hasReverse {
+                        Group {
+                            if large {
+                                PhotoImageView(slot: slot, maxPixel: 240)
+                            } else {
+                                PhotoImageView(reverseOf: slot, maxPixel: 240)
+                            }
+                        }
+                        .frame(width: 72, height: 72)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                        .padding(10)
+                    }
+                }
             } else {
                 // 写真がなかった日。作品の一部としてそのまま残す。
                 Rectangle()

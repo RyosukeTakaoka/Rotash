@@ -316,6 +316,7 @@ final class AppViewModel: ObservableObject {
             for week in weeks {
                 for slot in week.slots {
                     if let filename = slot.photoFilename { PhotoStore.shared.delete(filename) }
+                    if let filename = slot.reversePhotoFilename { PhotoStore.shared.delete(filename) }
                 }
             }
         }
@@ -400,12 +401,18 @@ final class AppViewModel: ObservableObject {
 
     // MARK: - Shooting
 
-    /// - Parameter front: 内カメで撮ったか。表示するときのレンズの方式を決めるために残す。
-    func attachPhoto(_ data: Data, toDay dayIndex: Int, front: Bool = false) {
+    /// - Parameters:
+    ///   - data: 表の写真（撮るときに大きい画面に映っていた方）。
+    ///   - front: 表を内カメで撮ったか。表示するときのレンズの方式を決めるために残す。
+    ///   - reverse: 裏の写真（シャッター側の丸に映っていた方）。撮れなかったとき・パノラマは nil。
+    ///   - reverseFront: 裏を内カメで撮ったか。
+    func attachPhoto(_ data: Data, toDay dayIndex: Int, front: Bool = false,
+                     reverse: Data? = nil, reverseFront: Bool = true) {
         guard var current = group,
               let index = current.currentWeek.slots.firstIndex(where: { $0.dayIndex == dayIndex }),
               let filename = try? PhotoStore.shared.save(data)
         else { return }
+        let reverseFilename = reverse.flatMap { try? PhotoStore.shared.save($0) }
 
         let previous = current.currentWeek.slots[index]
         let now = Date()
@@ -418,8 +425,14 @@ final class AppViewModel: ObservableObject {
         if let old = previous.photoFilename {
             PhotoStore.shared.delete(old)
         }
+        if let old = previous.reversePhotoFilename {
+            PhotoStore.shared.delete(old)
+        }
         current.currentWeek.slots[index].photoFilename = filename
         current.currentWeek.slots[index].photoURL = nil      // 撮り直したら URL も取り直す
+        current.currentWeek.slots[index].reversePhotoFilename = reverseFilename
+        current.currentWeek.slots[index].reversePhotoURL = nil
+        current.currentWeek.slots[index].reverseCapturedWithFront = reverseFilename == nil ? nil : reverseFront
         if isRetake {
             current.currentWeek.slots[index].retakeCount = (previous.retakeCount ?? 0) + 1
         } else {

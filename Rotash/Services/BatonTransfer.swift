@@ -50,9 +50,10 @@ enum BatonTransfer {
     static func export(group: RotashGroup) throws -> URL {
         var photos: [String: Data] = [:]
         for slot in group.currentWeek.slots {
-            guard let filename = slot.photoFilename,
-                  let data = PhotoStore.shared.data(for: filename) else { continue }
-            photos[filename] = data
+            for filename in [slot.photoFilename, slot.reversePhotoFilename].compactMap({ $0 }) {
+                guard let data = PhotoStore.shared.data(for: filename) else { continue }
+                photos[filename] = data
+            }
         }
 
         let bundle = BatonBundle(groupID: group.id,

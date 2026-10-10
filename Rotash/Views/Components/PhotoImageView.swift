@@ -27,6 +27,14 @@ struct PhotoImageView: View {
         self.lens = lens
     }
 
+    /// その日の裏の写真（撮るときにシャッター側の丸に映っていた方）。
+    init(reverseOf slot: Slot, maxPixel: CGFloat? = nil, lens: RotashLens.Setting = .plain) {
+        self.filename = slot.reversePhotoFilename
+        self.remoteURL = slot.reversePhotoURL
+        self.maxPixel = maxPixel
+        self.lens = lens
+    }
+
     var body: some View {
         ZStack {
             Palette.surfaceDeep
@@ -74,6 +82,25 @@ struct PhotoImageView: View {
             DispatchQueue.global(qos: .userInitiated).async {
                 continuation.resume(returning: PhotoStore.shared.image(for: name, maxPixel: pixel))
             }
+        }
+    }
+}
+
+/// 表と裏を持つカード。`flipped` が変わると、縦の軸でくるっと裏返る。
+/// 枠の長押し（その日の裏）と、Memories の作品全体の裏返しで使う。
+struct FlipCard<Front: View, Back: View>: View {
+    var flipped: Bool
+    @ViewBuilder var front: () -> Front
+    @ViewBuilder var back: () -> Back
+
+    var body: some View {
+        ZStack {
+            front()
+                .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
+                .opacity(flipped ? 0 : 1)
+            back()
+                .rotation3DEffect(.degrees(flipped ? 0 : -180), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
+                .opacity(flipped ? 1 : 0)
         }
     }
 }

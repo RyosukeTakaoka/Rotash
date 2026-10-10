@@ -10,6 +10,8 @@ struct CreateRotashView: View {
 
     @State private var name = ""
     @State private var myName = ""
+    /// 作り終わったか。作ったあとは招待コードを見せる。
+    @State private var created = false
 
     private var canCreate: Bool {
         !myName.trimmingCharacters(in: .whitespaces).isEmpty
@@ -18,9 +20,9 @@ struct CreateRotashView: View {
     var body: some View {
         ZStack {
             Palette.background.ignoresSafeArea()
-            // 作り終わっていれば招待コードを見せる。
-            // 作成シートは Rotash が無いときにしか開かないので、これで判定できる。
-            if let group = app.group {
+            // 作り終わっていれば、作ったグループ（いま開いているグループ）の招待コードを見せる。
+            // 掛け持ちできるので、「グループがあるか」では判定できない。
+            if created, let group = app.group {
                 InviteCodeView(group: group) { dismiss() }
             } else {
                 form
@@ -45,6 +47,7 @@ struct CreateRotashView: View {
 
                 Button("つくる") {
                     app.createRotash(name: name, memberNames: [myName])
+                    created = true
                 }
                 .buttonStyle(RotashButtonStyle(filled: true))
                 .disabled(!canCreate)

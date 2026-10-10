@@ -90,10 +90,7 @@ struct PortraitHomeView: View {
 
     private func groupBlock(_ group: RotashGroup) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(group.name.uppercased())
-                .font(Typo.title(20))
-                .tracking(2)
-                .foregroundStyle(Palette.text)
+            groupSwitcher(group)
 
             // 招待で送るのは6桁のコードではなく、いまの作品そのもの。
             // 受け取った側は、見ただけで何のアプリか分かる。
@@ -150,6 +147,49 @@ struct PortraitHomeView: View {
         .padding(.horizontal, 24)
         .padding(.top, 22)
         .padding(.bottom, 30)
+    }
+
+    /// グループ名。押すと、掛け持ちしているグループの切り替えと、新しく作る・参加するが出る。
+    private func groupSwitcher(_ group: RotashGroup) -> some View {
+        Menu {
+            Section {
+                ForEach(app.groups) { item in
+                    Button {
+                        app.switchGroup(to: item.id)
+                    } label: {
+                        if item.id == group.id {
+                            Label(item.name, systemImage: "checkmark")
+                        } else {
+                            Text(item.name)
+                        }
+                    }
+                }
+            }
+            Section {
+                Button { app.activeSheet = .create } label: {
+                    Label("新しいグループをつくる", systemImage: "plus")
+                }
+                Button { app.activeSheet = .join } label: {
+                    Label("招待コードで参加", systemImage: "person.badge.plus")
+                }
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(group.name.uppercased())
+                    .font(Typo.title(20))
+                    .tracking(2)
+                    .foregroundStyle(Palette.text)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Palette.dim)
+                if app.groups.count > 1 {
+                    Text("\(app.groups.count)")
+                        .rotashLabel(9, color: Palette.faint, tracking: 0.6)
+                }
+            }
+            .contentShape(Rectangle())
+        }
     }
 
     private func memoriesBlock(_ group: RotashGroup) -> some View {

@@ -87,6 +87,9 @@ struct ThisWeekView: View {
         .onChange(of: week?.id) { _, _ in
             flippedDays = []
             liveScale = 1
+            // グループを切り替えたときも、前のグループの選択や全画面を持ち越さない。
+            manualSelection = nil
+            viewerDay = nil
         }
         // 撮り直せる時間のあいだだけ時計を進め、残り秒数と「時間切れでカメラを閉じる」を画面に反映する。
         .onReceive(clock) { date in
@@ -104,6 +107,13 @@ struct ThisWeekView: View {
 
     private func header(week: RotashWeek) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
+            // 掛け持ちしているときは、どのグループの週かを先頭に出す。
+            if app.groups.count > 1, let name = app.group?.name {
+                Text(name.uppercased())
+                    .rotashLabel(10, color: Palette.dim, tracking: 1.6)
+                    .lineLimit(1)
+                Text("|").rotashLabel(10, color: Palette.faint, tracking: 0)
+            }
             Text("THIS WEEK")
                 .rotashLabel(12, color: Palette.text, tracking: 3.4)
             Text(week.dateRange)

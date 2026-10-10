@@ -1,12 +1,13 @@
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
 
     @EnvironmentObject private var app: AppViewModel
     @Environment(\.dismiss) private var dismiss
 
-    @State private var newMember = ""
     @State private var confirmDelete = false
+    @State private var copied = false
     @State private var showImporter = false
     @State private var batonPayload: SharePayload?
 
@@ -19,6 +20,11 @@ struct SettingsView: View {
                         .padding(.top, 28)
 
                     if let group = app.group {
+                        // 掛け持ちしているとき、どのグループの設定かが分かるように。
+                        Text(group.name.uppercased())
+                            .font(Typo.title(18))
+                            .tracking(1.5)
+                            .foregroundStyle(Palette.text)
                         members(group)
                         HairLine()
                         // 同期が使えるときはそちらが主。使えないときだけバトンを出す。
@@ -41,7 +47,7 @@ struct SettingsView: View {
                         .buttonStyle(RotashButtonStyle())
 
                     if app.hasGroup {
-                        Button(confirmDelete ? "本当に削除する(写真も消えます)" : "この Rotash を削除") {
+                        Button(confirmDelete ? "本当に抜ける（この端末からこのグループの写真が消えます）" : "このグループから抜ける") {
                             if confirmDelete {
                                 app.deleteRotash()
                                 dismiss()
@@ -103,25 +109,6 @@ struct SettingsView: View {
                     .lineSpacing(3)
             }
 
-            // 担当表の照合コード。
-            //
-            // 同じ担当表ならどの端末でも同じ6文字になるので、複数台で見くらべれば
-            // 食い違いにその場で気づける。ただしこれは「疑いながら使う」ための道具で、
-            // 公開するアプリに置くものではない。担当が食い違わないこと自体は
-            // AssignmentAudit が受け持っていて、そちらは本番でも常に動いている。
-            if let code = app.assignmentFingerprint {
-                HStack(spacing: 8) {
-                    Text("担当表").rotashLabel(9, color: Palette.faint, tracking: 2)
-                    Text(code)
-                        .font(Typo.label(11, weight: .semibold))
-                        .tracking(2)
-                        .foregroundStyle(Palette.text)
-                }
-                .padding(.top, 2)
-                Text("みんなで見くらべて、同じなら同じ当番表です。ちがうときは「今すぐ」で揃います。")
-                    .rotashLabel(9, color: Palette.faint, tracking: 0.4)
-                    .lineSpacing(3)
-            }
         }
     }
 
@@ -166,24 +153,32 @@ struct SettingsView: View {
                 }
             }
 
-            HStack(spacing: 12) {
-                TextField("メンバーを追加", text: $newMember)
-                    .textFieldStyle(.plain)
-                    .font(Typo.label(14))
-                    .foregroundStyle(Palette.text)
-                    .tint(Palette.live)
-                    .autocorrectionDisabled()
-                    .onSubmit { add() }
-                Button("追加") { add() }
-                    .font(Typo.label(11, weight: .semibold))
-                    .foregroundStyle(newMember.isEmpty ? Palette.faint : Palette.live)
+            // メンバーは、招待コードで本人が参加して増える（名前だけの人をここで足すことはしない。
+            // 足しても撮る端末が無いので、その人の当番の日はいつも写真のない日になってしまう）。
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 14) {
+                    InviteShareButton {
+                        Text("＋ 招待する")
+                            .rotashLabel(11, color: Palette.live, tracking: 1)
+                            .frame(minHeight: 36)
+                            .contentShape(Rectangle())
+                    }
+                    Text(group.inviteCode)
+                        .font(Typo.label(13, weight: .semibold))
+                        .tracking(3)
+                        .foregroundStyle(Palette.text)
+                    Button(copied ? "コピーしました" : "コードをコピー") {
+                        UIPasteboard.general.string = group.inviteCode
+                        copied = true
+                    }
+                    .font(Typo.label(9))
+                    .foregroundStyle(Palette.faint)
+                }
+                Text("招待コードを入れた人が、そのままメンバーに加わります。まだ来ていない日があれば、今週の当番にも入ります。")
+                    .rotashLabel(9, color: Palette.faint, tracking: 0.4)
+                    .lineSpacing(3)
             }
             HairLine()
         }
-    }
-
-    private func add() {
-        app.addMember(name: newMember)
-        newMember = ""
     }
 }

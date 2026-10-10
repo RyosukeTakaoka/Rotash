@@ -226,7 +226,7 @@ struct RotashWeek: Identifiable, Codable, Hashable {
 
 // MARK: - Group
 
-/// MVP は 1 グループのみ。掛け持ちは扱わない。
+/// グループは掛け持ちできる（端末には `RotashLibrary` として全部を保存し、1つずつ開いて見る）。
 ///
 /// グループは毎週続く。ユーザーが「新しい週を作る」操作はなく、
 /// 月曜になったら currentWeek が自動的に次の週へ切り替わり、前の週は archive に落ちる。

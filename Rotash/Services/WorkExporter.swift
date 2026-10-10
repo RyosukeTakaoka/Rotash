@@ -97,7 +97,7 @@ enum WorkExporter {
             UIRectFill(CGRect(origin: .zero, size: layout.canvas))
             drawHeader(week: week, layout: layout)
             drawFrames(week: week, group: group, now: now, layout: layout)
-            drawFooter(week: week, layout: layout)
+            drawFooter(week: week, group: group, layout: layout)
         }
     }
 
@@ -380,8 +380,26 @@ enum WorkExporter {
         path.stroke()
     }
 
-    private static func drawFooter(week: RotashWeek, layout: Layout) {
+    private static func drawFooter(week: RotashWeek, group: RotashGroup, layout: Layout) {
         let title = week.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        // ROTASH の寸法。名前はこれを基準に並べる。
+        // 字間は最後の1文字のうしろにも入るので、見た目の幅はその分を引いたもの。
+        let wordmarkSize: CGFloat = 26
+        let wordmarkTracking: CGFloat = 9
+        let wordmarkWidth = measure("ROTASH", size: wordmarkSize, weight: .bold,
+                                    tracking: wordmarkTracking) - wordmarkTracking
+
+        // 撮った人の名前。日付や枚数と同じ控えめな文字で、ROTASH の隣に添える。
+        // ROTASH と1語に読まれないよう、あいだに縦棒を挟む。
+        let names = photographerNames(in: week, group: group)
+        let nameSize = layout.caption
+        let nameTracking: CGFloat = 3
+        // 大きさの違う ROTASH と同じベースラインに置くための、上端のずれ。
+        let nameDrop = ascender(size: wordmarkSize, weight: .bold) - ascender(size: nameSize)
+        let bar = "|"
+        let barWidth = measure(bar, size: nameSize, tracking: 0)
+        let barGap: CGFloat = 20
 
         switch layout.format {
         case .screen:
@@ -395,8 +413,28 @@ enum WorkExporter {
                      tracking: 1, monospaced: false)
             }
             // 画面に唯一足りないもの。「THIS WEEK」は検索できない。
-            drawRightAligned("ROTASH", rightEdge: layout.canvas.width - layout.margin, y: baseline + 4,
-                             size: 26, weight: .bold, color: .rotashText, tracking: 9)
+            let wordmarkY = baseline + 4
+            let rightEdge = layout.canvas.width - layout.margin
+            drawRightAligned("ROTASH", rightEdge: rightEdge, y: wordmarkY,
+                             size: wordmarkSize, weight: .bold, color: .rotashText,
+                             tracking: wordmarkTracking)
+
+            // 名前は ROTASH の左へ、右そろえで伸ばす。
+            // 左にはタイトルがあるので、そこへ食い込む前に名前を打ち切る（タイトルのほうが大事）。
+            let barRight = rightEdge - wordmarkWidth - barGap
+            let namesRight = barRight - barWidth - barGap
+            let titleRight = title.isEmpty
+                ? layout.margin
+                : layout.margin + measure(title, size: layout.headline, weight: .regular,
+                                          tracking: 1, monospaced: false) - 1
+            let credits = fittedNames(names, maxWidth: namesRight - (titleRight + 48),
+                                      size: nameSize, tracking: nameTracking)
+            if !credits.isEmpty {
+                drawRightAligned(bar, rightEdge: barRight, y: wordmarkY + nameDrop,
+                                 size: nameSize, color: .rotashFaint, tracking: 0)
+                drawRightAligned(credits, rightEdge: namesRight, y: wordmarkY + nameDrop,
+                                 size: nameSize, color: .rotashDim, tracking: nameTracking)
+            }
 
         case .story:
             if !title.isEmpty {
@@ -404,9 +442,60 @@ enum WorkExporter {
                      size: layout.headline, weight: .regular, color: .rotashText,
                      tracking: 1, monospaced: false)
             }
-            draw("ROTASH", at: CGPoint(x: layout.margin, y: 1834),
-                 size: 26, weight: .bold, color: .rotashText, tracking: 9)
+            let wordmarkY: CGFloat = 1834
+            draw("ROTASH", at: CGPoint(x: layout.margin, y: wordmarkY),
+                 size: wordmarkSize, weight: .bold, color: .rotashText, tracking: wordmarkTracking)
+
+            // 縦長は ROTASH が左端にあるので、名前はその右へ左そろえで伸ばし、右の余白で打ち切る。
+            let barX = layout.margin + wordmarkWidth + barGap
+            let namesX = barX + barWidth + barGap
+            let credits = fittedNames(names, maxWidth: layout.canvas.width - layout.margin - namesX,
+                                      size: nameSize, tracking: nameTracking)
+            if !credits.isEmpty {
+                draw(bar, at: CGPoint(x: barX, y: wordmarkY + nameDrop),
+                     size: nameSize, color: .rotashFaint, tracking: 0)
+                draw(credits, at: CGPoint(x: namesX, y: wordmarkY + nameDrop),
+                     size: nameSize, color: .rotashDim, tracking: nameTracking)
+            }
         }
+    }
+
+    /// その週に1枚でも撮った人の名前（大文字）。最初に撮った曜日の順に、重複なく並べる。
+    ///
+    /// 担当者（assigneeID）ではなく、実際に撮った人（takenByMemberID）だけを数える。
+    /// まだ撮っていない日の担当者はここに出てこないので、未来の担当者が漏れることもない。
+    /// グループを抜けて引けなくなった人は、名前が分からないので載せない。
+    private static func photographerNames(in week: RotashWeek, group: RotashGroup) -> [String] {
+        var seen = Set<UUID>()
+        var names: [String] = []
+        for slot in week.slots.sorted(by: { $0.dayIndex < $1.dayIndex }) where slot.isFilled {
+            guard let id = slot.takenByMemberID, !seen.contains(id) else { continue }
+            seen.insert(id)
+            guard let member = group.member(withID: id) else { continue }
+            let name = member.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty { names.append(name.uppercased()) }
+        }
+        return names
+    }
+
+    /// 名前を `maxWidth` に収まる分だけ、2つの空白で区切って並べる。
+    /// 収まらなければ後ろから落として、落とした人数を `+N` で添える（誰かが消えたことは隠さない）。
+    /// `+N` すら入らないとき、または名前が1つも無いときは空文字を返す。
+    private static func fittedNames(_ names: [String],
+                                    maxWidth: CGFloat,
+                                    size: CGFloat,
+                                    tracking: CGFloat) -> String {
+        guard !names.isEmpty, maxWidth > 0 else { return "" }
+        for count in stride(from: names.count, through: 0, by: -1) {
+            let dropped = names.count - count
+            var parts = Array(names.prefix(count))
+            if dropped > 0 { parts.append("+\(dropped)") }
+            let text = parts.joined(separator: "  ")
+            if measure(text, size: size, tracking: tracking) - tracking <= maxWidth {
+                return text
+            }
+        }
+        return ""
     }
 
     // MARK: - 写真
@@ -430,10 +519,25 @@ enum WorkExporter {
                                    color: UIColor,
                                    tracking: CGFloat,
                                    monospaced: Bool) -> [NSAttributedString.Key: Any] {
-        let font = monospaced
+        [.font: font(size: size, weight: weight, monospaced: monospaced),
+         .foregroundColor: color,
+         .kern: tracking]
+    }
+
+    /// 文字の書体。描くときと寸法を測るときで同じものを使うために、ここだけで決める。
+    private static func font(size: CGFloat, weight: UIFont.Weight, monospaced: Bool) -> UIFont {
+        monospaced
             ? UIFont.monospacedSystemFont(ofSize: size, weight: weight)
             : UIFont.systemFont(ofSize: size, weight: weight)
-        return [.font: font, .foregroundColor: color, .kern: tracking]
+    }
+
+    /// 行の上端からベースラインまでの高さ。
+    /// `draw(at:)` は行の上端を基準に置くので、大きさの違う文字を同じベースラインに並べるには
+    /// この差だけ下げればよい。
+    private static func ascender(size: CGFloat,
+                                 weight: UIFont.Weight = .medium,
+                                 monospaced: Bool = true) -> CGFloat {
+        font(size: size, weight: weight, monospaced: monospaced).ascender
     }
 
     private static func draw(_ text: String,

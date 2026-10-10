@@ -21,7 +21,38 @@ enum RotashError: LocalizedError {
 @MainActor
 final class AppViewModel: ObservableObject {
 
-    @Published private(set) var group: RotashGroup?
+    /// 掛け持ちしているグループすべて。
+    @Published private(set) var groups: [RotashGroup] = []
+    /// いま開いているグループ。
+    @Published private(set) var currentGroupID: UUID?
+
+    /// いま開いているグループ。画面も操作も、ここを相手にする。
+    ///
+    /// 書き込むと、掛け持ちしているグループのうち「いま開いているもの」が置き換わる。
+    /// 同期で相手と突き合わせると ID が変わることがある（参加した直後など）ので、
+    /// 置き換えたあとの ID を開いているグループとして覚え直す。nil を入れると、そのグループを外す。
+    private(set) var group: RotashGroup? {
+        get { currentIndex.map { groups[$0] } }
+        set {
+            if let newValue {
+                if let index = currentIndex {
+                    groups[index] = newValue
+                } else {
+                    groups.append(newValue)
+                }
+                currentGroupID = newValue.id
+            } else if let index = currentIndex {
+                groups.remove(at: index)
+                currentGroupID = groups.first?.id
+            }
+        }
+    }
+
+    /// いま開いているグループの位置。覚えている ID が見つからなければ先頭。
+    private var currentIndex: Int? {
+        if let id = currentGroupID, let index = groups.firstIndex(where: { $0.id == id }) { return index }
+        return groups.isEmpty ? nil : 0
+    }
 
     @Published var alertMessage: String?
 
@@ -49,15 +80,33 @@ final class AppViewModel: ObservableObject {
 
     init(store: RotashStore = FileRotashStore()) {
         self.store = store
-        self.group = store.load()
+        let library = store.load()
+        self.groups = library.groups
+        self.currentGroupID = library.currentGroupID ?? library.groups.first?.id
         migrateAssignmentsIfNeeded()
         rollWeekIfNeeded()
-        applyAudit()
+        for id in groups.map(\.id) { applyAudit(groupID: id) }
+    }
+
+    // MARK: - 掛け持ち
+
+    /// 開くグループを切り替える。
+    func switchGroup(to id: UUID) {
+        guard groups.contains(where: { $0.id == id }), currentGroupID != id else { return }
+        currentGroupID = id
+        persist()
+        Task { await sync() }
+    }
+
+    /// 同じ招待コードのグループにすでに入っているか。入っていれば、そのグループ。
+    func joinedGroup(withCode code: String) -> RotashGroup? {
+        let normalized = InviteCode.normalize(code)
+        return groups.first { $0.inviteCode == normalized }
     }
 
     // MARK: - Derived
 
-    var hasGroup: Bool { group != nil }
+    var hasGroup: Bool { !groups.isEmpty }
 
     var todayIndex: Int {
         Calendar.dayIndex(for: Date(), weekStart: group?.currentWeek.startDate)
@@ -191,7 +240,9 @@ final class AppViewModel: ObservableObject {
         )
         newGroup.originGroupID = pendingOriginGroupID
         pendingOriginGroupID = nil
-        group = newGroup
+        // 掛け持ちに加えて、作ったグループを開く。
+        groups.append(newGroup)
+        currentGroupID = newGroup.id
         persist()
         prepareNotifications()
         AnalyticsService.groupCreated(fromOriginGroup: newGroup.originGroupID != nil)
@@ -213,6 +264,13 @@ final class AppViewModel: ObservableObject {
         let normalized = InviteCode.normalize(code)
         let name = Self.tidy(myName)
         guard normalized.count == 6, !name.isEmpty else { return }
+        // 同じグループに二重に入らない（入っていれば、そのグループを開くだけ）。
+        if let existing = joinedGroup(withCode: normalized) {
+            currentGroupID = existing.id
+            pendingJoinCode = nil
+            persist()
+            return
+        }
 
         let me = Member(name: name)
         let newGroup = RotashGroup(
@@ -222,7 +280,8 @@ final class AppViewModel: ObservableObject {
             myMemberID: me.id,
             currentWeek: Self.makeJoiningWeek(memberID: me.id)
         )
-        group = newGroup
+        groups.append(newGroup)
+        currentGroupID = newGroup.id
         persist()
         pendingJoinCode = nil
         prepareNotifications()
@@ -267,11 +326,13 @@ final class AppViewModel: ObservableObject {
     ///
     /// - Returns: 直したところがあれば true。
     @discardableResult
-    private func applyAudit() -> Bool {
-        guard let current = group else { return false }
+    private func applyAudit(groupID: UUID? = nil) -> Bool {
+        let id = groupID ?? group?.id
+        guard let index = groups.firstIndex(where: { $0.id == id }) else { return false }
+        let current = groups[index]
         let repaired = AssignmentAudit.repaired(current)
         guard repaired.currentWeek != current.currentWeek else { return false }
-        group = repaired
+        groups[index] = repaired
         persist()
         return true
     }
@@ -282,21 +343,8 @@ final class AppViewModel: ObservableObject {
         group.map { AssignmentAudit.fingerprint($0.currentWeek) }
     }
 
-    func addMember(name: String) {
-        let cleaned = Self.tidy(name)
-        guard var current = group, !cleaned.isEmpty else { return }
-        guard !current.members.contains(where: { $0.name.caseInsensitiveCompare(cleaned) == .orderedSame }) else { return }
-
-        let newMember = Member(name: cleaned)
-        current.members.append(newMember)
-        group = current
-        // 途中参加でも今週から作品づくりに参加してもらう。未来の枠の組み直しは検査が行う。
-        applyAudit()
-        persist()
-        AnalyticsService.memberAdded(memberCount: current.members.count)
-        Task { await sync() }
-    }
-
+    /// いま開いているグループから抜ける（この端末からそのグループと写真を消す）。
+    /// ほかのグループに入っていれば、そちらを開く。
     func deleteRotash() {
         if let current = group {
             let weeks = [current.currentWeek] + current.archive
@@ -308,7 +356,7 @@ final class AppViewModel: ObservableObject {
             }
         }
         group = nil
-        store.save(nil)
+        persist()
     }
 
     // MARK: - リンクから入ってくる
@@ -323,8 +371,11 @@ final class AppViewModel: ObservableObject {
 
         switch destination {
         case let .join(code):
-            guard group == nil else {
-                alertMessage = "すでに Rotash に参加しています。"
+            // すでに入っているグループなら、そのグループを開くだけ。
+            if let existing = joinedGroup(withCode: code) {
+                currentGroupID = existing.id
+                persist()
+                alertMessage = String(localized: "このグループにはもう参加しています。")
                 return
             }
             pendingJoinCode = code
@@ -334,7 +385,7 @@ final class AppViewModel: ObservableObject {
             // 発行元は、まだグループを持っていなくても覚えておく。
             // 実際に作られたときに記録され、K を測る手がかりになる。
             pendingOriginGroupID = origin
-            guard group == nil else { return }
+            // 掛け持ちできるので、すでにグループがあっても新しく作れる。
             activeSheet = .create
         }
     }
@@ -346,7 +397,7 @@ final class AppViewModel: ObservableObject {
     private func prepareNotifications() {
         Task {
             _ = await NotificationScheduler.requestAuthorizationIfNeeded()
-            NotificationScheduler.reschedule(for: group)
+            NotificationScheduler.reschedule(for: groups)
         }
     }
 
@@ -445,9 +496,21 @@ final class AppViewModel: ObservableObject {
     /// 月曜になったら自動的に次の週へ。ユーザーが「新しい週を作る」操作は無い。
     /// 終わった週はそのまま Memories（archive）へ落ちる。
     func rollWeekIfNeeded() {
-        guard var current = group else { return }
+        var changed = false
+        for index in groups.indices {
+            if let rolled = Self.rolledWeek(groups[index]) {
+                groups[index] = rolled
+                changed = true
+            }
+        }
+        if changed { persist() }
+    }
+
+    /// 週が変わっていれば、次の週に進めたグループ。変わっていなければ nil。
+    private static func rolledWeek(_ group: RotashGroup) -> RotashGroup? {
+        var current = group
         let start = Calendar.startOfWeek()
-        guard current.currentWeek.startDate < start else { return }
+        guard current.currentWeek.startDate < start else { return nil }
 
         let finished = current.currentWeek
         // 担当履歴は「入れ替える前」に取る（currentWeek と archive の二重計上を避ける）。
@@ -483,15 +546,27 @@ final class AppViewModel: ObservableObject {
                                                       weekStart: start,
                                                       memberIDs: memberIDs),
                                                   decidedAt: start)
-        group = current
-        persist()
+        return current
     }
 
     /// 担当者を持たない古い保存データを、新しい担当者モデルへ移す。
     /// すでに撮影済みの枠は、実際に撮った人をその日の担当者として確定させるので、
     /// 進行中の作品の見え方は変わらない。
     private func migrateAssignmentsIfNeeded() {
-        guard var current = group, !current.members.isEmpty else { return }
+        var changed = false
+        for index in groups.indices {
+            if let migrated = Self.migratedAssignments(groups[index]) {
+                groups[index] = migrated
+                changed = true
+            }
+        }
+        if changed { persist() }
+    }
+
+    /// 担当者を持たない古い保存データを移したグループ。移すものが無ければ nil。
+    private static func migratedAssignments(_ group: RotashGroup) -> RotashGroup? {
+        var current = group
+        guard !current.members.isEmpty else { return nil }
 
         let needsAssignee = current.currentWeek.slots.contains { $0.assigneeID == nil }
         // 決定時刻を持たない担当は「まだ誰とも合意していない仮のもの」という印として扱う。
@@ -501,7 +576,7 @@ final class AppViewModel: ObservableObject {
         let needsTimestamp = current.currentWeek.slots.contains {
             $0.assigneeID != nil && $0.assignedAt == nil
         }
-        guard needsAssignee || needsTimestamp else { return }
+        guard needsAssignee || needsTimestamp else { return nil }
 
         let memberIDs = current.members.map(\.id)
         var week = current.currentWeek
@@ -537,8 +612,7 @@ final class AppViewModel: ObservableObject {
         }
 
         current.currentWeek = week
-        group = current
-        persist()
+        return current
     }
 
     // MARK: - Baton (端末間の受け渡し)
@@ -550,10 +624,12 @@ final class AppViewModel: ObservableObject {
 
     func importBaton(from url: URL) throws {
         let bundle = try BatonTransfer.read(from: url)
-        guard let current = group else { throw RotashError.noGroup }
-        guard current.inviteCode == bundle.inviteCode else {
-            throw BatonTransferError.codeMismatch(expected: current.inviteCode, found: bundle.inviteCode)
+        guard let opened = group else { throw RotashError.noGroup }
+        // 掛け持ちしているなら、同じ招待コードのグループに受け取る。
+        guard let current = joinedGroup(withCode: bundle.inviteCode) else {
+            throw BatonTransferError.codeMismatch(expected: opened.inviteCode, found: bundle.inviteCode)
         }
+        currentGroupID = current.id
 
         BatonTransfer.materializePhotos(bundle)
 
@@ -580,7 +656,7 @@ final class AppViewModel: ObservableObject {
     /// サーバーと突き合わせる。未設定なら何もしない（ローカルのみで動き続ける）。
     /// 失敗しても手元のデータはそのままなので、次に開いたときに再試行される。
     func sync(showingError: Bool = false) async {
-        guard RotashSyncService.isEnabled, group != nil else { return }
+        guard RotashSyncService.isEnabled, !groups.isEmpty else { return }
 
         // 同期中に撮影されたときなど、重なった要求を捨てずに後から必ず走らせる。
         if isSyncing {
@@ -589,7 +665,13 @@ final class AppViewModel: ObservableObject {
         }
 
         isSyncing = true
-        await performSync(showingError: showingError)
+        // 掛け持ちしているグループを順に。開いていないグループの当番も、朝の通知に要るので取りに行く。
+        // いま開いているグループを先にする（画面に出ているので）。
+        let all = groups.map(\.id)
+        let order = all.filter { $0 == currentGroupID } + all.filter { $0 != currentGroupID }
+        for id in order {
+            await performSync(groupID: id, showingError: showingError)
+        }
         isSyncing = false
 
         if syncAgainWhenFinished {
@@ -598,11 +680,16 @@ final class AppViewModel: ObservableObject {
         }
     }
 
-    private func performSync(showingError: Bool) async {
-        guard let current = group else { return }
+    private func performSync(groupID: UUID, showingError: Bool) async {
+        guard let current = groups.first(where: { $0.id == groupID }) else { return }
         do {
             let outcome = try await RotashSyncService.sync(group: current)
-            group = keepingPhotosTakenDuringSync(outcome.group, sent: current)
+            // 同期しているあいだに抜けたグループなら、結果は捨てる。
+            guard let index = groups.firstIndex(where: { $0.id == groupID }) else { return }
+            let result = keepingPhotosTakenDuringSync(outcome.group, sent: current, latest: groups[index])
+            groups[index] = result
+            // 突き合わせで ID が変わったら（参加した直後など）、開いているグループもそれに合わせる。
+            if currentGroupID == groupID { currentGroupID = result.id }
             lastSyncedAt = Date()
 
             if outcome.failedUploads > 0 {
@@ -614,12 +701,14 @@ final class AppViewModel: ObservableObject {
             }
 
             rollWeekIfNeeded()
+            // 同じグループに二重に入っていたことが突き合わせで分かったら、1つにまとめる。
+            removeDuplicateGroups(keeping: result.id)
 
             // 突き合わせた直後に必ず検査する。ここが「食い違ったまま固定されない」
             // ことの担保で、途中参加した人が今週の残りに入るのもここ。
             // 直したなら、その結果をもう一度みんなに共有する必要がある。
             // 検査は同じ状態に何度かけても結果が変わらないので、これで堂々巡りにはならない。
-            if applyAudit() { syncAgainWhenFinished = true }
+            if applyAudit(groupID: result.id) { syncAgainWhenFinished = true }
 
             persist()
         } catch {
@@ -631,9 +720,10 @@ final class AppViewModel: ObservableObject {
     /// 同期は数秒かかる。そのあいだに撮った（撮り直した）写真は、同期に送った状態には入っていない。
     /// 結果をそのまま採ると撮ったばかりの写真が巻き戻るので、その枠だけ手元の今の状態を残し、
     /// もう一度同期してみんなに届ける。撮った直後の撮り直しでは、これがよく起きる。
-    private func keepingPhotosTakenDuringSync(_ synced: RotashGroup, sent: RotashGroup) -> RotashGroup {
-        guard let latest = group,
-              latest.currentWeek.id == sent.currentWeek.id,
+    private func keepingPhotosTakenDuringSync(_ synced: RotashGroup,
+                                              sent: RotashGroup,
+                                              latest: RotashGroup) -> RotashGroup {
+        guard latest.currentWeek.id == sent.currentWeek.id,
               synced.currentWeek.startDate == latest.currentWeek.startDate
         else { return synced }
 
@@ -652,10 +742,20 @@ final class AppViewModel: ObservableObject {
 
     // MARK: -
 
+    /// 同じグループ（同じ ID）が2つになっていたら、あとの方を消す。
+    /// 参加した直後の端末は仮の ID で始まり、同期で本当の ID に替わるので、まれに重なりうる。
+    private func removeDuplicateGroups(keeping id: UUID) {
+        var seen = Set<UUID>()
+        let deduplicated = groups.filter { seen.insert($0.id).inserted }
+        guard deduplicated.count != groups.count else { return }
+        groups = deduplicated
+        if !groups.contains(where: { $0.id == currentGroupID }) { currentGroupID = id }
+    }
+
     private func persist() {
-        store.save(group)
+        store.save(RotashLibrary(groups: groups, currentGroupID: currentGroupID))
         // 担当が変わりうる操作はすべてここを通る（作成・参加・途中参加・週送り・同期）。
         // 差分で消そうとすると消し忘れた古い名前が朝に届くので、毎回まとめて組み直す。
-        NotificationScheduler.reschedule(for: group)
+        NotificationScheduler.reschedule(for: groups)
     }
 }

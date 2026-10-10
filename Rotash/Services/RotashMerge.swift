@@ -66,7 +66,17 @@ enum RotashMerge {
                 // 先にサーバーへ上がった撮り直し前の写真が勝ち、撮り直しが消えてしまう。
                 if isSameShot(local, remote) {
                     // 撮り直した回数が多い方が新しい版。同じなら同じ写真なので手元（ファイルあり）を残す。
-                    return (remote.retakeCount ?? 0) > (local.retakeCount ?? 0) ? adopted(remote) : local
+                    if (remote.retakeCount ?? 0) > (local.retakeCount ?? 0) { return adopted(remote) }
+                    // ただし裏の写真は、表より遅れて上がることがある（裏の上げに失敗して次の同期で上がった、など）。
+                    // 手元に裏の URL が無く相手にだけあるなら引き継ぐ。捨てると、この端末が裏の無い版を
+                    // サーバーへ書き戻して、裏が消えたり戻ったりを繰り返す。
+                    // 撮り直しで裏が無くなった版は retakeCount が増えて上で採られるので、古い裏が戻ることはない。
+                    var kept = local
+                    if kept.reversePhotoURL == nil, let url = remote.reversePhotoURL {
+                        kept.reversePhotoURL = url
+                        kept.reverseCapturedWithFront = remote.reverseCapturedWithFront
+                    }
+                    return kept
                 }
                 let localIsEarlier = (local.capturedAt ?? .distantFuture) <= (remote.capturedAt ?? .distantFuture)
                 // 別々の写真なので、負けた側のファイル名も URL も引き継がない。

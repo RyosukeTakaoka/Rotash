@@ -83,7 +83,8 @@ struct Slot: Identifiable, Codable, Hashable {
     var isFilled: Bool { photoFilename != nil || photoURL != nil }
 
     /// 裏の写真があるか（他の端末で撮られてまだダウンロードしていない状態も含む）。
-    var hasReverse: Bool { reversePhotoFilename != nil || reversePhotoURL != nil }
+    /// 表の写真があるときだけ裏があるとみなす（裏だけ先に同期で届いた枠を、裏返せる枠にしないため）。
+    var hasReverse: Bool { isFilled && (reversePhotoFilename != nil || reversePhotoURL != nil) }
 }
 
 // MARK: - Week (= 1 作品)

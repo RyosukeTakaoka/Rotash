@@ -126,7 +126,9 @@ struct MemoryDetailView: View {
     private func workCell(_ slot: Slot) -> some View {
         if slot.isFilled {
             // 左から1枚ずつ裏返る。
-            FlipCard(flipped: flipped && slot.hasReverse, delay: Double(slot.dayIndex) * 0.07) {
+            // 並んでいる順に待たせる（曜日で待たせると、週の途中から始めた週で最初の1枚まで間が空く）。
+            FlipCard(flipped: flipped && slot.hasReverse,
+                     delay: Double(slots.firstIndex(where: { $0.id == slot.id }) ?? 0) * 0.07) {
                 PhotoImageView(slot: slot, maxPixel: 300)
             } back: {
                 PhotoImageView(reverseOf: slot, maxPixel: 300)

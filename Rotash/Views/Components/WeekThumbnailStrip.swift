@@ -17,10 +17,11 @@ struct WeekThumbnailStrip: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            ForEach(week.slots.sorted(by: { $0.dayIndex < $1.dayIndex })) { slot in
+            let sorted = week.slots.sorted(by: { $0.dayIndex < $1.dayIndex })
+            ForEach(Array(sorted.enumerated()), id: \.element.id) { position, slot in
                 Group {
                     if slot.isFilled {
-                        FlipCard(flipped: flipped && slot.hasReverse, delay: Double(slot.dayIndex) * 0.07) {
+                        FlipCard(flipped: flipped && slot.hasReverse, delay: Double(position) * 0.07) {
                             PhotoImageView(slot: slot, maxPixel: 160)
                         } back: {
                             PhotoImageView(reverseOf: slot, maxPixel: 160)

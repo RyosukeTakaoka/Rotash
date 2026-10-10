@@ -1189,24 +1189,24 @@
         }
       }
     },
-    "撮るのは1日にひとりだけ。見るのはいつでも全員。\n7枚そろうと、その週の作品が完成します。\n完成した作品は Memories に残ります。": {
+    "撮るのは1日にひとりだけ。見るのはいつでも全員。\n日曜日が終わると、その週の作品が完成します。\n完成した作品は Memories に残ります。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Only one person shoots each day. Everyone can look anytime.\nOnce all 7 photos are in, the week's piece is complete.\nFinished pieces are kept in Memories."
+            "value": "Only one person shoots each day. Everyone can look anytime.\nWhen Sunday ends, the week's piece is complete.\nFinished pieces are kept in Memories."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "撮るのは1日にひとりだけ。見るのはいつでも全員。\n7枚そろうと、その週の作品が完成します。\n完成した作品は Memories に残ります。"
+            "value": "撮るのは1日にひとりだけ。見るのはいつでも全員。\n日曜日が終わると、その週の作品が完成します。\n完成した作品は Memories に残ります。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "찍는 건 하루에 한 사람만. 보는 건 언제나 모두가.\n7장이 모이면 그 주의 작품이 완성돼요.\n완성된 작품은 Memories에 남아요."
+            "value": "찍는 건 하루에 한 사람만. 보는 건 언제나 모두가.\n일요일이 끝나면 그 주의 작품이 완성돼요.\n완성된 작품은 Memories에 남아요."
           }
         }
       }

@@ -222,7 +222,10 @@ struct RotashWeek: Identifiable, Codable, Hashable {
 
     /// 表示用の期間ラベル。ユーザーが付ける `title` とは別物。
     var dateRange: String {
-        "\(RotashDateFormat.day.string(from: displayStartDate)) - \(RotashDateFormat.day.string(from: endDate))"
+        let first = RotashDateFormat.day.string(from: displayStartDate)
+        let last = RotashDateFormat.day.string(from: endDate)
+        // 日曜に始めた最初の週は1日だけなので、同じ日付を2回並べない。
+        return first == last ? first : "\(first) - \(last)"
     }
 
     /// 最後に写真が入った枠。タイトルを付けられるのはこの枠を撮った人。

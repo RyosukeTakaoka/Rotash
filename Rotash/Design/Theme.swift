@@ -36,10 +36,13 @@ enum ReverseBadge {
     /// 枠の大きさから、丸の直径と置き方を決める。
     /// 細い枠は下の真ん中（7つの丸が一列にそろう）。上限に届くほど広い枠は右下
     /// （真ん中に置くと、横に広い写真の主役をふさぐため）。
+    ///
+    /// 右下に移るのは、上限よりはっきり広いとき（幅で決めた直径が上限の 1.25 倍を超えるとき）だけ。
+    /// 境目ぎりぎりの枠（6枠の週など）で、端末や共有画像によって置き方が変わらないように。
     static func placement(in cell: CGSize) -> (diameter: CGFloat, centered: Bool) {
         let byWidth = cell.width * widthRatio
         let cap = cell.height * maxHeightRatio
-        return byWidth <= cap ? (byWidth, true) : (cap, false)
+        return (min(byWidth, cap), byWidth <= cap * 1.25)
     }
 }
 

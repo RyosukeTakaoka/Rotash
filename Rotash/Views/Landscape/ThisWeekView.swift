@@ -62,7 +62,6 @@ struct ThisWeekView: View {
                     // 完成したことは、見出しの COMPLETE と、その週の名前（見出しに出る）で伝える。
                     grid(week: week)
                 }
-                .overlay(alignment: .bottom) { bottomControl(week: week) }
             }
 
             if let viewerDay, let slot = week?.slot(at: viewerDay), slot.isFilled {
@@ -230,12 +229,19 @@ struct ThisWeekView: View {
             .overlay(alignment: .trailing) {
                 // シャッターなどは、広げた画面ではなく7分割の右端に置く（画面が細いときも押せるように）。
                 // 丸より上の空いた所の真ん中に来るようにする（日曜は丸とシャッターが同じ右端に来るため）。
+                let controlsBottom = ReverseBadge.placement(in: CGSize(width: cellWidth,
+                                                                       height: geometry.size.height)).diameter
+                    + ReverseBadge.bottomInset
                 if let activeDay {
                     shootControls(day: activeDay)
                         .padding(.trailing, 16)
-                        .padding(.bottom, ReverseBadge.placement(in: CGSize(width: cellWidth,
-                                                                            height: geometry.size.height)).diameter
-                                 + ReverseBadge.bottomInset)
+                        .padding(.bottom, controlsBottom)
+                } else if let window = app.retakeWindow(now: now) {
+                    // 撮った直後の RETAKE も、シャッターと同じ右端の丸より上に置く
+                    // （下の真ん中だと、真ん中あたりの曜日の枠の丸に重なって、丸が押せなくなる）。
+                    retakeButton(day: window.dayIndex)
+                        .padding(.trailing, 16)
+                        .padding(.bottom, controlsBottom)
                 }
             }
             // 指でつまむように縮めると元の枠に近づき、広げると画面いっぱいに近づく。
@@ -566,25 +572,18 @@ struct ThisWeekView: View {
     // 完成したかどうかは7枚の写真そのもの（と SHARE ボタンの有無）で伝わるので、
     // ここでは撮影ボタン以外のテキストは出さない。
     // 今日の担当が誰かも、各枠に既に名前が出ているので改めて言葉にしない。
-    @ViewBuilder
-    private func bottomControl(week: RotashWeek) -> some View {
-        if activeDay != nil {
-            // 撮る間の操作（シャッター・FLIP）は、広げたライブビューの右端に出している（shootControls）。
-            EmptyView()
-        } else if let window = app.retakeWindow(now: now) {
-            // 撮った直後。写真を見て「事故った」と思ったら、ここから撮り直せる。
-            // 押すとその枠にライブビューが戻る。時間が切れたら黙って消える。
-            Button { manualSelection = window.dayIndex } label: {
-                Text("RETAKE\(retakeCountdown(for: window.dayIndex))")
-                    .rotashLabel(10, color: Palette.text, tracking: 2.4)
-                    .frame(height: 46)
-                    .padding(.horizontal, 18)
-                    .background(Color.black.opacity(0.5))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.bottom, 12)
+    /// 撮った直後。写真を見て「事故った」と思ったら、ここから撮り直せる。
+    /// 押すとその枠にライブビューが戻る。時間が切れたら黙って消える。
+    private func retakeButton(day: Int) -> some View {
+        Button { manualSelection = day } label: {
+            Text("RETAKE\(retakeCountdown(for: day))")
+                .rotashLabel(10, color: Palette.text, tracking: 2.4)
+                .frame(height: 46)
+                .padding(.horizontal, 18)
+                .background(Color.black.opacity(0.5))
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
     /// 撮り直せる残り秒数（「  24」のような形）。撮り直しの対象でなければ空。

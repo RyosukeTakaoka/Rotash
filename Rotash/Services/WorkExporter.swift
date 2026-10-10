@@ -66,7 +66,8 @@ enum WorkExporter {
               let data = image.jpegData(compressionQuality: 0.94)
         else { return nil }
 
-        let stamp = RotashDateFormat.fileStamp.string(from: week.startDate)
+        // 週の途中から始めた週は、作品の初日（月曜ではない）の日付にする。
+        let stamp = RotashDateFormat.fileStamp.string(from: week.displayStartDate)
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("ROTASH-\(stamp).jpg")
         return (try? data.write(to: url, options: .atomic)) == nil ? nil : url
@@ -364,7 +365,8 @@ enum WorkExporter {
                             y: rect.maxY - layout.labelInset - diameter,
                             width: diameter, height: diameter)
         case .story:
-            let diameter = rect.height * ReverseBadge.widthRatio
+            // 帯が横に長い（週の途中から始めた最初の週）と高さだけで決めると写真を覆うので、幅でも上限を決める。
+            let diameter = min(rect.height * ReverseBadge.widthRatio, rect.width * 0.3)
             circle = CGRect(x: rect.maxX - layout.labelInset - diameter,
                             y: rect.midY - diameter / 2,
                             width: diameter, height: diameter)

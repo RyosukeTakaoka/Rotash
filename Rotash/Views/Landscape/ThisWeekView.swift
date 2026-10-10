@@ -367,71 +367,85 @@ struct ThisWeekView: View {
     /// 背景か「×」を押すと閉じる。
     private func photoViewer(_ slot: Slot) -> some View {
         let day = slot.dayIndex
-        // 枠を裏返している日は裏から見せる。丸を押すと、さらに入れ替わる。
+        // 枠を裏返している日は裏から見せる。丸を押すか写真を長押しすると、さらに入れ替わる。
         let showsReverse = slot.hasReverse && (flippedDays.contains(day) != viewerSwapped)
-        return ZStack {
-            Color.black.opacity(0.94)
-                .ignoresSafeArea()
-                .onTapGesture { closeViewer() }
+        return GeometryReader { geometry in
+            // 写真は画面の高さいっぱい（上下の端まで）。丸はその高さの 1/3。
+            let fullHeight = geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom
+            let diameter = (fullHeight / 3).rounded()
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                    .onTapGesture { closeViewer() }
 
-            Group {
-                if showsReverse {
-                    PhotoImageView(reverseOf: slot, maxPixel: 1600).natural()
-                } else {
-                    PhotoImageView(slot: slot, maxPixel: 1600).natural()
+                Group {
+                    if showsReverse {
+                        PhotoImageView(reverseOf: slot, maxPixel: 1600).natural()
+                    } else {
+                        PhotoImageView(slot: slot, maxPixel: 1600).natural()
+                    }
                 }
-            }
-            .padding(.vertical, 44)
-            .padding(.horizontal, 60)
-            .overlay(alignment: .bottomTrailing) {
-                if slot.hasReverse {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) { viewerSwapped.toggle() }
-                    } label: {
-                        Group {
-                            if showsReverse {
-                                PhotoImageView(slot: slot, maxPixel: 360)
-                            } else {
-                                PhotoImageView(reverseOf: slot, maxPixel: 360)
+                .overlay(alignment: .bottomTrailing) {
+                    if slot.hasReverse {
+                        Button { swapViewer() } label: {
+                            Group {
+                                if showsReverse {
+                                    PhotoImageView(slot: slot, maxPixel: 480)
+                                } else {
+                                    PhotoImageView(reverseOf: slot, maxPixel: 480)
+                                }
                             }
+                            .frame(width: diameter, height: diameter)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.white, lineWidth: 3))
+                            .contentShape(Circle())
                         }
-                        .frame(width: 110, height: 110)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.white, lineWidth: 3))
-                        .contentShape(Circle())
+                        .buttonStyle(.plain)
+                        .padding(diameter / 8)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.trailing, 76)
-                    .padding(.bottom, 56)
                 }
-            }
+                // 写真を長押ししても、表と裏が入れ替わる（7分割の枠と同じ）。
+                .contentShape(Rectangle())
+                .onLongPressGesture(minimumDuration: 0.2) {
+                    guard slot.hasReverse else { return }
+                    swapViewer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea(edges: .vertical)
 
-            VStack {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(RotashDay.label(for: day))
-                        .rotashLabel(11, color: Palette.text, tracking: 1.8)
-                    if let name = app.revealedAssignee(forDay: day)?.name {
-                        Text(name.uppercased())
-                            .rotashLabel(10, color: Palette.dim, tracking: 0.8)
+                VStack {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(RotashDay.label(for: day))
+                            .rotashLabel(11, color: Palette.text, tracking: 1.8)
+                        if let name = app.revealedAssignee(forDay: day)?.name {
+                            Text(name.uppercased())
+                                .rotashLabel(10, color: Palette.dim, tracking: 0.8)
+                        }
+                        if let capturedAt = slot.capturedAt {
+                            Text(RotashDateFormat.time.string(from: capturedAt))
+                                .rotashLabel(10, color: Palette.faint, tracking: 1)
+                        }
+                        Spacer()
+                        Button { closeViewer() } label: {
+                            Text("×")
+                                .rotashLabel(18, color: Palette.text, tracking: 0)
+                                .frame(width: 44, height: 44)
+                                .background(Color.black.opacity(0.4))
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    if let capturedAt = slot.capturedAt {
-                        Text(RotashDateFormat.time.string(from: capturedAt))
-                            .rotashLabel(10, color: Palette.faint, tracking: 1)
-                    }
+                    .padding(.horizontal, 24)
                     Spacer()
-                    Button { closeViewer() } label: {
-                        Text("×")
-                            .rotashLabel(18, color: Palette.text, tracking: 0)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 24)
-                Spacer()
+                .padding(.top, 4)
             }
-            .padding(.top, 4)
         }
+    }
+
+    private func swapViewer() {
+        UISelectionFeedbackGenerator().selectionChanged()
+        withAnimation(.easeInOut(duration: 0.2)) { viewerSwapped.toggle() }
     }
 
     private func closeViewer() {

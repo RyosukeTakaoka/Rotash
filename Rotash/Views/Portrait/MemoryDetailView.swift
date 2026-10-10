@@ -102,9 +102,11 @@ struct MemoryDetailView: View {
         HStack(spacing: 2) {
             ForEach(slots) { slot in
                 VStack(spacing: 6) {
-                    workCell(slot)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 150)
+                    // 横画面で見る作品と同じ形の枠にする。
+                    Color.clear
+                        .aspectRatio(WorkShape.cellAspect, contentMode: .fit)
+                        .overlay { workCell(slot) }
+                        .clipped()
                         .overlay(Rectangle().stroke(slot.dayIndex == currentDay ? Palette.live : Color.clear,
                                                     lineWidth: 1.5))
                     Text(RotashDay.label(for: slot.dayIndex))

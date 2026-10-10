@@ -210,7 +210,9 @@ struct PortraitHomeView: View {
     /// いちばん新しい作品。横画面と同じく7つの枠を横に並べて大きく出し、その下に名前と日付を置く。
     private func latestCard(_ week: RotashWeek) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            WeekThumbnailStrip(week: week, height: 230)
+            // 横画面で見る作品と同じ形（1枠の縦横比をそろえる）。
+            WeekThumbnailStrip(week: week, height: nil)
+                .aspectRatio(WorkShape.stripAspect, contentMode: .fit)
                 .padding(.bottom, 16)
             if let title = week.title, !title.isEmpty {
                 Text(title)
@@ -231,7 +233,8 @@ struct PortraitHomeView: View {
     /// 前の週の1行。7分割を小さく、右に日付（始まりと終わりの2行）。
     private func olderRow(_ week: RotashWeek) -> some View {
         HStack(alignment: .center, spacing: 14) {
-            WeekThumbnailStrip(week: week, height: 72)
+            WeekThumbnailStrip(week: week, height: nil)
+                .aspectRatio(WorkShape.stripAspect, contentMode: .fit)
                 .opacity(0.85)
             VStack(alignment: .leading, spacing: 4) {
                 Text(RotashDateFormat.day.string(from: week.displayStartDate))

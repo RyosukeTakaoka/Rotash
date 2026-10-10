@@ -28,6 +28,20 @@ enum ReverseBadge {
     static let bottomInset: CGFloat = 10
 }
 
+/// 作品（7分割）の1枠の形。縦の画面で作品を小さく見せるときも、横画面で見る作品と同じ形にそろえる。
+enum WorkShape {
+    /// 横画面の7分割の1枠の「幅 ÷ 高さ」。この端末の画面の大きさから求める（`PortraitShootView.cellAspect`）。
+    @MainActor static var cellAspect: CGFloat {
+        let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.size
+            ?? CGSize(width: 390, height: 844)
+        let portrait = CGSize(width: min(screen.width, screen.height), height: max(screen.width, screen.height))
+        return PortraitShootView.cellAspect(portraitSize: portrait)
+    }
+
+    /// 7分割の帯全体の「幅 ÷ 高さ」（枠どうしのすきまは小さいので無視する）。
+    @MainActor static var stripAspect: CGFloat { cellAspect * 7 }
+}
+
 extension UIColor {
     static let rotashBackground = UIColor(white: 0.04, alpha: 1)
     static let rotashSurface = UIColor(white: 0.10, alpha: 1)

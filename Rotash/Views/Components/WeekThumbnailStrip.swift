@@ -11,7 +11,8 @@ import SwiftUI
 /// 裏の写真が無い日（古い写真）は表のまま残る。
 struct WeekThumbnailStrip: View {
     let week: RotashWeek
-    var height: CGFloat = 16
+    /// 帯の高さ。nil なら決めず、呼び出し側の形（`.aspectRatio(WorkShape.stripAspect, ...)` など）に合わせて伸びる。
+    var height: CGFloat? = 16
     var flipped = false
 
     var body: some View {

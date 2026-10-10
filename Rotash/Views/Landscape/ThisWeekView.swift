@@ -70,7 +70,16 @@ struct ThisWeekView: View {
         }
         .onAppear { syncCamera() }
         .onDisappear { camera.stop() }
-        .onChange(of: activeDay) { _, _ in syncCamera() }
+        .onChange(of: activeDay) { oldDay, newDay in
+            // 撮り始めるたびに、ライブビューは元の7分割の枠の大きさから始める。
+            if oldDay == nil, newDay != nil { liveScale = 1 }
+            syncCamera()
+        }
+        // 週が変わったら、前の週で裏返していた曜日を引き継がない（新しい週の同じ曜日が裏返って見えないように）。
+        .onChange(of: week?.id) { _, _ in
+            flippedDays = []
+            liveScale = 1
+        }
         // 撮り直せる時間のあいだだけ時計を進め、残り秒数と「時間切れでカメラを閉じる」を画面に反映する。
         .onReceive(clock) { date in
             // 「いま撮り直せるか」ではなく「締め切りがまだ来ていないか」で進める。
@@ -410,6 +419,9 @@ struct ThisWeekView: View {
             ShutterButton(diameter: 64, isBusy: isCapturing) { capture(day: day, aspect: aspect) }
             flipButton
         }
+        // ボタンのすきまを押したときに、下にある枠（自由撮影では別の日）が選ばれないように受け止める。
+        .contentShape(Rectangle())
+        .onTapGesture {}
     }
 
     @ViewBuilder

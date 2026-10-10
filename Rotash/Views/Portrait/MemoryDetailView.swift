@@ -102,14 +102,16 @@ struct MemoryDetailView: View {
             if slot.isFilled {
                 // 裏返しているときは裏を大きく、もう一方を右下の丸に出す。
                 let large = flipped && slot.hasReverse
+                // 写真そのものの形で出す。横持ちで撮った写真は、撮るときに映っていた範囲の形
+                // （細い枠ほど細長い）で保存されているので、4:3 の枠いっぱいに広げると大きく切れてしまう。
                 Group {
                     if large {
-                        PhotoImageView(reverseOf: slot, maxPixel: 900)
+                        PhotoImageView(reverseOf: slot, maxPixel: 900).natural()
                     } else {
-                        PhotoImageView(slot: slot, maxPixel: 900)
+                        PhotoImageView(slot: slot, maxPixel: 900).natural()
                     }
                 }
-                .aspectRatio(4.0 / 3.0, contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: 560)
                 .overlay(alignment: .bottomTrailing) {
                     if slot.hasReverse {
                         Group {

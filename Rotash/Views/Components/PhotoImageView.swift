@@ -9,6 +9,10 @@ struct PhotoImageView: View {
     var filename: String?
     var remoteURL: String?
     var maxPixel: CGFloat?
+    /// 枠いっぱいに広げず、写真そのものの縦横比で出すか（`natural()`）。
+    private var keepsAspect = false
+    /// 写真が読めたときに、その大きさを知らせる（`onLoad(_:)`）。
+    private var loaded: ((CGSize) -> Void)?
 
     @State private var image: UIImage?
 
@@ -32,6 +36,28 @@ struct PhotoImageView: View {
     }
 
     var body: some View {
+        if keepsAspect {
+            naturalBody
+        } else {
+            filledBody
+        }
+    }
+
+    /// 写真そのものの縦横比で、収まる大きさに出す。読めるまでは 4:3 の暗い枠。
+    private var naturalBody: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Palette.surfaceDeep.aspectRatio(4.0 / 3.0, contentMode: .fit)
+            }
+        }
+        .task(id: taskID) { await load() }
+    }
+
+    private var filledBody: some View {
         ZStack {
             Palette.surfaceDeep
             if let image {
@@ -52,20 +78,39 @@ struct PhotoImageView: View {
         .task(id: taskID) { await load() }
     }
 
+    /// 写真を切り抜かず、写真そのものの縦横比で出す（横持ちで撮った写真は、映っていた範囲の形で保存されるため）。
+    func natural() -> PhotoImageView {
+        var copy = self
+        copy.keepsAspect = true
+        return copy
+    }
+
+    /// 写真が読めたら、その大きさ（向きを反映した後）を知らせる。
+    func onLoad(_ action: @escaping (CGSize) -> Void) -> PhotoImageView {
+        var copy = self
+        copy.loaded = action
+        return copy
+    }
+
     private var taskID: String {
         "\(filename ?? "-")|\(remoteURL ?? "-")"
     }
 
     private func load() async {
         if let filename, let local = await loadLocal(filename) {
-            image = local
+            show(local)
             return
         }
         guard let remoteURL,
               let data = try? await CloudinaryClient.download(from: remoteURL),
               let cached = try? PhotoStore.shared.save(data)
         else { return }
-        image = await loadLocal(cached)
+        show(await loadLocal(cached))
+    }
+
+    private func show(_ loadedImage: UIImage?) {
+        image = loadedImage
+        if let loadedImage { loaded?(loadedImage.size) }
     }
 
     private func loadLocal(_ name: String) async -> UIImage? {
@@ -80,19 +125,29 @@ struct PhotoImageView: View {
 
 /// 表と裏を持つカード。`flipped` が変わると、縦の軸でくるっと裏返る。
 /// 枠の長押し（その日の裏）と、Memories の作品全体の裏返しで使う。
+///
+/// 裏は、はじめて裏返すまで作らない。見えない裏まで7枚ぶん読み込むと、
+/// カメラを動かしている横持ちの画面でメモリを大きく使うため。
 struct FlipCard<Front: View, Back: View>: View {
     var flipped: Bool
     @ViewBuilder var front: () -> Front
     @ViewBuilder var back: () -> Back
+
+    @State private var backBuilt = false
 
     var body: some View {
         ZStack {
             front()
                 .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
                 .opacity(flipped ? 0 : 1)
-            back()
-                .rotation3DEffect(.degrees(flipped ? 0 : -180), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
-                .opacity(flipped ? 1 : 0)
+            if backBuilt || flipped {
+                back()
+                    .rotation3DEffect(.degrees(flipped ? 0 : -180), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
+                    .opacity(flipped ? 1 : 0)
+            }
+        }
+        .onChange(of: flipped) { _, isFlipped in
+            if isFlipped { backBuilt = true }
         }
     }
 }

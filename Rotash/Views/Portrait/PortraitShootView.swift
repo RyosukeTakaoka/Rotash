@@ -24,6 +24,9 @@ struct PortraitShootView: View {
     @StateObject private var camera = CameraController(position: .back)
     /// 撮ったあとの表示で、裏を大きく出しているか（丸を押すと入れ替わる）。
     @State private var showsReverseLarge = false
+    /// 撮ったあとに大きく出している写真の「幅 ÷ 高さ」。読めるまでは nil。
+    /// 横持ちで撮った写真は映っていた範囲の形で保存されるので、カメラの形（frameAspect）とは限らない。
+    @State private var capturedAspect: CGFloat?
 
     @State private var isCapturing = false
     @State private var flashOpacity: Double = 0
@@ -139,8 +142,16 @@ struct PortraitShootView: View {
             if large {
                 PhotoImageView(reverseOf: slot, maxPixel: 1080)
             } else {
+                // 写真そのものの形で真ん中に出し、サムネの線もその形から作る。
                 PhotoImageView(slot: slot, maxPixel: 1080)
-                ThumbnailGuide(region: ThumbnailGuide.centerCrop(imageAspect: aspect, cellAspect: cellAspect))
+                    .natural()
+                    .onLoad { size in capturedAspect = size.width / max(1, size.height) }
+                    .overlay {
+                        ThumbnailGuide(region: ThumbnailGuide.centerCrop(imageAspect: capturedAspect ?? aspect,
+                                                                         cellAspect: cellAspect))
+                    }
+                    // 外の ZStack は丸のために右下そろえなので、写真は大きい画面の真ん中に置き直す。
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             if slot.hasReverse {
                 Button { showsReverseLarge.toggle() } label: {

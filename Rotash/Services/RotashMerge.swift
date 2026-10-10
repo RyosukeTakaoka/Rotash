@@ -152,6 +152,19 @@ enum RotashMerge {
         }) {
             members.append(member)
         }
+        // 抜けた印は、どちらかが知っていれば残す（抜けた端末はもうグループを持たないので、
+        // 印はサーバーから届くだけ。届いたあとに古い端末が消してしまわないように）。
+        // ただし自分自身については、この端末が正しい。グループを持っている＝参加しているので、
+        // 一度抜けた人が同じ名前で入り直したときは、ここで印が外れる。
+        for index in members.indices {
+            let id = members[index].id
+            if id == merged.myMemberID {
+                members[index].leftAt = local.me?.leftAt
+            } else if members[index].leftAt == nil,
+                      let leftAt = local.members.first(where: { $0.id == id })?.leftAt {
+                members[index].leftAt = leftAt
+            }
+        }
         merged.members = members
 
         // 週: 同じ週なら突き合わせ、違う週なら新しい方を今週にして古い方は Memories へ。

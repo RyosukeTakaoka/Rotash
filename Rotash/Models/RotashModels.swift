@@ -6,6 +6,14 @@ import Foundation
 struct Member: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var name: String
+    /// グループから抜けた時刻。抜けた人はもう当番に入らない。
+    ///
+    /// メンバー一覧からは消さずに印をつけるだけにする。消すと、過去の作品で
+    /// その人が撮った日の名前が引けなくなるうえ、まだ抜けたことを知らない端末が
+    /// 「相手が知らないメンバー」として一覧に戻してしまう。
+    var leftAt: Date?
+
+    var isActive: Bool { leftAt == nil }
 }
 
 // MARK: - Day
@@ -247,6 +255,9 @@ struct RotashGroup: Identifiable, Codable {
     var originGroupID: UUID?
 
     var me: Member? { members.first { $0.id == myMemberID } }
+
+    /// まだ抜けていないメンバー。当番を組むのはこの人たちだけ。
+    var activeMembers: [Member] { members.filter(\.isActive) }
 
     /// その日の担当者。週の開始時に決まったものを引くだけ。
     /// 未来の日を伏せるかどうかは表示側の責任なので、ここでは常に本当の担当者を返す。

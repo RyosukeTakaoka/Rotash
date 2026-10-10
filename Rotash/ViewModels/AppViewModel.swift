@@ -13,7 +13,7 @@ enum RotashError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noGroup:
-            return "先に Rotash を作るか、招待コードで参加してください。"
+            return String(localized: "先に Rotash を作るか、招待コードで参加してください。")
         }
     }
 }
@@ -694,7 +694,7 @@ final class AppViewModel: ObservableObject {
 
             if outcome.failedUploads > 0 {
                 let reason = outcome.failureReason ?? ""
-                syncNote = "写真 \(outcome.failedUploads) 枚を送れませんでした。\(reason)"
+                syncNote = String(localized: "写真 \(outcome.failedUploads) 枚を送れませんでした。\(reason)")
                 if showingError { alertMessage = syncNote }
             } else {
                 syncNote = nil

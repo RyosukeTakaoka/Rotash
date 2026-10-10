@@ -80,13 +80,13 @@ enum SyncError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "同期の接続先が設定されていません。"
+            return String(localized: "同期の接続先が設定されていません。")
         case .badResponse(let code):
-            return "サーバーとの通信に失敗しました（\(code)）。"
+            return String(localized: "サーバーとの通信に失敗しました（\(code)）。")
         case .malformedPayload:
-            return "サーバー上のデータを読めませんでした。"
+            return String(localized: "サーバー上のデータを読めませんでした。")
         case .uploadFailed:
-            return "写真のアップロードに失敗しました。"
+            return String(localized: "写真のアップロードに失敗しました。")
         }
     }
 }

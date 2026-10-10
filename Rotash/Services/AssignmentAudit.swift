@@ -97,7 +97,9 @@ enum AssignmentAudit {
             if let id = slot.assigneeID { history[id, default: 0] += 1 }
         }
 
-        let ids = updated.members.map(\.id)
+        // 抜けた人には、もう当番を回さない（まだ来ていない日だけ組み直すので、撮った日はそのまま）。
+        let ids = updated.activeMembers.map(\.id)
+        guard !ids.isEmpty else { return updated }
         let planned = WeekPlanner.planned(
             week: updated.currentWeek,
             memberIDs: ids,

@@ -1,0 +1,30 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "NSCameraUsageDescription": {
+      "comment": "Privacy - Camera Usage Description",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotash uses the camera to take photos inside the 7-part frame."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "7分割の枠の中で写真を撮るためにカメラを使います。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "7칸 프레임 안에서 사진을 찍기 위해 카메라를 사용해요."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

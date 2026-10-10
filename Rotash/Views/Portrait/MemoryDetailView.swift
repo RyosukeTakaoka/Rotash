@@ -240,13 +240,9 @@ struct MemoryDetailView: View {
     }
 
     private func captionText(_ slot: Slot) -> String {
-        let weekdays = ["月", "火", "水", "木", "金", "土", "日"]
         var parts: [String] = []
-        let weekday = weekdays.indices.contains(slot.dayIndex) ? weekdays[slot.dayIndex] : ""
         if let date = Calendar.rotash.date(byAdding: .day, value: slot.dayIndex, to: week.startDate) {
-            parts.append("\(weekday) \(Self.monthDay.string(from: date))")
-        } else {
-            parts.append(weekday)
+            parts.append("\(Self.weekday.string(from: date)) \(Self.monthDay.string(from: date))")
         }
         if let name = assigneeName(for: slot) { parts.append(name.uppercased()) }
         if let capturedAt = slot.capturedAt { parts.append(RotashDateFormat.time.string(from: capturedAt)) }
@@ -256,6 +252,13 @@ struct MemoryDetailView: View {
     private static let monthDay: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "MM.dd"
+        return formatter
+    }()
+
+    /// 曜日の短い表記。端末の言語に合わせる（「水」「Wed」「수」）。
+    private static let weekday: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE"
         return formatter
     }()
 

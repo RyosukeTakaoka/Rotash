@@ -24,8 +24,23 @@ enum Palette {
 enum ReverseBadge {
     /// 丸の直径を、7分割の1枠の幅の何倍にするか。
     static let widthRatio: CGFloat = 0.8
-    /// 丸を枠の下の端からどれだけ離すか（pt）。
+    /// 丸を枠の下の端からどれだけ離すか（pt）。右下に置くときは右の端からも同じだけ離す。
     static let bottomInset: CGFloat = 10
+    /// 丸の直径の上限（枠の高さに対する割合）。
+    ///
+    /// 週の途中から始めた最初の週は枠が1〜3つしかなく、1枠が横に広い。
+    /// 幅だけで決めると丸が枠からはみ出すほど大きくなるので、高さで上限を決める。
+    /// ふだんの7分割（細い枠）はこの上限に届かないので、見た目は変わらない。
+    static let maxHeightRatio: CGFloat = 0.3
+
+    /// 枠の大きさから、丸の直径と置き方を決める。
+    /// 細い枠は下の真ん中（7つの丸が一列にそろう）。上限に届くほど広い枠は右下
+    /// （真ん中に置くと、横に広い写真の主役をふさぐため）。
+    static func placement(in cell: CGSize) -> (diameter: CGFloat, centered: Bool) {
+        let byWidth = cell.width * widthRatio
+        let cap = cell.height * maxHeightRatio
+        return byWidth <= cap ? (byWidth, true) : (cap, false)
+    }
 }
 
 /// 作品（7分割）の1枠の形。縦の画面で作品を小さく見せるときも、横画面で見る作品と同じ形にそろえる。

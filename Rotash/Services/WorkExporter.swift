@@ -355,8 +355,12 @@ enum WorkExporter {
         let circle: CGRect
         switch layout.format {
         case .screen:
-            let diameter = rect.width * ReverseBadge.widthRatio
-            circle = CGRect(x: rect.midX - diameter / 2,
+            // 画面と同じ決まり（細い枠は下の真ん中、週の途中から始めた広い枠は右下）。
+            let placement = ReverseBadge.placement(in: rect.size)
+            let diameter = placement.diameter
+            circle = CGRect(x: placement.centered
+                                ? rect.midX - diameter / 2
+                                : rect.maxX - layout.labelInset - diameter,
                             y: rect.maxY - layout.labelInset - diameter,
                             width: diameter, height: diameter)
         case .story:

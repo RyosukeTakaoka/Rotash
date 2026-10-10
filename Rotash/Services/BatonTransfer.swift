@@ -22,9 +22,9 @@ enum BatonTransferError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unreadable:
-            return "バトンファイルを読み込めませんでした。"
+            return String(localized: "バトンファイルを読み込めませんでした。")
         case let .codeMismatch(expected, found):
-            return "招待コードが違います（このRotashは \(expected) / ファイルは \(found)）。"
+            return String(localized: "招待コードが違います（このRotashは \(expected) / ファイルは \(found)）。")
         }
     }
 }

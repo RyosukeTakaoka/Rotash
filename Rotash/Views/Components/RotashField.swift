@@ -9,8 +9,8 @@ import SwiftUI
 /// 招待コードだけは英数字しか使わないので、
 /// キーボード自体を ASCII に固定して日本語入力を経由させないようにし、そのうえで整形する。
 struct RotashField: View {
-    let title: String
-    var placeholder: String = ""
+    let title: LocalizedStringKey
+    var placeholder: LocalizedStringKey = ""
     @Binding var text: String
     /// 招待コード用の入力欄にする。
     var isInviteCode: Bool = false

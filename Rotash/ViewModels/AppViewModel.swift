@@ -543,7 +543,7 @@ final class AppViewModel: ObservableObject {
         }
         if finished.isComplete {
             AnalyticsService.weekCompleted(
-                memberCount: current.members.count,
+                memberCount: current.activeMembers.count,
                 isFirstWeek: current.archive.count == 1
             )
         }

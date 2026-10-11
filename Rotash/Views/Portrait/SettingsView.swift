@@ -16,8 +16,19 @@ struct SettingsView: View {
             Palette.background.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
-                    Text("SETTINGS").rotashLabel(11, color: Palette.text, tracking: 3)
-                        .padding(.top, 28)
+                    // とじるは、下まで行かなくても押せるよう右上にも置く（指の届く大きさで）。
+                    HStack(alignment: .center) {
+                        Text("SETTINGS").rotashLabel(11, color: Palette.text, tracking: 3)
+                        Spacer()
+                        Button { dismiss() } label: {
+                            Text("とじる")
+                                .rotashLabel(11, color: Palette.text, tracking: 1.6)
+                                .frame(minWidth: 64, minHeight: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.top, 16)
 
                     if let group = app.group {
                         // 掛け持ちしているとき、どのグループの設定かが分かるように。

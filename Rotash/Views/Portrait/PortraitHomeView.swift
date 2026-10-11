@@ -232,12 +232,26 @@ struct PortraitHomeView: View {
                     HairLine()
                         .padding(.bottom, 18)
                     // それより前の週は、少し小さく・少し薄く積む。右に日付だけ添える。
-                    VStack(spacing: 12) {
-                        ForEach(older) { week in
-                            NavigationLink(value: week) {
-                                olderRow(week)
+                    // 月ごとに区切り、年が変わるところには年を出す（積み重なった厚みが、時間として読めるように）。
+                    let sections = Self.monthSections(older)
+                    VStack(alignment: .leading, spacing: 22) {
+                        ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
+                            VStack(alignment: .leading, spacing: 12) {
+                                if index == 0 || sections[index - 1].year != section.year {
+                                    Text(String(section.year))
+                                        .font(Typo.title(16))
+                                        .tracking(2)
+                                        .foregroundStyle(Palette.text)
+                                }
+                                Text(Self.monthFormatter.string(from: section.start))
+                                    .rotashLabel(9, color: Palette.dim, tracking: 1.2)
+                                ForEach(section.weeks) { week in
+                                    NavigationLink(value: week) {
+                                        olderRow(week)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                     .padding(.bottom, 22)
@@ -273,6 +287,38 @@ struct PortraitHomeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
+
+    /// 同じ月の週をまとめたもの（新しい順のまま）。
+    private struct MonthSection: Identifiable {
+        let id: String
+        let year: Int
+        let start: Date
+        var weeks: [RotashWeek]
+    }
+
+    /// 週を、作品の初日がある月ごとに区切る。並びは渡された順（新しい順）のまま。
+    private static func monthSections(_ weeks: [RotashWeek]) -> [MonthSection] {
+        let calendar = Calendar.rotash
+        var sections: [MonthSection] = []
+        for week in weeks {
+            let parts = calendar.dateComponents([.year, .month], from: week.displayStartDate)
+            let id = "\(parts.year ?? 0)-\(parts.month ?? 0)"
+            if sections.last?.id == id {
+                sections[sections.count - 1].weeks.append(week)
+            } else {
+                sections.append(MonthSection(id: id, year: parts.year ?? 0,
+                                             start: week.displayStartDate, weeks: [week]))
+            }
+        }
+        return sections
+    }
+
+    /// 月の名前（端末の言語で「10月」「October」「10월」）。
+    private static let monthFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("MMMM")
+        return formatter
+    }()
 
     /// 前の週の1行。7分割を小さく、右に日付（始まりと終わりの2行）。
     private func olderRow(_ week: RotashWeek) -> some View {

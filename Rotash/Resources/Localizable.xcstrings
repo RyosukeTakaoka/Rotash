@@ -67,6 +67,28 @@
         }
       }
     },
+    "Rotash で一緒に写真を撮ろう。\n招待コード %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Join my group on Rotash.\nInvite code %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotash で一緒に写真を撮ろう。\n招待コード %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotash에서 같이 사진 찍자.\n초대 코드 %@"
+          }
+        }
+      }
+    },
     "→ 横にして見る": {
       "localizations": {
         "en": {
@@ -151,28 +173,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "내 이름"
-          }
-        }
-      }
-    },
-    "この1週間、一緒に1枚にしない？\n招待コード %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Want to make one picture together this week?\nInvite code %@"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "この1週間、一緒に1枚にしない？\n招待コード %@"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "이번 한 주, 같이 한 장 만들어 볼래요?\n초대 코드 %@"
           }
         }
       }
@@ -287,24 +287,24 @@
         }
       }
     },
-    "たとえば 8月の1週間": {
+    "たとえば 高校の友達": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "e.g. A week in August"
+            "value": "e.g. High school friends"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "たとえば 8月の1週間"
+            "value": "たとえば 高校の友達"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "예: 8월의 한 주"
+            "value": "예: 고등학교 친구들"
           }
         }
       }
@@ -415,6 +415,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "시작하기"
+          }
+        }
+      }
+    },
+    "カメラが一時的に止まっています": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The camera is paused for now"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カメラが一時的に止まっています"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "카메라가 잠시 멈췄어요"
           }
         }
       }
@@ -855,6 +877,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "사진을 업로드하지 못했어요."
+          }
+        }
+      }
+    },
+    "写真を撮れませんでした。もう一度シャッターを押してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't take the photo. Please press the shutter again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "写真を撮れませんでした。もう一度シャッターを押してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사진을 찍지 못했어요. 셔터를 다시 눌러 주세요."
           }
         }
       }

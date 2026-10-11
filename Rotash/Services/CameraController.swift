@@ -22,6 +22,19 @@ final class CameraController: NSObject, ObservableObject {
     let session: AVCaptureSession
     /// 表の映像の縦横比（短い辺 ÷ 長い辺）。縦持ちの撮影画面で、写る範囲をそのまま見せるのに使う。
     @Published private(set) var frameAspect: CGFloat = 0.75
+    /// カメラが一時的に止められているか（ほかのアプリがカメラを使った、端末が熱くなった など）。
+    /// 止められているあいだは映像が黒くなり、シャッターを押しても写真が撮れない。
+    @Published private(set) var isInterrupted = false
+    /// 撮れる状態か。シャッターはこれが true のときだけ押せるようにする
+    /// （準備中や止められているときに押すと、写真が無いまま終わってしまうため）。
+    var canCapture: Bool {
+        #if targetEnvironment(simulator)
+        // シミュレータにはカメラが無いので、ダミーの写真で撮った扱いにする（SimulatedCapture）。
+        return true
+        #else
+        return status == .ready && !isInterrupted
+        #endif
+    }
 
     /// 同時撮影のときの、前と後ろのカメラそれぞれの一式。画面のスレッドで読み書きする。
     private var rigs: [AVCaptureDevice.Position: Rig] = [:]
@@ -50,6 +63,46 @@ final class CameraController: NSObject, ObservableObject {
         isDual = dual
         session = dual ? AVCaptureMultiCamSession() : AVCaptureSession()
         super.init()
+        observeSession()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    /// カメラが止められた・戻った・エラーで止まったことを見張る。
+    ///
+    /// 止められているあいだは映像が真っ黒になり、撮っても写真ができない。
+    /// それを画面に出し、エラーで止まったときは動かし直す。
+    private func observeSession() {
+        let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(sessionWasInterrupted),
+                           name: AVCaptureSession.wasInterruptedNotification, object: session)
+        center.addObserver(self, selector: #selector(sessionInterruptionEnded),
+                           name: AVCaptureSession.interruptionEndedNotification, object: session)
+        center.addObserver(self, selector: #selector(sessionRuntimeError),
+                           name: AVCaptureSession.runtimeErrorNotification, object: session)
+    }
+
+    @objc private func sessionWasInterrupted(_ notification: Notification) {
+        DispatchQueue.main.async { self.isInterrupted = true }
+    }
+
+    @objc private func sessionInterruptionEnded(_ notification: Notification) {
+        DispatchQueue.main.async { self.isInterrupted = false }
+    }
+
+    @objc private func sessionRuntimeError(_ notification: Notification) {
+        #if DEBUG
+        print("📷 カメラが止まった:", notification.userInfo?[AVCaptureSessionErrorKey] ?? "")
+        #endif
+        // エラーで止まったら動かし直す（メディアサービスの再起動などは、動かし直せば戻る）。
+        sessionQueue.async { [weak self] in
+            guard let self, self.isConfigured, !self.session.isRunning else { return }
+            self.session.startRunning()
+            let running = self.session.isRunning
+            DispatchQueue.main.async { self.isInterrupted = !running }
+        }
     }
 
     /// 裏（シャッター側）のカメラ。

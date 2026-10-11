@@ -280,7 +280,8 @@ struct ThisWeekView: View {
                 // 元の写真（約1200万画素）をそのまま7枚読むとメモリを大きく使うので、
                 // 枠の高さに足りる大きさに縮めて読む（720pt → 3倍の画面で 2160px）。
                 // 長押しすると裏（撮るときシャッター側に映っていた方）に裏返る。
-                FlipCard(flipped: flippedDays.contains(day) && slot.hasReverse) {
+                // 7分割の枠は、長押しで手早く裏返す（全画面の入れ替えと同じくらいの速さに）。
+                FlipCard(flipped: flippedDays.contains(day) && slot.hasReverse, duration: 0.28) {
                     PhotoImageView(slot: slot, maxPixel: 720)
                 } back: {
                     PhotoImageView(reverseOf: slot, maxPixel: 720)
@@ -358,7 +359,7 @@ struct ThisWeekView: View {
             }
         }
         // 押してすぐ離すと全画面、少し長く押すと裏返す。短すぎると、ふつうに押したつもりでも裏返る。
-        .onLongPressGesture(minimumDuration: 0.3) {
+        .onLongPressGesture(minimumDuration: 0.25) {
             guard !isActive, slot.hasReverse else { return }
             toggleFlip(day)
         }
@@ -367,7 +368,7 @@ struct ThisWeekView: View {
     /// その日の枠を裏返す（長押し、または枠の下の丸を押す）。
     private func toggleFlip(_ day: Int) {
         UISelectionFeedbackGenerator().selectionChanged()
-        withAnimation(.easeInOut(duration: 0.45)) {
+        withAnimation(.easeInOut(duration: 0.28)) {
             if flippedDays.contains(day) { flippedDays.remove(day) } else { flippedDays.insert(day) }
         }
     }
@@ -530,7 +531,7 @@ struct ThisWeekView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
                 .background(Color.black.opacity(0.5))
-            ShutterButton(diameter: 64, isBusy: isCapturing) { capture(day: day) }
+            ShutterButton(diameter: 64, isBusy: isCapturing || !camera.canCapture) { capture(day: day) }
             flipButton
         }
         // ボタンのすきまを押したときに、下にある枠が選ばれないように受け止める。
@@ -547,6 +548,16 @@ struct ThisWeekView: View {
                 LiveLayerView(layer: layer)
             } else {
                 CameraPreview(controller: camera)
+            }
+            if camera.isInterrupted {
+                // ほかのアプリがカメラを使った・端末が熱い などで、カメラが一時的に止められている。
+                ZStack {
+                    Color.black.opacity(0.6)
+                    Text("カメラが一時的に止まっています")
+                        .rotashLabel(9, color: Palette.text, tracking: 0.5)
+                        .multilineTextAlignment(.center)
+                        .padding(8)
+                }
             }
         case .denied:
             ZStack {
@@ -619,7 +630,8 @@ struct ThisWeekView: View {
     }
 
     private func capture(day: Int) {
-        guard !isCapturing, app.canShoot(dayIndex: day) else { return }
+        // カメラの準備中や、止められているあいだは撮らない（押しても写真が無いまま終わるため）。
+        guard !isCapturing, camera.canCapture, app.canShoot(dayIndex: day) else { return }
         isCapturing = true
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
 
@@ -635,6 +647,9 @@ struct ThisWeekView: View {
                                          reverse: reverse, reverseFront: reverseFront)
                     self.manualSelection = nil
                     self.flippedDays.remove(day)
+                } else {
+                    // 黙って何も起きないと、撮れたと思ったまま終わってしまう。
+                    self.app.alertMessage = String(localized: "写真を撮れませんでした。もう一度シャッターを押してください。")
                 }
                 // 撮り直しの残り秒数をここから数え始める。撮った時刻（attachPhoto の中で決まる）より
                 // 前に合わせると、残りが一瞬 31 秒に見えるので、保存が終わってから合わせる。

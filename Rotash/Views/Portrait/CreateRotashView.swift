@@ -37,7 +37,7 @@ struct CreateRotashView: View {
                 Text("NEW ROTASH").rotashLabel(11, color: Palette.text, tracking: 3)
                     .padding(.top, 28)
 
-                RotashField(title: "ROTASH の名前", placeholder: "たとえば 8月の1週間", text: $name)
+                RotashField(title: "ROTASH の名前", placeholder: "たとえば 高校の友達", text: $name)
 
                 RotashField(title: "あなたの名前", placeholder: "NAME", text: $myName)
 

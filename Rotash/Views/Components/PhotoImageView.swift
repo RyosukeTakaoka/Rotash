@@ -142,6 +142,8 @@ struct FlipCard<Front: View, Back: View>: View {
     var flipped: Bool
     /// 回り始めるまでの待ち時間（左から1枚ずつ裏返すときに使う）。
     var delay: Double = 0
+    /// 回る時間。
+    var duration: Double = 0.45
     @ViewBuilder var front: () -> Front
     @ViewBuilder var back: () -> Back
 
@@ -150,10 +152,12 @@ struct FlipCard<Front: View, Back: View>: View {
 
     init(flipped: Bool,
          delay: Double = 0,
+         duration: Double = 0.45,
          @ViewBuilder front: @escaping () -> Front,
          @ViewBuilder back: @escaping () -> Back) {
         self.flipped = flipped
         self.delay = delay
+        self.duration = duration
         self.front = front
         self.back = back
         _backBuilt = State(initialValue: flipped)
@@ -172,7 +176,7 @@ struct FlipCard<Front: View, Back: View>: View {
             }
         }
         .onChange(of: flipped) { _, isFlipped in
-            let animation = Animation.easeInOut(duration: 0.45).delay(delay)
+            let animation = Animation.easeInOut(duration: duration).delay(delay)
             if isFlipped && !backBuilt {
                 backBuilt = true
                 DispatchQueue.main.async {

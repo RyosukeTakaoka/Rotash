@@ -130,37 +130,24 @@ enum RotashMerge {
         // 発行元は一度決まったら変わらない。どちらかが知っていれば、それを残す。
         merged.originGroupID = local.originGroupID ?? remote.originGroupID
 
-        // メンバー: 自分が誰かを見失わないようにする。
+        // メンバー: ID だけで照合する。名前では結びつけない。
         //
-        // ID で照合できるならそれが最優先。名前は変えられるし、同じ名前の人も居るので、
-        // 一度サーバーに載った自分の ID があるなら名前で判断してはいけない
-        // （名前で判断すると、同名の人が居たときに二人が同一人物に潰れ、
-        //   どちらの端末でも「今日は自分の担当」に見えてしまう）。
-        // まだ載っていないときだけ、名前で「先に登録しておいてもらった枠」と結びつける。
+        // 名前は変えられるし、同じ名前（同じ呼び名）の別人は普通にいる。名前で結びつけると、
+        // 同名の二人が同一人物に潰れ、どちらの端末でも「今日は自分の担当」に見えてしまう。
+        // （以前は、先に名前だけ登録しておいた枠に本人を結びつけるために名前でも照合していたが、
+        //   名前だけのメンバーを足す機能は無くなったので、その必要も無くなった。）
         var members = remote.members
-        let myName = local.me?.name ?? ""
-        if members.contains(where: { $0.id == local.myMemberID }) {
-            merged.myMemberID = local.myMemberID
-        } else if let match = members.first(where: {
-            // 抜けた人とは結びつけない。同じ名前で入り直した人は、新しいメンバーとして加わる
-            // （結びつけると、ほかの端末が持っている「抜けた」印と食い違い続ける）。
-            $0.isActive && $0.name.caseInsensitiveCompare(myName) == .orderedSame
-        }) {
-            merged.myMemberID = match.id
-        } else if let me = local.me {
+        merged.myMemberID = local.myMemberID
+        if !members.contains(where: { $0.id == local.myMemberID }), let me = local.me {
             members.append(me)
         }
         // リモートがまだ知らないローカル側のメンバーも落とさない。
-        for member in local.members where !members.contains(where: {
-            $0.id == member.id || ($0.isActive && member.isActive
-                                   && $0.name.caseInsensitiveCompare(member.name) == .orderedSame)
-        }) {
+        for member in local.members where !members.contains(where: { $0.id == member.id }) {
             members.append(member)
         }
         // 抜けた印は、どちらかが知っていれば残す（抜けた端末はもうグループを持たないので、
         // 印はサーバーから届くだけ。届いたあとに古い端末が消してしまわないように）。
-        // ただし自分自身については、この端末が正しい。グループを持っている＝参加しているので、
-        // 一度抜けた人が同じ名前で入り直したときは、ここで印が外れる。
+        // ただし自分自身については、この端末が正しい（グループを持っている＝参加している）。
         for index in members.indices {
             let id = members[index].id
             if id == merged.myMemberID {

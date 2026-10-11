@@ -29,6 +29,8 @@ struct PortraitShootView: View {
     @State private var capturedAspect: CGFloat?
 
     @State private var isCapturing = false
+    /// 撮れなかったことを知らせる（この画面は全画面で開くので、ホームの知らせは上に出ない）。
+    @State private var captureFailed = false
     @State private var flashOpacity: Double = 0
     /// 撮ったあと、撮り直すためにライブビューへ戻しているか。
     @State private var retaking = false
@@ -80,6 +82,9 @@ struct PortraitShootView: View {
         }
         .onAppear { syncCamera() }
         .onDisappear { camera.stop() }
+        .alert("写真を撮れませんでした。もう一度シャッターを押してください。", isPresented: $captureFailed) {
+            Button("OK", role: .cancel) {}
+        }
         .onChange(of: showsLive) { _, _ in syncCamera() }
         .onReceive(clock) { date in
             if let deadline = app.latestRetakeDeadline, now <= deadline { now = date }
@@ -184,6 +189,16 @@ struct PortraitShootView: View {
             } else {
                 CameraPreview(controller: camera)
             }
+            if camera.isInterrupted {
+                // ほかのアプリがカメラを使った・端末が熱い などで、カメラが一時的に止められている。
+                ZStack {
+                    Color.black.opacity(0.6)
+                    Text("カメラが一時的に止まっています")
+                        .rotashLabel(9, color: Palette.text, tracking: 0.5)
+                        .multilineTextAlignment(.center)
+                        .padding(8)
+                }
+            }
         case .denied:
             ZStack {
                 Palette.surfaceDeep
@@ -213,7 +228,7 @@ struct PortraitShootView: View {
                     .rotashLabel(9, color: Palette.live, tracking: 3)
                 HStack(spacing: 24) {
                     flipButton
-                    CameraShutter(camera: camera, diameter: 96, isBusy: isCapturing) { capture() }
+                    CameraShutter(camera: camera, diameter: 96, isBusy: isCapturing || !camera.canCapture) { capture() }
                     // FLIP と左右をそろえ、シャッターを真ん中に置く。
                     Color.clear.frame(width: 62, height: 1)
                 }
@@ -275,7 +290,8 @@ struct PortraitShootView: View {
 
     /// 表と裏を撮る。表は大きい画面側、裏はシャッター側（どちらが内カメかは FLIP しだい）。
     private func capture() {
-        guard !isCapturing, app.canShoot(dayIndex: day) else { return }
+        // カメラの準備中や、止められているあいだは撮らない（押しても写真が無いまま終わるため）。
+        guard !isCapturing, camera.canCapture, app.canShoot(dayIndex: day) else { return }
         isCapturing = true
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         let target = day
@@ -291,6 +307,9 @@ struct PortraitShootView: View {
                                          reverse: reverse, reverseFront: reverseFront)
                     self.retaking = false
                     self.showsReverseLarge = false
+                } else {
+                    // 黙って何も起きないと、撮れたと思ったまま終わってしまう。
+                    self.captureFailed = true
                 }
                 // 撮った時刻（attachPhoto の中で決まる）のあとで合わせる。先だと残りが一瞬 31 に見える。
                 self.now = Date()

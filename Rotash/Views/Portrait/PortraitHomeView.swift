@@ -132,6 +132,9 @@ struct PortraitHomeView: View {
                 Text("→ 横にして見る")
                     .rotashLabel(9, color: Palette.faint, tracking: 1.2)
 
+                membersRow(group)
+                    .padding(.top, 14)
+
                 // 担当日だけ。縦のまま撮ると、枠とカメラの向きがそろって広く写る。
                 if app.canShootTodayInPortrait {
                     Button { app.activeSheet = .shoot } label: {
@@ -149,6 +152,58 @@ struct PortraitHomeView: View {
         .padding(.horizontal, 24)
         .padding(.top, 22)
         .padding(.bottom, 30)
+    }
+
+    /// メンバー。丸は、その人が最後に撮った裏の写真（たいてい本人の顔）。撮るたびに替わる。
+    /// まだ撮っていない人は頭文字。最後に招待の丸を置く。
+    private func membersRow(_ group: RotashGroup) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("メンバー").rotashLabel(9, color: Palette.faint, tracking: 1.6)
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: 14) {
+                    ForEach(group.activeMembers) { member in
+                        VStack(spacing: 6) {
+                            memberIcon(member, in: group)
+                            Text(member.name.uppercased())
+                                .rotashLabel(8, color: member.id == group.myMemberID ? Palette.live : Palette.dim,
+                                             tracking: 0.6)
+                                .lineLimit(1)
+                                .frame(maxWidth: 56)
+                        }
+                    }
+                    InviteShareButton {
+                        VStack(spacing: 6) {
+                            Circle()
+                                .stroke(Palette.line, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                                .frame(width: 48, height: 48)
+                                .overlay(Text("+").rotashLabel(16, color: Palette.dim, tracking: 0))
+                            Text("招待する")
+                                .rotashLabel(8, color: Palette.faint, tracking: 0.6)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    @ViewBuilder
+    private func memberIcon(_ member: Member, in group: RotashGroup) -> some View {
+        Group {
+            if let slot = group.latestReverseSlot(of: member.id) {
+                PhotoImageView(reverseOf: slot, maxPixel: 120)
+            } else {
+                ZStack {
+                    Palette.surface
+                    Text(String(member.name.prefix(1)).uppercased())
+                        .rotashLabel(15, color: Palette.text, tracking: 0)
+                }
+            }
+        }
+        .frame(width: 48, height: 48)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: 1.5))
     }
 
     /// グループ名。押すと、掛け持ちしているグループの切り替えと、新しく作る・参加するが出る。

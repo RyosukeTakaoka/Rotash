@@ -262,6 +262,17 @@ struct RotashGroup: Identifiable, Codable {
     /// まだ抜けていないメンバー。当番を組むのはこの人たちだけ。
     var activeMembers: [Member] { members.filter(\.isActive) }
 
+    /// その人が最後に撮った、裏の写真のある枠。
+    ///
+    /// 裏（もう一方のカメラ）はたいてい撮った本人の顔なので、これをその人のアイコンにする。
+    /// 撮るたびに、その日の顔にアイコンが替わっていく（Rotash ならではの、メンバーの見え方）。
+    func latestReverseSlot(of memberID: UUID) -> Slot? {
+        ([currentWeek] + archive)
+            .flatMap(\.slots)
+            .filter { $0.takenByMemberID == memberID && $0.hasReverse }
+            .max { ($0.capturedAt ?? .distantPast) < ($1.capturedAt ?? .distantPast) }
+    }
+
     /// その日の担当者。週の開始時に決まったものを引くだけ。
     /// 未来の日を伏せるかどうかは表示側の責任なので、ここでは常に本当の担当者を返す。
     func member(forDay dayIndex: Int, in week: RotashWeek) -> Member? {

@@ -7,7 +7,6 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var confirmDelete = false
-    @State private var copied = false
     @State private var showImporter = false
     @State private var batonPayload: SharePayload?
 
@@ -36,7 +35,6 @@ struct SettingsView: View {
                             .font(Typo.title(18))
                             .tracking(1.5)
                             .foregroundStyle(Palette.text)
-                        members(group)
                         HairLine()
                         // 同期が使えるときはそちらが主。使えないときだけバトンを出す。
                         if app.isSyncEnabled {
@@ -145,52 +143,6 @@ struct SettingsView: View {
             batonPayload = SharePayload(items: [url])
         } catch {
             app.alertMessage = error.localizedDescription
-        }
-    }
-
-    private func members(_ group: RotashGroup) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("メンバー（この順に当番がまわります）")
-                .rotashLabel(9, color: Palette.faint, tracking: 1)
-
-            // 抜けた人は当番に入らないので、ここには出さない（過去の作品には名前が残る）。
-            ForEach(Array(group.activeMembers.enumerated()), id: \.element.id) { index, member in
-                HStack(spacing: 12) {
-                    Text(String(format: "%02d", index + 1)).rotashLabel(10, color: Palette.faint)
-                    Text(member.name).rotashLabel(12, color: Palette.text, tracking: 0.6)
-                    if member.id == group.myMemberID {
-                        Text("YOU").rotashLabel(8, color: Palette.live, tracking: 1.4)
-                    }
-                    Spacer()
-                }
-            }
-
-            // メンバーは、招待コードで本人が参加して増える（名前だけの人をここで足すことはしない。
-            // 足しても撮る端末が無いので、その人の当番の日はいつも写真のない日になってしまう）。
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 14) {
-                    InviteShareButton {
-                        Text("＋ 招待する")
-                            .rotashLabel(11, color: Palette.live, tracking: 1)
-                            .frame(minHeight: 36)
-                            .contentShape(Rectangle())
-                    }
-                    Text(group.inviteCode)
-                        .font(Typo.label(13, weight: .semibold))
-                        .tracking(3)
-                        .foregroundStyle(Palette.text)
-                    Button(copied ? "コピーしました" : "コードをコピー") {
-                        UIPasteboard.general.string = group.inviteCode
-                        copied = true
-                    }
-                    .font(Typo.label(9))
-                    .foregroundStyle(Palette.faint)
-                }
-                Text("招待コードを入れた人が、そのままメンバーに加わります。まだ来ていない日があれば、今週の当番にも入ります。")
-                    .rotashLabel(9, color: Palette.faint, tracking: 0.4)
-                    .lineSpacing(3)
-            }
-            HairLine()
         }
     }
 }

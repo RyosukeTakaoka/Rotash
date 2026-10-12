@@ -302,7 +302,7 @@ enum WorkExporter {
                          size: layout.dayLabel, color: dayColor, tracking: 3.4)
             if let name {
                 drawCentered(name, in: rect, atTop: dayTop + layout.dayLabel * 1.25 + 7,
-                             size: layout.nameLabel, color: .rotashFaint, tracking: 1.8)
+                             size: layout.nameLabel, color: UIColor.rotashText.withAlphaComponent(0.85), tracking: 1.8)
             }
 
         case .story:
@@ -334,7 +334,7 @@ enum WorkExporter {
             start = CGPoint(x: band.minX, y: band.minY)
             end = CGPoint(x: band.minX, y: band.maxY)
         }
-        let colors = [UIColor(white: 0, alpha: 0).cgColor, UIColor(white: 0, alpha: 0.62).cgColor]
+        let colors = [UIColor(white: 0, alpha: 0).cgColor, UIColor(white: 0, alpha: 0.72).cgColor]
         guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
                                         colors: colors as CFArray,
                                         locations: [0, 1]) else { return }

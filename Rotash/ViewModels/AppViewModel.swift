@@ -743,6 +743,8 @@ final class AppViewModel: ObservableObject {
 
             persist()
         } catch {
+            // 取り消された（画面を閉じた・引っぱり更新が終わった など）だけなら失敗ではないので、何も出さない。
+            if Self.isCancellation(error) { return }
             syncNoteByGroup[groupID] = error.localizedDescription
             if showingError, groupID == currentGroupID { alertMessage = error.localizedDescription }
         }
@@ -772,6 +774,12 @@ final class AppViewModel: ObservableObject {
     }
 
     // MARK: -
+
+    private static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        return (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == NSURLErrorCancelled
+    }
 
     /// まだ伝えられていない「抜けた」知らせを送る。サーバーに載っているのを確かめられたものだけ消し、
     /// 残りは次の同期でもう一度。2週間たっても確かめられないものは諦める（そのグループはもう使われていない）。

@@ -27,7 +27,9 @@ struct PortraitHomeView: View {
                 .padding(.bottom, 40)
             }
             .scrollIndicators(.hidden)
-            .refreshable { await app.sync(showingError: true) }
+            // 引っぱって更新する処理は、画面が描き直されると途中で取り消される（「キャンセルしました」になる）。
+            // 同期そのものは別の仕事として走らせ、ここではその終わりを待つだけにする。
+            .refreshable { await Task { await app.sync(showingError: true) }.value }
             .background(Palette.background)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: RotashWeek.self) { week in

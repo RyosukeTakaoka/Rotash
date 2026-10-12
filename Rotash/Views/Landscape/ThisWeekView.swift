@@ -299,9 +299,9 @@ struct ThisWeekView: View {
 
             // 曜日と名前は枠の上、裏の丸は枠の下に置き、真ん中（写真の主役が来るところ）を空けておく。
             // 共有画像（WorkExporter）も同じ並びにしてある。
-            LinearGradient(colors: [.black.opacity(0.55), .clear],
+            LinearGradient(colors: [.black.opacity(0.7), .black.opacity(0.35), .clear],
                            startPoint: .top,
-                           endPoint: UnitPoint(x: 0.5, y: 0.3))
+                           endPoint: UnitPoint(x: 0.5, y: 0.34))
                 .allowsHitTesting(false)
 
             VStack(spacing: 0) {
@@ -311,8 +311,10 @@ struct ThisWeekView: View {
                                      color: slot.isFilled ? Palette.text : (isActive ? Palette.text : Palette.dim),
                                      tracking: 1.4)
                     if let assignee {
+                        // 写真の上でも読めるよう、灰色ではなく白に近い色にして、うすい影をつける。
                         Text(assignee.name.uppercased())
-                            .rotashLabel(8, color: isActive ? Palette.live : Palette.faint, tracking: 0.8)
+                            .rotashLabel(9, color: isActive ? Palette.live : Palette.text.opacity(0.85), tracking: 0.8)
+                            .shadow(color: .black.opacity(0.6), radius: 2)
                             .lineLimit(1)
                             .minimumScaleFactor(0.6)
                     }

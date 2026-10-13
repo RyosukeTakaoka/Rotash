@@ -44,6 +44,8 @@ struct CreateRotashView: View {
                 Text("つくると招待コードが出ます。\nそのコードを渡した人が参加すると、自動でメンバーに加わります。")
                     .rotashLabel(10, color: Palette.dim, tracking: 0.4)
                     .lineSpacing(5)
+                Text("2人からはじめられます。7人そろわなくても大丈夫です。")
+                    .rotashLabel(10, color: Palette.faint, tracking: 0.4)
 
                 Button("つくる") {
                     // 二度押しで2つ作らないように、作ったあとは押せない（下の disabled）。

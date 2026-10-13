@@ -123,7 +123,7 @@ struct InviteShareButton<Label: View>: View {
             AnalyticsService.inviteShareTapped()
             // 招待コードは文章の中に入れる。リンクが押せない相手（アプリ未導入・
             // 独自スキームを繋がない LINE など）でも、これなら手で入力して入れる。
-            var items: [Any] = [String(localized: "Rotash で一緒に写真を撮ろう。\n招待コード \(group.inviteCode)")]
+            var items: [Any] = [String(localized: "Rotash で一緒に写真を撮ろう。1日1人ずつ撮って、1週間で1枚の作品にするアプリです（2人からOK）。\n招待コード \(group.inviteCode)")]
             if let image = WorkExporter.shareCardURL(for: group.currentWeek, in: group) {
                 items.append(image)
             }

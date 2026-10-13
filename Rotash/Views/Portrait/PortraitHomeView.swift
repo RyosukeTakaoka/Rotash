@@ -131,12 +131,6 @@ struct PortraitHomeView: View {
                 }
                 Text("→ 横にして見る")
                     .rotashLabel(9, color: Palette.faint, tracking: 1.2)
-                // 自分の番がいつ来るかは前もって見せない（その日まで誰の番か分からないのが Rotash）。
-                // そのかわり、来たら知らせることだけは伝えておく（途中から入った人が「どう撮るの？」と迷ったため）。
-                if !group.currentWeek.isFinished, !app.isMyDay(app.todayIndex) {
-                    Text("あなたの番の日は、朝8時に通知が届きます。")
-                        .rotashLabel(9, color: Palette.faint, tracking: 0.4)
-                }
 
                 membersRow(group)
                     .padding(.top, 14)
@@ -412,10 +406,6 @@ struct PortraitHomeView: View {
             Text("撮るのは1日にひとりだけ。\n見るのはいつでも全員。")
                 .rotashLabel(11, color: Palette.dim, tracking: 0.4)
                 .lineSpacing(6)
-                .padding(.bottom, 6)
-            // テストで「7人集めないとあかんの？」と聞かれたので、はじめる前に言っておく。
-            Text("2人からはじめられます。7人そろわなくても大丈夫です。")
-                .rotashLabel(10, color: Palette.faint, tracking: 0.4)
                 .padding(.bottom, 26)
 
             Button("ROTASH をつくる") { app.activeSheet = .create }

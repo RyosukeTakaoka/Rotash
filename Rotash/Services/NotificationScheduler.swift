@@ -6,14 +6,7 @@ import UserNotifications
 /// 担当は週の開始時点で内部的に決まっているので、**その週の分をまとめて予約するだけ**で済む。
 /// サーバーも APNs も要らない。
 ///
-/// 送るのは3種類だけ（グループを掛け持ちしていても、同じ時刻のものは1通にまとめる）。
-///
-///   朝 8:00     「今日は MINA」／自分の番なら「今日はあなたの番です」 … 全員に
-///   夜 20:00    「まだ撮れます」          … **その日の担当の本人にだけ**、まだ撮っていないときだけ
-///   日曜 21:00  「今週の Rotash」        … 週に1度だけ
-///
-/// 夜の1通は、テストで「通知に気づかず撮り忘れた」という声があって足した。
-/// 担当でない人には届かず、撮ったら消える（撮ると予約を組み直すので）。催促を何度も重ねることはしない。
+/// 送るのは2種類だけで、上限は 1日2通（グループを掛け持ちしていても、朝の1通にまとめる）。
 ///
 ///   朝 8:00     「今日は MINA」          … 全員に。日次ループの起点
 ///   日曜 21:00  「今週の Rotash」        … 週に1度だけ。作品が決着する日
@@ -28,8 +21,6 @@ enum NotificationScheduler {
 
     private static let prefix = "rotash.day."
     private static let weekEndPrefix = "rotash.weekend."
-    private static let reminderPrefix = "rotash.remind."
-    private static let reminderHour = 20
 
     /// 朝の通知を出す時刻。
     ///
@@ -74,7 +65,7 @@ enum NotificationScheduler {
         let center = UNUserNotificationCenter.current()
         center.getPendingNotificationRequests { pending in
             let ours = pending.map(\.identifier).filter {
-                $0.hasPrefix(prefix) || $0.hasPrefix(weekEndPrefix) || $0.hasPrefix(reminderPrefix)
+                $0.hasPrefix(prefix) || $0.hasPrefix(weekEndPrefix)
             }
             center.removePendingNotificationRequests(withIdentifiers: ours)
             for request in next {
@@ -87,27 +78,17 @@ enum NotificationScheduler {
     static func combinedRequests(for groups: [RotashGroup], now: Date = Date()) -> [UNNotificationRequest] {
         let calendar = Calendar.rotash
         var mornings: [Date: [String]] = [:]
-        var reminders: [Date: [String]] = [:]
         var weekEnds = Set<Date>()
 
         for group in groups {
             let week = group.currentWeek
             for slot in week.slots.sorted(by: { $0.dayIndex < $1.dayIndex }) {
-                guard let name = group.member(forDay: slot.dayIndex, in: week)?.name else { continue }
-                let mine = group.isMyDay(slot.dayIndex, in: week)
-                if let date = fireDate(dayIndex: slot.dayIndex, weekStart: week.startDate,
-                                       hour: morningHour, calendar: calendar),
-                   date > now {
-                    mornings[date, default: []].append(mine
-                        ? String(localized: "\(group.name): あなたの番です")
-                        : "\(group.name): \(name.uppercased())")
-                }
-                if mine, !slot.isFilled,
-                   let evening = fireDate(dayIndex: slot.dayIndex, weekStart: week.startDate,
-                                          hour: reminderHour, calendar: calendar),
-                   evening > now {
-                    reminders[evening, default: []].append(group.name)
-                }
+                guard let name = group.member(forDay: slot.dayIndex, in: week)?.name,
+                      let date = fireDate(dayIndex: slot.dayIndex, weekStart: week.startDate,
+                                          hour: morningHour, calendar: calendar),
+                      date > now
+                else { continue }
+                mornings[date, default: []].append("\(group.name): \(name.uppercased())")
             }
             if let date = fireDate(dayIndex: 6, weekStart: week.startDate, hour: weekEndHour, calendar: calendar),
                date > now {
@@ -122,14 +103,6 @@ enum NotificationScheduler {
             content.body = lines.joined(separator: "\n")
             content.sound = .default
             result.append(request(id: "\(prefix)\(stamp(date))",
-                                  date: date, content: content, calendar: calendar))
-        }
-        for (date, names) in reminders.sorted(by: { $0.key < $1.key }) {
-            let content = UNMutableNotificationContent()
-            content.title = "TODAY"
-            content.body = String(localized: "まだ撮れます。今日はあなたの番です（\(names.joined(separator: " / "))）")
-            content.sound = .default
-            result.append(request(id: "\(reminderPrefix)\(stamp(date))",
                                   date: date, content: content, calendar: calendar))
         }
         for date in weekEnds.sorted() {
@@ -150,34 +123,23 @@ enum NotificationScheduler {
         var result: [UNNotificationRequest] = []
 
         for slot in week.slots.sorted(by: { $0.dayIndex < $1.dayIndex }) {
-            guard let name = group.member(forDay: slot.dayIndex, in: week)?.name else { continue }
-            let mine = group.isMyDay(slot.dayIndex, in: week)
+            guard let name = group.member(forDay: slot.dayIndex, in: week)?.name,
+                  let date = fireDate(dayIndex: slot.dayIndex,
+                                      weekStart: week.startDate,
+                                      hour: morningHour,
+                                      calendar: calendar),
+                  date > now
+            else { continue }
 
-            // 朝の1通（もう8時を過ぎた日は出さない。夜の1通はそれとは別に考える）。
-            if let date = fireDate(dayIndex: slot.dayIndex, weekStart: week.startDate,
-                                   hour: morningHour, calendar: calendar),
-               date > now {
-                let content = UNMutableNotificationContent()
-                content.title = "TODAY"
-                content.body = mine ? String(localized: "今日はあなたの番です") : String(localized: "今日は \(name.uppercased())")
-                content.sound = .default
-                result.append(request(id: "\(prefix)\(group.id.uuidString)-\(stamp(week.startDate))-\(slot.dayIndex)",
-                                      date: date,
-                                      content: content,
-                                      calendar: calendar))
-            }
-            // 自分の番で、まだ撮っていなければ、夜にもう一度だけ。
-            if mine, !slot.isFilled,
-               let evening = fireDate(dayIndex: slot.dayIndex, weekStart: week.startDate,
-                                      hour: reminderHour, calendar: calendar),
-               evening > now {
-                let reminder = UNMutableNotificationContent()
-                reminder.title = "TODAY"
-                reminder.body = String(localized: "まだ撮れます。今日はあなたの番です")
-                reminder.sound = .default
-                result.append(request(id: "\(reminderPrefix)\(group.id.uuidString)-\(stamp(week.startDate))-\(slot.dayIndex)",
-                                      date: evening, content: reminder, calendar: calendar))
-            }
+            let content = UNMutableNotificationContent()
+            content.title = "TODAY"
+            content.body = String(localized: "今日は \(name.uppercased())")
+            content.sound = .default
+
+            result.append(request(id: "\(prefix)\(group.id.uuidString)-\(stamp(week.startDate))-\(slot.dayIndex)",
+                                  date: date,
+                                  content: content,
+                                  calendar: calendar))
         }
 
         // 日曜の夜。7枚そろっていても、撮れなかった日があっても、その週は決着している。

@@ -54,6 +54,10 @@ App Store 公開版ではなく、実際に友人と使って体験価値を検�
 > [`docs/DEFENSIBILITY.md`](docs/DEFENSIBILITY.md)。5つの防御層と、
 > 20グループ実験を「市場発見」に組み替える提案を扱う。
 >
+> ChatGPT / Gemini（Deep Research）の成長レポートを、事実確認と既存資料の NEVER に照らして
+> 1つずつ判定した結果は [`docs/EXTERNAL_REVIEW_2026-10.md`](docs/EXTERNAL_REVIEW_2026-10.md)。
+> 競合（Retro・Setlog）の更新、App Store 公開前の必須対応、既存資料の古くなった箇所の一覧もここにある。
+>
 > Firebase Analyticsを導入した（無料）。イベント名の一覧とFirebaseコンソール側の
 > セットアップ手順は [`docs/ANALYTICS_SETUP.md`](docs/ANALYTICS_SETUP.md)。
 

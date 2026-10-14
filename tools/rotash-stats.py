@@ -6,6 +6,8 @@
   python3 tools/rotash-stats.py            # 集計を表示
   python3 tools/rotash-stats.py --csv out  # out-groups.csv / out-weeks.csv も書き出す
   python3 tools/rotash-stats.py --from-file docs.json   # Firestore の代わりに手元の JSON を読む
+  python3 tools/rotash-stats.py --codes ABC123,DEF456   # 招待コードを指定して1つずつ読む
+                                                        # （ルールで一覧の読み取りが止められているとき）
 
 接続情報は環境変数 ROTASH_PROJECT_ID / ROTASH_API_KEY / ROTASH_COLLECTION、
 未設定なら Rotash/Services/Sync/SyncConfig.swift から読む
@@ -36,6 +38,7 @@ import os
 import re
 import sys
 import urllib.parse
+import urllib.error
 import urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -122,8 +125,11 @@ def fetch_documents(project: str, key: str, collection: str) -> list[dict]:
         query = {"pageSize": "300", "key": key}
         if token:
             query["pageToken"] = token
-        with urllib.request.urlopen(f"{base}?{urllib.parse.urlencode(query)}") as response:
-            page = json.load(response)
+        try:
+            with urllib.request.urlopen(f"{base}?{urllib.parse.urlencode(query)}") as response:
+                page = json.load(response)
+        except urllib.error.HTTPError as error:
+            explain_http_error(error)
 
         groups.extend(parse_documents(page))
 
@@ -132,6 +138,60 @@ def fetch_documents(project: str, key: str, collection: str) -> list[dict]:
             break
 
     return groups
+
+
+def fetch_by_codes(project: str, key: str, collection: str, codes: list[str]) -> list[dict]:
+    """招待コード（＝ドキュメント ID）を指定して1つずつ読む。
+
+    セキュリティルールで一覧（list）が止められていても、アプリと同じ1件ずつの読み取り（get）なら通る。
+    """
+    groups: list[dict] = []
+    for code in codes:
+        url = (
+            f"https://firestore.googleapis.com/v1/projects/{project}"
+            f"/databases/(default)/documents/{collection}/{urllib.parse.quote(code)}"
+            f"?{urllib.parse.urlencode({'key': key})}"
+        )
+        try:
+            with urllib.request.urlopen(url) as response:
+                document = json.load(response)
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                print(f"  {code}: 見つかりません（招待コードを確かめてください）", file=sys.stderr)
+                continue
+            explain_http_error(error)
+        groups.extend(parse_documents({"documents": [document]}))
+    return groups
+
+
+def explain_http_error(error: "urllib.error.HTTPError") -> None:
+    """Firestore が断ってきた理由を、そのまま見せて終わる。
+
+    403 だけでは「ルールで断られた」のか「API キーの制限で断られた」のか分からないので、
+    返ってきた本文の message を出し、よくある原因に当てはめる。
+    """
+    try:
+        body = json.loads(error.read().decode("utf-8"))
+        message = body.get("error", {}).get("message", "")
+        status = body.get("error", {}).get("status", "")
+    except (ValueError, OSError):
+        message, status = "", ""
+
+    lines = [f"Firestore に断られました（HTTP {error.code} {status}）。", f"  理由: {message or '（本文なし）'}"]
+    if "permission" in message.lower() or status == "PERMISSION_DENIED":
+        lines += [
+            "  → Firestore のセキュリティルールで、一覧の読み取り（list）が止められています。",
+            "    アプリはグループを1つずつ（招待コードで）読むので動きますが、",
+            "    このスクリプトは全部を一覧で読むので断られます。",
+            "    招待コードを渡せば、アプリと同じ1つずつの読み方で集計できます:",
+            "      python3 tools/rotash-stats.py --codes ABC123,DEF456",
+        ]
+    elif "api key" in message.lower() or "blocked" in message.lower() or "referer" in message.lower():
+        lines += [
+            "  → API キーに制限（iOS アプリのみ など）がかかっています。",
+            "    Google Cloud コンソール → API とサービス → 認証情報 で、このキーの制限を確認してください。",
+        ]
+    sys.exit("\n".join(lines))
 
 
 # ── 集計 ────────────────────────────────────────────────────────────────
@@ -376,6 +436,8 @@ def main() -> None:
     parser.add_argument("--csv", metavar="PREFIX", help="CSV も書き出す")
     parser.add_argument("--from-file", metavar="PATH",
                         help="Firestore の代わりに手元の JSON を読む（REST の一覧レスポンス、またはグループ状態の配列）")
+    parser.add_argument("--codes", metavar="CODE,CODE",
+                        help="招待コードを指定して1つずつ読む（ルールで一覧の読み取りが止められているとき）")
     parser.add_argument("--now", metavar="ISO8601",
                         help="「今日」を指定する（検証用。省略時は現在時刻）")
     args = parser.parse_args()
@@ -390,7 +452,11 @@ def main() -> None:
     else:
         project, key, collection = config()
         print(f"取得中: {project}/{collection} …")
-        groups = fetch_documents(project, key, collection)
+        if args.codes:
+            codes = [code.strip().upper().replace("-", "").replace(" ", "") for code in args.codes.split(",") if code.strip()]
+            groups = fetch_by_codes(project, key, collection, codes)
+        else:
+            groups = fetch_documents(project, key, collection)
     report(groups, now)
     if args.csv:
         write_csv(groups, args.csv, now)

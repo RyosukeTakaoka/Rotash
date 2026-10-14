@@ -188,9 +188,12 @@ App Store Connectでアプリ情報を登録する際、データを収集する
 
 ### 注意
 
-- **`GoogleService-Info.plist` の `IS_ANALYTICS_ENABLED` が `false`**。plist をダウンロードした時点で、
-  Firebase プロジェクトに Google Analytics がつながっていなかった可能性がある。
-  コンソールの Analytics を開いて「Google Analytics を有効にする」が出るなら、有効にしてから plist を入れ直す
+- `GoogleService-Info.plist` の `IS_ANALYTICS_ENABLED` は `false` だが、**イベントは実際に記録されている**
+  （2026-10-13 にオーナーが書き出したレポートで確認）。今の SDK はこの値を見ていないので気にしなくてよい
+- **開発者自身の操作も数に入る。** テスト期間の数字は、オーナーの端末の分を差し引いて読む
+- 国が US と出る利用者がいる。iCloud プライベートリレーや TestFlight の審査端末の可能性があり、実在の米国ユーザーとは限らない
+- `tools/rotash-stats.py` は、Firestore のルールで一覧の読み取りが止められているため、
+  そのままだと 403 になる。`--codes ABC123,DEF456` のように招待コードを渡して1つずつ読む
 - イベントの数は登録なしで見られる。**パラメータ（`is_complete` など）で分けて見るには**、
   Analytics → カスタム定義 で、パラメータ名をカスタムディメンションとして登録する（登録した日以降の分だけ集計される）
 - ③は「共有シートで送信まで完了した」までしか分からない。Instagram に出したかどうかは、今は区別できない

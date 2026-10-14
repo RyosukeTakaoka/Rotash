@@ -170,3 +170,28 @@ App Store Connectでアプリ情報を登録する際、データを収集する
 - 配布段階が近づいたら、§5-2の申告内容をGoogle公式ページで再確認し、
   `PrivacyInfo.xcprivacy`の`NSPrivacyCollectedDataTypes`（現在は空のまま）も
   合わせて埋める
+
+---
+
+## 7. 見方 — オーナーの3つの指標と、どこを見ればいいか（2026-10-14 追記）
+
+オーナーが置いた戦略の指標は3つ。
+
+| 指標 | 見る場所 | 使うイベント・数字 |
+|---|---|---|
+| ① 1人がどれくらい招待するか（何グループ作るか・何人誘うか） | Firebase コンソール → Analytics → イベント | `group_created`・`invite_share_tapped` を「ユーザーあたり」で。実際に入った人は `group_joined` |
+| ② グループの稼働率（作品が完成するか・翌週も続くか） | `tools/rotash-stats.py` | 完成率・週次継続率（Firestore の実データから出す。Analytics より確実） |
+| ③ ストーリーなどにあげる割合 | Firebase コンソール → Analytics → イベント | `work_share_completed`（`is_complete` が true）÷ `week_completed` |
+
+結果としての数字は `GROWTH_STRATEGY.md` K の **WCG（その週に作品が完成したグループ数）**。
+①〜③はそれを増やすための3つのレバーで、`WCG(t+1) = WCG(t) × (R + K) + S` の S・R・K にほぼ対応する。
+
+### 注意
+
+- **`GoogleService-Info.plist` の `IS_ANALYTICS_ENABLED` が `false`**。plist をダウンロードした時点で、
+  Firebase プロジェクトに Google Analytics がつながっていなかった可能性がある。
+  コンソールの Analytics を開いて「Google Analytics を有効にする」が出るなら、有効にしてから plist を入れ直す
+- イベントの数は登録なしで見られる。**パラメータ（`is_complete` など）で分けて見るには**、
+  Analytics → カスタム定義 で、パラメータ名をカスタムディメンションとして登録する（登録した日以降の分だけ集計される）
+- ③は「共有シートで送信まで完了した」までしか分からない。Instagram に出したかどうかは、今は区別できない
+- レポートへの反映は最大24時間後。すぐ確かめたいときは 4章の DebugView

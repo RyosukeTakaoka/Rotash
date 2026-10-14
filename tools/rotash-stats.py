@@ -237,8 +237,9 @@ def _week_row(group: dict, week: dict | None, start: dt.datetime, index: int, no
         # 「今週」かどうかは時計で決める。currentWeek は誰かがアプリを開くまで週送りされないので、
         # 放置されたグループでは currentWeek がとっくに終わった週のまま残っている。
         "current": start + WEEK > now,
+        # 撮った時刻は Firestore では UTC。通知の時刻を決める材料なので、この端末の時刻（日本なら JST）に直す。
         "shot_hours": [
-            t.hour
+            t.astimezone().hour
             for t in (parse_time(s.get("capturedAt")) for s in filled)
             if t is not None
         ],
@@ -361,7 +362,7 @@ def report(groups: list[dict], now: dt.datetime) -> None:
 
     # ── 撮影時刻 ──
     hours = [h for w in weeks for h in w["shot_hours"]]
-    print("■ 撮影された時刻  ← 通知を何時に出すべきか")
+    print("■ 撮影された時刻（この端末の時刻）  ← 通知を何時に出すべきか")
     if hours:
         by_hour = collections.Counter(hours)
         peak = max(by_hour, key=lambda h: by_hour[h])
@@ -369,7 +370,7 @@ def report(groups: list[dict], now: dt.datetime) -> None:
             n = by_hour.get(h, 0)
             if n:
                 print(f"   {h:02d}時 {n:>4}  {bar(n, len(hours))}")
-        print(f"\n   最も多い時刻: {peak:02d}時台（{len(hours)} 枚）\n")
+        print(f"\n   最も多い時刻: {peak:02d}時台（{by_hour[peak]} / {len(hours)} 枚）\n")
     else:
         print("   撮影された写真がまだありません。\n")
 

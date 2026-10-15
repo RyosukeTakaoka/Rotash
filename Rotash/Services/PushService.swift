@@ -8,11 +8,11 @@ import UserNotifications
 /// 一方「今日の1枚が撮られた」は、撮った人の端末で起きたことなので、ほかの人の端末へはサーバーから送るしかない。
 ///
 ///   1. この端末の宛先（FCM トークン）を Firestore の `devices/{uid}` に置く（本人だけが書ける）
-///   2. 誰かが撮ってグループの状態が書き換わると、Cloud Functions（functions/index.js）が
-///      新しく埋まった枠を見つけ、撮った人以外のメンバーの宛先へ「◯◯が撮った」を送る
+///   2. 誰かが今日の1枚を撮ると、その人の端末が送り役（Google Apps Script、`tools/push-relay.gs`）に知らせ（`PushRelay`）、
+///      送り役が撮った人以外のメンバーの宛先へ「◯◯が撮った」を送る
 ///
-/// 1日に届くのは、朝の1通とこの1通まで（`GROWTH_STRATEGY.md` F-3）。撮った本人には送らない。
-/// サーバー側（Cloud Functions と APNs の鍵）を用意するまでは、宛先を置くだけで何も届かない。
+/// 撮った本人には送らない。1つの枠につき1回だけ。
+/// 送り役（Apps Script と APNs の鍵）を用意するまでは、宛先を置くだけで何も届かない（docs/PUSH_RELAY_SETUP.md）。
 @MainActor
 final class PushService: NSObject, MessagingDelegate {
 

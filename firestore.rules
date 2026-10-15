@@ -42,7 +42,8 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
-    // 押し出し通知の宛先（端末ごとの FCM トークン）。本人が自分の分だけ書ける。読むのは Cloud Functions だけ。
+    // 押し出し通知の宛先（端末ごとの FCM トークン）。本人が自分の分だけ書ける。
+    // 読むのは送り役（tools/push-relay.gs。サービスアカウントで読むので、このルールの外）だけ。
     match /devices/{uid} {
       allow create, update, delete: if request.auth != null && request.auth.uid == uid;
       allow read: if false;

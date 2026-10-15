@@ -11,7 +11,7 @@
 | 1 | 匿名ログインを有効にする | ログインせずに今までどおり読み書きする。入れ直したときに「前の自分」に戻れない | 高 |
 | 2 | セキュリティルールを反映 | 今コンソールに入っているルールのまま | 高 |
 | 3 | App Store に公開したとき | **何もしなくてよい**（招待に App Store のリンクが自動で付く） | — |
-| 4 | 「◯◯が撮った」の押し出し通知 | **保留**（従量課金の Blaze は使わない。無料の方法を選んでいるところ） | — |
+| 4 | 「◯◯が撮った」の押し出し通知（Apps Script の送り役。無料） | 届かない（ほかは動く） | 中 |
 | 5 | 古いアプリを締め出す | 古い版も読み書きできるまま | 全員が新しい版にしてから |
 | 6 | 連絡先メール | **済み**（ryotaka057@gmail.com） | — |
 | 7 | App Store Connect の申告 | 審査に出せない | 公開前 |
@@ -74,18 +74,22 @@ firebase deploy --only firestore:rules
 
 URL を書き換えてアプリを出し直す必要はない。公開した日のうちに、招待する側がアプリを開けば次の招待から付く。
 
-## 4. 「◯◯が撮った」の押し出し通知（保留）
+## 4. 「◯◯が撮った」の押し出し通知
 
-今日の担当が撮ったら、ほかのメンバーに「◯◯が今日の1枚を撮りました」を届ける仕組み。
-Firebase の Cloud Functions（`functions/`）で作ったが、**Cloud Functions は従量課金（Blaze）でないと動かせない**ので使わない（2026-10-15、オーナー判断）。
-無料の代わりの方法を選んでいるところ（[`PENDING_DECISIONS.md`](PENDING_DECISIONS.md)）。決まるまで、この通知は届かない（ほかは全部動く）。
-
-どの方法でも共通して要る準備（無料）:
+今日の担当が撮ったら、ほかのメンバーに「◯◯が今日の1枚を撮りました」を届ける。
+送り役は **Google Apps Script**（無料）。Cloud Functions は従量課金（Blaze）でないと動かせないのでやめた（2026-10-15）。
 
 1. **APNs キーを作る**: [Apple Developer](https://developer.apple.com/account/resources/authkeys/list) → Keys → ＋ →
    「Apple Push Notifications service (APNs)」にチェック → 作成 → `.p8` ファイルをダウンロード（**1回しかダウンロードできない**ので大事に保管）。Key ID を控える。
 2. Firebase コンソール → ⚙ プロジェクトの設定 → **Cloud Messaging** → Apple アプリの構成 → **APNs 認証キー** をアップロード
    （Key ID と、チーム ID `5B2NQ74986` を入れる）。Cloud Messaging そのものは無料プラン（Spark）で使える。
+3. Xcode → Signing & Capabilities に **Push Notifications** が出ていることを確かめる（`Supporting/Rotash.entitlements` に書いてある）。
+   `aps-environment` は `development` だが、TestFlight / App Store 用に書き出すときは Xcode が自動で本番用に直す。
+4. 送り役を置く: **[`PUSH_RELAY_SETUP.md`](PUSH_RELAY_SETUP.md)** の手順どおり（20分ほど）。
+
+- 撮った本人には届かない。1つの枠につき1回だけ。
+- 「見えなくする」はこの端末だけの設定なので、見えなくした人が撮ったときも通知は届く（写真は見えない）。
+- 担当を入った人に渡した日（入った日の番）は、もとの担当の端末に、同期するまで夜21時の「あなたの番」が残ることがある。
 
 ## 5. 古いアプリを締め出す（全員が新しい版にしてから）
 

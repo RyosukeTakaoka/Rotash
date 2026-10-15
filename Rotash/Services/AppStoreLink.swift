@@ -42,8 +42,8 @@ enum AppStoreLink {
         components?.queryItems = [URLQueryItem(name: "bundleId", value: bundleID),
                                   URLQueryItem(name: "country", value: region)]
         guard let requestURL = components?.url,
-              let (data, _) = try? await URLSession.shared.data(from: requestURL),
-              let response = try? JSONDecoder().decode(Response.self, from: data),
+              let reply = try? await URLSession.shared.data(from: requestURL),
+              let response = try? JSONDecoder().decode(Response.self, from: reply.0),
               let first = response.results.first,
               var found = URLComponents(string: first.trackViewUrl)
         else { return nil }

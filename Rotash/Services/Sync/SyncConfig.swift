@@ -71,6 +71,13 @@ enum SyncConfig {
         return components?.url
     }
 
+    // MARK: - 「◯◯が撮った」の送り役
+
+    /// `tools/push-relay.gs` を Apps Script のウェブアプリとして公開した URL（`https://script.google.com/macros/s/…/exec`）。
+    /// 空のあいだは「◯◯が撮った」を送らない（ほかは全部動く）。手順は docs/PUSH_RELAY_SETUP.md。
+    /// この URL は知られても困らない（送り役が、本当にその人が撮ったかを確かめてから送るので）。
+    static let pushRelayURL = ""
+
     // MARK: - 問い合わせ先
 
     /// 報告・問い合わせを受ける連絡先（App Store ガイドライン 1.2 で、公開した連絡先が必要）。

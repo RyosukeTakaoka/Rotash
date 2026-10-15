@@ -824,6 +824,10 @@ final class AppViewModel: ObservableObject {
             if applyAudit(groupID: result.id) { syncAgainWhenFinished = true }
 
             persist()
+
+            // 今日の1枚を撮って上げ終えたなら、ほかのメンバーへ「撮った」を送ってもらう（1枠に1回だけ）。
+            let synced = result
+            Task { await PushRelay.notifyIfNeeded(for: synced) }
         } catch SyncError.groupFull {
             // 入ろうとしたグループが、もう定員（7人）だった。手元に作った仮のグループは消して、そう伝える。
             // 自分がまだサーバーに載っていないときだけ起きるので、すでに入っているグループが消えることはない。

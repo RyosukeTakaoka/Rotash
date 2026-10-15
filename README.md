@@ -279,7 +279,7 @@ Firebase の Swift Package（12.18.0）から、使う4つだけをリンクし�
 | `FirebaseAuth` | 匿名ログイン（`AuthService`）。ID トークンを Firestore への REST の読み書きに添える。入れ直しても同じ uid なので「前の自分」に戻れる |
 | `FirebaseMessaging` | 「◯◯が撮った」の押し出し通知の宛先（`PushService`。端末のトークンを `devices/{uid}` に置く） |
 
-サーバー側は `firebase.json`（ルール・Functions）、`firestore.rules`、`functions/`（Cloud Functions。従量課金が要るので**今は使っていない**）にあります。
+サーバー側は `firebase.json`・`firestore.rules`（ルール）と、「◯◯が撮った」の送り役 `tools/push-relay.gs`（Google Apps Script。無料）です。
 コンソールでの有効化とデプロイの手順は [`docs/FIREBASE_SETUP.md`](docs/FIREBASE_SETUP.md)。
 
 同期そのものは、Firestore を REST API で叩いて **URLSession だけで実装**しています。
@@ -566,16 +566,15 @@ Rotash/
   Resources/    Localizable.xcstrings ほか   … 日本語・韓国語・英語、アイコン、プライバシーマニフェスト
 Supporting/     Info.plist・Rotash.entitlements（通知・Associated Domains）
 RotashTests/    自動テスト（⌘U）
-functions/      Cloud Functions（「◯◯が撮った」の押し出し通知。従量課金が要るので今は使っていない）
 firestore.rules Firestore のセキュリティルール
 docs/           戦略・診断・保留事項などの資料
-tools/          rotash-stats.py（Firestore の集計）/ feedback-form.gs（ふりかえりフォームの作成）
+tools/          rotash-stats.py（Firestore の集計）/ feedback-form.gs（ふりかえりフォームの作成）/ push-relay.gs（「◯◯が撮った」の送り役）
 project.yml     XcodeGen 用の写し（正は Rotash.xcodeproj）
 ```
 
 MVVM。日付計算・担当者決定・突き合わせは副作用のない純粋ロジックとして
 `Services/` に切り出してあります。自動テストは `RotashTests/`（Xcode で ⌘U）: 同期の突き合わせ・担当決め・入った日の番・
-招待リンクと貼り付け・夜の通知。押し出し通知の中身は `functions/` で `node --test`。
+招待リンクと貼り付け・夜の通知。「◯◯が撮った」の送り役は `node --test tools/push-relay.test.js`。
 
 ---
 
@@ -585,7 +584,8 @@ MVVM。日付計算・担当者決定・突き合わせは副作用のない純�
 担当は週の開始時点で内部的に決まっているので、その週の分をまとめて予約するだけで足ります。
 
 これとは別に、**「◯◯が今日の1枚を撮りました」の押し出し通知**を、撮った人以外のメンバーに1通だけ送る仕組みを作ってあります
-（`PushService`）。ただし送る側に Cloud Functions（従量課金）が要るため、**今は届きません**。無料の方法を検討中です（[`docs/PENDING_DECISIONS.md`](docs/PENDING_DECISIONS.md)）。
+（`PushService`・`PushRelay`）。送り役は Google Apps Script（`tools/push-relay.gs`。無料）で、置き方は [`docs/PUSH_RELAY_SETUP.md`](docs/PUSH_RELAY_SETUP.md)。
+置くまで（`SyncConfig.pushRelayURL` が空のあいだ）は届きません。
 
 送るのは3種類、どの端末にも **1日2通まで**。
 

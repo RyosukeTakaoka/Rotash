@@ -137,7 +137,7 @@
 | # | 項目 | 触る | 着手条件 |
 |---|---|---|---|
 | L1 | **撮影画角の分離**（撮影は広く / 表示は7分割のまま） | `Services/CameraController.swift`, `Views/Landscape/ThisWeekView.swift` | **Month 2 の目視分類で自撮り70%超だったら。**その場合は LATER ではなく**最優先に繰り上げる**（7分割は写真の横幅を82%捨てている） |
-| L2 | **「◯◯が撮った」プッシュ通知** | APNs 設定 + サーバー側 | N4（朝の通知）が効いていることが確認できてから。**プッシュ基盤が要るので重い。先に軽い N4 で大半を取る** **→ 2026-10-15 アプリ側と Cloud Functions（`functions/`）は作ったが、Cloud Functions は従量課金（Blaze）が要るので使わない。無料の送り方を検討中（[`PENDING_DECISIONS.md`](PENDING_DECISIONS.md)）** |
+| L2 | **「◯◯が撮った」プッシュ通知** | APNs 設定 + サーバー側 | N4（朝の通知）が効いていることが確認できてから。**プッシュ基盤が要るので重い。先に軽い N4 で大半を取る** **→ 2026-10-15 実装済み。送り役は Google Apps Script（`tools/push-relay.gs`。Cloud Functions は従量課金が要るのでやめた）。置き方は [`PUSH_RELAY_SETUP.md`](PUSH_RELAY_SETUP.md)** |
 | L3 | **当日限定・1回だけの撮り直し** | `App/FeatureFlags.swift` の `allowRetake` を日次1回制限つきで true | ユーザーから**明確な不満**が確認されたら。「便利だから」では入れない。**→ 実験中（実装済み）: 「写真が事故ったときに救えない」という声を受け、「撮った直後30秒だけ撮り直し自由」（`retakeWindowSeconds`）で検証している。`photo_retaken` の秒数分布を見て、撮り比べに使われていたら短くするか 0 に戻す** |
 | L4 | 担当者本人への夜リマインド（**当日1回のみ**） | `Services/NotificationScheduler.swift` | No Shot が「忘れていた」で頻発していたら。**→ 2026-10-15 実装済み（21時。オーナー判断、#21）**。日曜は「今週の Rotash」と同じ時刻なので、まだ撮っていない担当の端末にはリマインドだけを出す |
 | L5 | 参加直後に既存の枠を見せる | `ViewModels/AppViewModel.swift`（`joinRotash` の同期完了まで空を出さない） | 参加直後の離脱が観測されたら。**→ 2026-10 の友達テストで条件を満たした**（途中参加者が「入れたけど進めない」）。#28 と同じ週に入れる（[`EXTERNAL_REVIEW_2026-10.md`](EXTERNAL_REVIEW_2026-10.md) 3-2） **→ 2026-10-15 実装済み**：今日の1枚がまだなら、今日入った人に今日の番を渡す（`AssignmentAudit.handOverToday`）。縦のホームには今日の1マス（`TodayCard`）を出す |

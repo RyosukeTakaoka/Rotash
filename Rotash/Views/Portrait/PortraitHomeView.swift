@@ -16,17 +16,22 @@ struct PortraitHomeView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    header
-
-                    if let group = app.group {
+                if let group = app.group {
+                    // ちょうど1画面。スクロールしなくても全部見える（引っぱって更新はできる）。
+                    // 余った高さは、今日の1マスが使う（機種ごとに画面の高さが違っても、はみ出さない）。
+                    VStack(alignment: .leading, spacing: 0) {
+                        header
                         groupBlock(group)
                         memoriesBlock(group)
-                    } else {
+                    }
+                    .containerRelativeFrame(.vertical)
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
+                        header
                         onboarding
                     }
+                    .padding(.bottom, 40)
                 }
-                .padding(.bottom, 40)
             }
             .scrollIndicators(.hidden)
             // 引っぱって更新する処理は、画面が描き直されると途中で取り消される（「キャンセルしました」になる）。
@@ -67,40 +72,42 @@ struct PortraitHomeView: View {
                     .tracking(1.6)
                     .foregroundStyle(Palette.faint)
             }
-            .padding(.top, 28)
-            .padding(.bottom, 22)
+            .padding(.top, 18)
+            .padding(.bottom, 16)
             HairLine()
         }
         .padding(.horizontal, 24)
     }
 
     private func groupBlock(_ group: RotashGroup) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             groupSwitcher(group)
 
-            // 招待で送るのは6桁のコードではなく、いまの作品そのもの。
-            // 受け取った側は、見ただけで何のアプリか分かる。
-            InviteShareButton {
-                HStack(spacing: 10) {
-                    Text("INVITE").rotashLabel(9, color: Palette.faint, tracking: 2)
-                    Text(group.inviteCode)
-                        .font(Typo.label(15, weight: .semibold))
-                        .tracking(4)
-                        .foregroundStyle(Palette.text)
-                    Text("SEND").rotashLabel(8, color: Palette.live, tracking: 1.6)
+            HStack(alignment: .firstTextBaseline) {
+                // 招待で送るのは6桁のコードではなく、いまの作品そのもの。
+                // 受け取った側は、見ただけで何のアプリか分かる。
+                InviteShareButton {
+                    HStack(spacing: 10) {
+                        Text("INVITE").rotashLabel(9, color: Palette.faint, tracking: 2)
+                        Text(group.inviteCode)
+                            .font(Typo.label(15, weight: .semibold))
+                            .tracking(4)
+                            .foregroundStyle(Palette.text)
+                        Text("SEND").rotashLabel(8, color: Palette.live, tracking: 1.6)
+                    }
                 }
+                Spacer(minLength: 8)
+                // 対面でそのまま伝えたいときのために、コピーも残しておく（1画面に収めるため、同じ行に）。
+                Button {
+                    UIPasteboard.general.string = group.inviteCode
+                    copied = true
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                } label: {
+                    Text(copied ? "コードをコピーしました" : "コードをコピー")
+                        .rotashLabel(9, color: Palette.faint, tracking: 0.8)
+                }
+                .buttonStyle(.plain)
             }
-
-            // 対面でそのまま伝えたいときのために、コピーも残しておく。
-            Button {
-                UIPasteboard.general.string = group.inviteCode
-                copied = true
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-            } label: {
-                Text(copied ? "コードをコピーしました" : "コードをコピー")
-                    .rotashLabel(9, color: Palette.faint, tracking: 0.8)
-            }
-            .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 6) {
                 if group.currentWeek.isFinished {
@@ -111,22 +118,22 @@ struct PortraitHomeView: View {
                 membersRow(group)
                     .padding(.top, 4)
 
-                // 今日の1マス（縦は「1日」、横は「1週間」）。真ん中に、画面の半分弱の高さで。
+                // 今日の1マス（縦は「1日」、横は「1週間」）。ほかを置いて余った高さを全部使う。
                 TodayCard(week: group.currentWeek,
                           hides: { app.isHidden($0) },
                           todayIndex: app.todayIndex,
                           assigneeName: app.revealedAssignee(forDay: app.todayIndex)?.name,
                           isMine: app.isMyDay(app.todayIndex))
                     .aspectRatio(TodayCard.aspect, contentMode: .fit)
-                    .containerRelativeFrame(.vertical) { length, _ in length * 0.46 }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 14)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.top, 12)
             }
+            .frame(maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, 24)
-        .padding(.top, 22)
-        .padding(.bottom, 24)
+        .padding(.top, 16)
+        .padding(.bottom, 18)
     }
 
     /// メンバー。丸は、その人が最後に撮った裏の写真（たいてい本人の顔）。撮るたびに替わる。
@@ -270,8 +277,8 @@ struct PortraitHomeView: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Palette.faint)
                 }
-                .padding(.top, 18)
-                .padding(.bottom, 12)
+                .padding(.top, 14)
+                .padding(.bottom, 10)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -307,8 +314,18 @@ struct PortraitHomeView: View {
                     .rotashLabel(10, color: Palette.dim, tracking: 1.2)
                     .lineLimit(1)
             }
-            WeekThumbnailStrip(week: week, height: nil, hides: { app.isHidden($0) })
-                .aspectRatio(CGFloat(max(week.slots.count, 1)), contentMode: .fit)
+            // 1枚は正方形で、いつも7枚ぶんの幅で割る（週の途中から始めた2枚だけの週でも、写真が大きくならないように）。
+            Color.clear
+                .aspectRatio(7, contentMode: .fit)
+                .overlay(alignment: .leading) {
+                    GeometryReader { geometry in
+                        let gap: CGFloat = 2
+                        let count = CGFloat(max(week.slots.count, 1))
+                        let side = (geometry.size.width - gap * 6) / 7
+                        WeekThumbnailStrip(week: week, height: side, hides: { app.isHidden($0) })
+                            .frame(width: side * count + gap * (count - 1))
+                    }
+                }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())

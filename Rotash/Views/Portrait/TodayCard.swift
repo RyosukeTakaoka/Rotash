@@ -38,7 +38,7 @@ struct TodayCard: View {
     }
 
     /// 高さに対する幅。横画面の1枠（およそ 1 : 3.2）より太くして、写真が見えるようにする。
-    static let aspect: CGFloat = 0.48
+    static let aspect: CGFloat = PhotoCarousel.aspect
 
     private var today: Slot? { week.slot(at: todayIndex) }
     private var isMyTurnToShoot: Bool { isMine && !(today?.isFilled ?? false) }

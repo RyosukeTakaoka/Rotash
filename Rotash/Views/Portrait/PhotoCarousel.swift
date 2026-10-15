@@ -35,7 +35,11 @@ struct PhotoCarousel: View {
     var onOpen: (Item, Bool) -> Void
 
     /// 1枚の「幅 ÷ 高さ」。横画面の1枠（およそ 1 : 3.2）より太くして、写真が見えるようにする（`TodayCard` と同じ）。
-    static let aspect: CGFloat = 0.48
+    /// 太すぎると圧が強いので、細めにする（2026-10-16）。
+    static let aspect: CGFloat = 0.40
+    /// 写真の上に重ねる黒の濃さ。真ん中もまぶしすぎないよう少しだけ落とし、横の写真はぐっと暗くする（2026-10-16）。
+    private static let centerDim: Double = 0.15
+    private static let sideDim: Double = 0.6
 
     fileprivate static let settle = Animation.spring(response: 0.42, dampingFraction: 0.86)
 
@@ -120,8 +124,10 @@ struct PhotoCarousel: View {
                             isCenter: isCenter) {
             toggleFlip(item)
         }
-        // 横にある写真は暗くして、真ん中を主役にする。
-        .overlay(Color.black.opacity(0.5 * min(abs(position), 1)).allowsHitTesting(false))
+        // 全体を少し暗くして抑え、横にある写真はさらに暗くして、真ん中を主役にする。
+        .overlay(Color.black
+            .opacity(Self.centerDim + (Self.sideDim - Self.centerDim) * Double(min(abs(position), 1)))
+            .allowsHitTesting(false))
         .contentShape(Rectangle())
         .onTapGesture {
             if isCenter {
@@ -170,11 +176,11 @@ struct PhotoCarousel: View {
         let spacing: CGFloat
 
         init(size: CGSize) {
-            // 縦長の1枚。高さに収まる大きさにしつつ、左右に隣の写真がのぞく幅を残す。
-            let width = max(1, min(size.height * PhotoCarousel.aspect, size.width * 0.56))
+            // 縦長の1枚。高さに収まる大きさにしつつ、左右に隣の写真がのぞく幅を残す（画面の幅の 4 割まで）。
+            let width = max(1, min(size.height * PhotoCarousel.aspect, size.width * 0.4))
             cardSize = CGSize(width: width, height: width / PhotoCarousel.aspect)
-            // 傾いた隣の写真の内側の辺が、真ん中の写真の辺から少し（10pt）離れたところに来るように。
-            let gap: CGFloat = 10
+            // 傾いた隣の写真の内側の辺が、真ん中の写真の辺から少し（12pt）離れたところに来るように。
+            let gap: CGFloat = 12
             spacing = width / 2 + gap
                 + CoverEffect.sideScale * CoverEffect.sideSqueeze * width / (2 * (1 - CoverEffect.sideTilt))
         }
@@ -274,12 +280,12 @@ private struct CarouselCard: View {
 /// 傾きは `rotation3DEffect` ではなく、遠近の変形を直接組み立てて作る。
 /// 「どちらの辺が奥へ行くか」を、角度の向きの約束に頼らず、ここで確実に決めるため。
 private struct CoverEffect: GeometryEffect {
-    /// 横にあるときの、横の縮み（1 = そのまま）。
-    static let sideSqueeze: CGFloat = 0.38
+    /// 横にあるときの、横の縮み（1 = そのまま）。細い帯がのぞくくらいにする（2026-10-16）。
+    static let sideSqueeze: CGFloat = 0.27
     /// 横にあるときの、全体の縮み。
     static let sideScale: CGFloat = 0.88
     /// 横にあるときの傾きの強さ。外側の辺は 1 / (1 + これ) 倍、内側の辺は 1 / (1 - これ) 倍の高さになる。
-    static let sideTilt: CGFloat = 0.1
+    static let sideTilt: CGFloat = 0.07
 
     var position: CGFloat
     var spacing: CGFloat

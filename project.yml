@@ -13,7 +13,7 @@
 #   brew install xcodegen && xcodegen generate   # XcodeGen 2.43.0+ (synced folders)
 #
 # Last synced with project.pbxproj: bundle id app.takaoka.com.Rorash,
-# version 0.2 (202610152100), Firebase 12.18.0 (up to next major).
+# version 0.2 (202610160010), Firebase 12.18.0 (up to next major).
 # ---------------------------------------------------------------------------
 name: Rotash
 options:
@@ -75,7 +75,7 @@ targets:
         PRODUCT_NAME: $(TARGET_NAME)
         MARKETING_VERSION: "0.2"
         # Build number = 年月日時分 (YYYYMMDDHHmm). Must be larger than the last upload.
-        CURRENT_PROJECT_VERSION: "202610152100"
+        CURRENT_PROJECT_VERSION: "202610160010"
         DEVELOPMENT_TEAM: 5B2NQ74986
         CODE_SIGN_STYLE: Automatic
         # Push notifications (aps-environment). See docs/FIREBASE_SETUP.md.

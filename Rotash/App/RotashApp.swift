@@ -5,6 +5,8 @@ import SwiftUI
 struct RotashApp: App {
 
     @StateObject private var app = AppViewModel()
+    /// 押し出し通知のデバイストークンを受け取るため（`AppDelegate`）。
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     init() {
         FirebaseApp.configure()

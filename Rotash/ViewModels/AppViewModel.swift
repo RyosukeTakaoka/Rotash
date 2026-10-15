@@ -481,8 +481,10 @@ final class AppViewModel: ObservableObject {
     /// （まだ何も通知するものが無いうちに聞いても断られるだけなので）。
     private func prepareNotifications() {
         Task {
-            _ = await NotificationScheduler.requestAuthorizationIfNeeded()
+            let granted = await NotificationScheduler.requestAuthorizationIfNeeded()
             NotificationScheduler.reschedule(for: groups)
+            // 「◯◯が撮った」（押し出し通知）の宛先も、この許可で登録する。
+            PushService.shared.registerIfAuthorized(granted)
         }
     }
 

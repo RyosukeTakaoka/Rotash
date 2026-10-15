@@ -61,6 +61,16 @@ enum SyncConfig {
         return components?.url
     }
 
+    /// 押し出し通知の宛先（`FirestoreClient.saveDevice`）。
+    static func deviceURL(uid: String) -> URL? {
+        var components = URLComponents(
+            string: "https://firestore.googleapis.com/v1/projects/\(firebaseProjectID)"
+                + "/databases/(default)/documents/devices/\(uid)"
+        )
+        components?.queryItems = [URLQueryItem(name: "key", value: firebaseAPIKey)]
+        return components?.url
+    }
+
     // MARK: - 問い合わせ先
 
     /// 報告・問い合わせを受ける連絡先（App Store ガイドライン 1.2 で、公開した連絡先が必要）。

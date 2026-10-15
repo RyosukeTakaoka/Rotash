@@ -58,6 +58,25 @@ enum FirestoreClient {
         return request
     }
 
+    /// 押し出し通知の宛先を置く（`devices/{uid}`）。本人だけが書ける（firestore.rules）。
+    static func saveDevice(uid: String, token: String, language: String) async throws {
+        guard SyncConfig.isConfigured, let url = SyncConfig.deviceURL(uid: uid) else { throw SyncError.notConfigured }
+        let body: [String: Any] = [
+            "fields": [
+                "token": ["stringValue": token],
+                "language": ["stringValue": language],
+                "updatedAt": ["timestampValue": ISO8601DateFormatter().string(from: Date())]
+            ]
+        ]
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (_, response) = try await URLSession.shared.data(for: await authorized(request))
+        guard let http = response as? HTTPURLResponse else { throw SyncError.malformedPayload }
+        guard (200..<300).contains(http.statusCode) else { throw SyncError.badResponse(http.statusCode) }
+    }
+
     /// 報告を1件書き込む（`reports` コレクションに新しいドキュメントを作る）。
     /// 報告は誰も読めず、書くだけ（セキュリティルールで読み取りを止める）。運営が Firebase コンソールで見る。
     static func send(_ report: PhotoReport) async throws {

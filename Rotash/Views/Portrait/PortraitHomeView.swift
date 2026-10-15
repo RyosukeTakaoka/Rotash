@@ -3,7 +3,8 @@ import UIKit
 
 /// 縦向き。Rotash の入口。管理画面ではないので、ここに置くのは
 /// グループ名 / 招待コード / 今日の1マス / メンバー / Memories / 設定 だけ。
-/// 今週の7分割そのもの（進行中の作品）はここでは見せない。見せるのは今日の1マスだけ（ふたつき。`TodayCard`）。
+/// 今週の7分割そのもの（進行中の作品）はここでは見せない。見せるのは今日の1マスだけ（`TodayCard`）。
+/// メンバーの丸は、今日の1マスの左右に縦に並べる（1画面に収めるため。2026-10-15）。
 /// 横にした瞬間に「THIS WEEK」が現れることが Rotash 独自の体験になる。
 struct PortraitHomeView: View {
 
@@ -106,18 +107,10 @@ struct PortraitHomeView: View {
                         .rotashLabel(11, color: Palette.text, tracking: 0.6)
                 }
 
-                // 今日の1マス（縦は「1日」、横は「1週間」）。担当の名前・横にするきっかけもこの中に出す。
-                TodayCard(week: group.currentWeek,
-                          hides: { app.isHidden($0) },
-                          todayIndex: app.todayIndex,
-                          assigneeName: app.revealedAssignee(forDay: app.todayIndex)?.name,
-                          isMine: app.isMyDay(app.todayIndex),
-                          showsRotateHint: !app.hasSeenLandscape)
+                // 今日の1マス（縦は「1日」、横は「1週間」）と、その左右にメンバー。
+                todayWithMembers(group)
                     .containerRelativeFrame(.vertical) { length, _ in length * 0.5 }
                     .padding(.top, 8)
-
-                membersRow(group)
-                    .padding(.top, 18)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -126,57 +119,114 @@ struct PortraitHomeView: View {
         .padding(.bottom, 30)
     }
 
-    /// メンバー。丸は、その人が最後に撮った裏の写真（たいてい本人の顔）。撮るたびに替わる。
-    /// まだ撮っていない人は頭文字。最後に招待の丸を置く。
-    private func membersRow(_ group: RotashGroup) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("メンバー").rotashLabel(9, color: Palette.faint, tracking: 1.6)
-            ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 14) {
-                    ForEach(group.activeMembers) { member in
-                        VStack(spacing: 6) {
-                            memberIcon(member, in: group)
-                                .opacity(group.isHiddenMember(member.id) ? 0.35 : 1)
-                            Text(member.name.uppercased())
-                                .rotashLabel(8, color: member.id == group.myMemberID ? Palette.live : Palette.dim,
-                                             tracking: 0.6)
-                                .lineLimit(1)
-                                .frame(maxWidth: 56)
-                        }
-                        // 長く押すと、その人の写真をこの端末で見えなくする／元に戻す（ブロック）。
-                        .contextMenu {
-                            if member.id != group.myMemberID {
-                                if group.isHiddenMember(member.id) {
-                                    Button { app.setMemberHidden(member.id, hidden: false) } label: {
-                                        Label("写真をまた表示する", systemImage: "eye")
-                                    }
-                                } else {
-                                    Button(role: .destructive) { app.setMemberHidden(member.id, hidden: true) } label: {
-                                        Label("この人の写真を見えなくする", systemImage: "eye.slash")
-                                    }
-                                }
-                            }
-                        }
+    /// 今日の1マスと、その左右に縦に並べたメンバー。
+    ///
+    /// 今日の1マスは7分割の1枠と同じ細長い形なので、縦の画面では左右が大きく空く。
+    /// そこにメンバーを左右に振り分けて並べ、下にあったメンバーの列をなくす（縦のホームを1画面に収める）。
+    /// 並びは左・右・左・右…の順。最後に招待の丸（7人そろったら出さない）。
+    private func todayWithMembers(_ group: RotashGroup) -> some View {
+        GeometryReader { geometry in
+            let cardWidth = min(TodayCard.naturalWidth(forHeight: geometry.size.height), geometry.size.width * 0.6)
+            let sideWidth = max((geometry.size.width - cardWidth) / 2, 0)
+            let items = Self.memberItems(group)
+            let left = items.enumerated().filter { $0.offset % 2 == 0 }.map { $0.element }
+            let right = items.enumerated().filter { $0.offset % 2 == 1 }.map { $0.element }
+            HStack(spacing: 0) {
+                memberColumn(left, in: group, width: sideWidth)
+                TodayCard(week: group.currentWeek,
+                          hides: { app.isHidden($0) },
+                          todayIndex: app.todayIndex,
+                          assigneeName: app.revealedAssignee(forDay: app.todayIndex)?.name,
+                          isMine: app.isMyDay(app.todayIndex),
+                          showsRotateHint: !app.hasSeenLandscape)
+                    .frame(width: cardWidth)
+                memberColumn(right, in: group, width: sideWidth)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+    }
+
+    /// 左右の列に並べるもの（メンバーと、最後に招待）。
+    private enum MemberItem: Identifiable {
+        case member(Member)
+        case invite
+
+        var id: String {
+            switch self {
+            case let .member(member): return member.id.uuidString
+            case .invite: return "invite"
+            }
+        }
+    }
+
+    private static func memberItems(_ group: RotashGroup) -> [MemberItem] {
+        var items = group.activeMembers.map { MemberItem.member($0) }
+        if group.activeMembers.count < RotashGroup.capacity { items.append(.invite) }
+        return items
+    }
+
+    /// 片側の列。丸の大きさは列の幅に合わせる（小さい iPhone でもはみ出さないように）。
+    private func memberColumn(_ items: [MemberItem], in group: RotashGroup, width: CGFloat) -> some View {
+        let size = max(min(44, width - 16), 28)
+        return VStack(spacing: 14) {
+            ForEach(items) { item in
+                switch item {
+                case let .member(member):
+                    memberCell(member, in: group, size: size, width: width)
+                case .invite:
+                    inviteCell(size: size)
+                }
+            }
+        }
+        .frame(width: width)
+        .frame(maxHeight: .infinity)
+    }
+
+    /// メンバー1人。丸は、その人が最後に撮った裏の写真（たいてい本人の顔）。撮るたびに替わる。まだ撮っていない人は頭文字。
+    private func memberCell(_ member: Member, in group: RotashGroup, size: CGFloat, width: CGFloat) -> some View {
+        VStack(spacing: 5) {
+            memberIcon(member, in: group, size: size)
+                .opacity(group.isHiddenMember(member.id) ? 0.35 : 1)
+            Text(member.name.uppercased())
+                .rotashLabel(8, color: member.id == group.myMemberID ? Palette.live : Palette.dim, tracking: 0.6)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: width - 8)
+        }
+        // 長く押すと、その人の写真をこの端末で見えなくする／元に戻す（ブロック）。
+        .contextMenu {
+            if member.id != group.myMemberID {
+                if group.isHiddenMember(member.id) {
+                    Button { app.setMemberHidden(member.id, hidden: false) } label: {
+                        Label("写真をまた表示する", systemImage: "eye")
                     }
-                    InviteShareButton {
-                        VStack(spacing: 6) {
-                            Circle()
-                                .stroke(Palette.line, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                                .frame(width: 48, height: 48)
-                                .overlay(Text("+").rotashLabel(16, color: Palette.dim, tracking: 0))
-                            Text("招待する")
-                                .rotashLabel(8, color: Palette.faint, tracking: 0.6)
-                        }
-                        .contentShape(Rectangle())
+                } else {
+                    Button(role: .destructive) { app.setMemberHidden(member.id, hidden: true) } label: {
+                        Label("この人の写真を見えなくする", systemImage: "eye.slash")
                     }
                 }
             }
-            .scrollIndicators(.hidden)
+        }
+    }
+
+    private func inviteCell(size: CGFloat) -> some View {
+        InviteShareButton {
+            VStack(spacing: 5) {
+                Circle()
+                    .stroke(Palette.line, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    .frame(width: size, height: size)
+                    .overlay(Text("+").rotashLabel(15, color: Palette.dim, tracking: 0))
+                Text("招待する")
+                    .rotashLabel(8, color: Palette.faint, tracking: 0.6)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .contentShape(Rectangle())
         }
     }
 
     @ViewBuilder
-    private func memberIcon(_ member: Member, in group: RotashGroup) -> some View {
+    private func memberIcon(_ member: Member, in group: RotashGroup, size: CGFloat) -> some View {
         Group {
             if let slot = group.latestReverseSlot(of: member.id) {
                 PhotoImageView(reverseOf: slot, maxPixel: 120)
@@ -188,7 +238,7 @@ struct PortraitHomeView: View {
                 }
             }
         }
-        .frame(width: 48, height: 48)
+        .frame(width: size, height: size)
         .clipShape(Circle())
         .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: 1.5))
     }

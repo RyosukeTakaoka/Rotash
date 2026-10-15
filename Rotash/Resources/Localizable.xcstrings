@@ -1541,28 +1541,6 @@
         }
       }
     },
-    "メンバー": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "MEMBERS"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "メンバー"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "멤버"
-          }
-        }
-      }
-    },
     "招待する": {
       "localizations": {
         "en": {
@@ -1669,28 +1647,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "참여하면 이번 주 작품과 멤버를 바로 볼 수 있어요.\n오늘 사진이 아직 없다면, 오늘은 당신 차례예요."
-          }
-        }
-      }
-    },
-    "横にして開く": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Turn sideways to open"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "横にして開く"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "가로로 돌려서 열기"
           }
         }
       }

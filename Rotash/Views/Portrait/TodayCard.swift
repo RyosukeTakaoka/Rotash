@@ -8,12 +8,12 @@ import SwiftUI
 /// ただし何も見せないと、横にすれば作品が見られることに気づけない（友達テストで実際に起きた、#27）。
 /// そこで縦には**今日の1マスだけ**を大きく置く。7分割の1枠は縦に細長いので、縦に持った画面とよく合う。
 /// 左右には、となりの日が少しだけはみ出して見える。「横に続きがある」ことが、言葉なしで分かる。
+/// さらにその外側（`PortraitHomeView`）にメンバーの丸を並べる。
 ///
-/// # ふた
-///
-/// 今日の写真には「ふた」がかかっていて（ぼかし）、横にすると開く。
-/// 横にすること自体を、見たいものを開ける動きにする（#35）。
-/// 何が撮られたかは縦でも分かる（ぼけた色と形）ので、「何を撮った？」で開く理由にもなる。
+/// 今日の写真は、ぼかさずそのまま見せる。
+/// 以前は「ふた」（ぼかし）をかけて横にすると開くようにしていたが、外した（2026-10-15）。
+/// 横にするきっかけは初めて入った直後の画面（`RootView`）が担うようになり、
+/// 「◯◯が撮った」の通知から開いた人には、その1枚がすぐ見えるほうがいい。横にすると見えるのは、1週間の全体。
 ///
 /// 横にするきっかけは、文字ではなく、スマホの形が横に倒れる動きで示す。
 /// 「視差効果を減らす」がオンの人には動かさない。
@@ -45,8 +45,16 @@ struct TodayCard: View {
     }
 
     /// となりの日が見えている幅。
-    private var peek: CGFloat { 26 }
-    private var gap: CGFloat { 2 }
+    private static let peek: CGFloat = 26
+    private static let gap: CGFloat = 2
+    private var peek: CGFloat { Self.peek }
+    private var gap: CGFloat { Self.gap }
+
+    /// 高さが決まったときの、このカードのちょうどの幅（今日の枠＋左右にはみ出すとなりの日）。
+    /// これより広い幅を渡されても、余りは左右の空白になるだけ。
+    @MainActor static func naturalWidth(forHeight height: CGFloat) -> CGFloat {
+        height * WorkShape.cellAspect + (peek + gap) * 2
+    }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 押したときに、横にするきっかけを一度だけ大きく揺らす。
@@ -86,10 +94,15 @@ struct TodayCard: View {
             if let today, today.isFilled, hides(today) {
                 HiddenPhotoPlaceholder()
             } else if let today, today.isFilled {
-                // ふた。写真はぼかして、何となく色と形だけ分かるようにする。
-                PhotoImageView(slot: today, maxPixel: 240)
-                    .blur(radius: 22, opaque: true)
-                    .overlay(Color.black.opacity(0.35))
+                PhotoImageView(slot: today, maxPixel: 480)
+                    // 上の曜日・名前と下の一言が、写真の上でも読めるように、上下だけ少し暗くする。
+                    .overlay(
+                        LinearGradient(stops: [.init(color: .black.opacity(0.55), location: 0),
+                                               .init(color: .clear, location: 0.22),
+                                               .init(color: .clear, location: 0.72),
+                                               .init(color: .black.opacity(0.55), location: 1)],
+                                       startPoint: .top, endPoint: .bottom)
+                    )
             } else {
                 Palette.surface
             }
@@ -130,11 +143,10 @@ struct TodayCard: View {
 
     private var isMyTurnToShoot: Bool { isMine && !(today?.isFilled ?? false) }
 
-    /// ふたの上の一言。いま横にすると何ができるか。横にしたことがある人には、自分の番のときだけ。
+    /// 下の一言。いま横にすると何ができるか。横にしたことがある人には、自分の番のときだけ。
     private var hintText: String? {
         if isMyTurnToShoot { return String(localized: "今日はあなたの番\n横にして撮る") }
         guard showsRotateHint else { return nil }
-        if today?.isFilled ?? false { return String(localized: "横にして開く") }
         return String(localized: "横にして見る")
     }
 
@@ -148,14 +160,13 @@ struct TodayCard: View {
 
     // MARK: - となりの日
 
-    /// となりの日の端。写真があれば、ふたをかけたまま端だけ見せる。週の外（月曜の前・日曜の後）は空ける。
+    /// となりの日の端。写真があれば端だけ少し暗くして見せる。週の外（月曜の前・日曜の後）は空ける。
     @ViewBuilder
     private func neighbor(dayIndex: Int) -> some View {
         if let slot = week.slot(at: dayIndex) {
             ZStack {
                 if slot.isFilled, !hides(slot) {
                     PhotoImageView(slot: slot, maxPixel: 120)
-                        .blur(radius: 10, opaque: true)
                         .overlay(Color.black.opacity(0.45))
                 } else {
                     Palette.surfaceDeep

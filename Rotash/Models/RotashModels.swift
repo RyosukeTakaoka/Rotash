@@ -12,6 +12,12 @@ struct Member: Identifiable, Codable, Hashable {
     /// その人が撮った日の名前が引けなくなるうえ、まだ抜けたことを知らない端末が
     /// 「相手が知らないメンバー」として一覧に戻してしまう。
     var leftAt: Date?
+    /// 招待コードで入った時刻（グループを作った人は nil）。
+    ///
+    /// 入った日には、その日の番がまだ撮られていなければ、その番を入った人に渡す（`AssignmentAudit`）。
+    /// 入った直後に何もできないと、入れたのかどうかも分からないまま閉じてしまうため。
+    /// 端末をまたいで同じ判断になるよう、秒より下は切り捨てて持つ（サーバーの日付も秒まで）。
+    var joinedAt: Date?
 
     var isActive: Bool { leftAt == nil }
 }
@@ -261,6 +267,10 @@ struct RotashGroup: Identifiable, Codable {
 
     /// まだ抜けていないメンバー。当番を組むのはこの人たちだけ。
     var activeMembers: [Member] { members.filter(\.isActive) }
+
+    /// 1つのグループに入れる人数の上限。7日に1人1日ずつ、全員に毎週1回は番が回る人数。
+    /// 下限は設けない（2人なら交互に撮る形で成り立つ）。
+    static let capacity = 7
 
     /// その人が最後に撮った、裏の写真のある枠。
     ///

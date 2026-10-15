@@ -76,6 +76,8 @@ enum SyncError: LocalizedError {
     case badResponse(Int)
     case malformedPayload
     case uploadFailed
+    /// 入ろうとしたグループが定員（`RotashGroup.capacity`）に達している。
+    case groupFull
 
     var errorDescription: String? {
         switch self {
@@ -87,6 +89,8 @@ enum SyncError: LocalizedError {
             return String(localized: "サーバー上のデータを読めませんでした。")
         case .uploadFailed:
             return String(localized: "写真のアップロードに失敗しました。")
+        case .groupFull:
+            return String(localized: "このグループは7人でいっぱいです。")
         }
     }
 }

@@ -156,6 +156,12 @@ enum RotashMerge {
                       let leftAt = local.members.first(where: { $0.id == id })?.leftAt {
                 members[index].leftAt = leftAt
             }
+            // 入った時刻は、古い版のアプリが書き戻すと消える（知らない項目は読み捨てるため）。
+            // 手元が知っていれば残す。入った日の番を渡す判断（AssignmentAudit）に要る。
+            if members[index].joinedAt == nil,
+               let joinedAt = local.members.first(where: { $0.id == id })?.joinedAt {
+                members[index].joinedAt = joinedAt
+            }
         }
         merged.members = members
 

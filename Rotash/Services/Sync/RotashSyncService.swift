@@ -49,6 +49,12 @@ enum RotashSyncService {
                                                 failureReason: &failureReason)
 
         if let remote = try await FirestoreClient.fetch(inviteCode: working.inviteCode) {
+            // まだサーバーに載っていない自分（いま入ろうとしている）なら、定員を確かめてから加わる。
+            // すでに載っている人（入っている人の普段の同期）は、ここで止めない。
+            if !remote.members.contains(where: { $0.id == working.myMemberID }),
+               remote.members.filter(\.isActive).count >= RotashGroup.capacity {
+                throw SyncError.groupFull
+            }
             working = RotashMerge.merge(local: working, remote: remote)
         }
 

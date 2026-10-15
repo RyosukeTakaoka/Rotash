@@ -273,7 +273,9 @@ final class AppViewModel: ObservableObject {
             return
         }
 
-        let me = Member(name: name)
+        // 入った時刻は秒で切り捨てる（サーバーの日付は秒までなので、どの端末でも同じ値になるように）。
+        let joinedAt = Date(timeIntervalSince1970: Date().timeIntervalSince1970.rounded(.down))
+        let me = Member(name: name, joinedAt: joinedAt)
         let newGroup = RotashGroup(
             name: "ROTASH",
             inviteCode: normalized,
@@ -729,6 +731,15 @@ final class AppViewModel: ObservableObject {
             if applyAudit(groupID: result.id) { syncAgainWhenFinished = true }
 
             persist()
+        } catch SyncError.groupFull {
+            // 入ろうとしたグループが、もう定員（7人）だった。手元に作った仮のグループは消して、そう伝える。
+            // 自分がまだサーバーに載っていないときだけ起きるので、すでに入っているグループが消えることはない。
+            if let index = groups.firstIndex(where: { $0.id == groupID }) {
+                groups.remove(at: index)
+                if currentGroupID == groupID { currentGroupID = groups.first?.id }
+                persist()
+            }
+            alertMessage = SyncError.groupFull.localizedDescription
         } catch {
             // 取り消された（画面を閉じた・引っぱり更新が終わった など）だけなら失敗ではないので、何も出さない。
             if Self.isCancellation(error) { return }

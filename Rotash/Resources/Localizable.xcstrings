@@ -1101,28 +1101,6 @@
         }
       }
     },
-    "参加すると、今週の作品とメンバーがそのまま見られます。\nまだ来ていない日が残っていれば、その当番にも入ります。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Once you join, you'll see this week's piece and members right away.\nIf any days are still ahead, you'll get a turn too."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "参加すると、今週の作品とメンバーがそのまま見られます。\nまだ来ていない日が残っていれば、その当番にも入ります。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "참여하면 이번 주 작품과 멤버를 바로 볼 수 있어요.\n아직 오지 않은 날이 남아 있으면 그날 차례도 맡게 돼요."
-          }
-        }
-      }
-    },
     "友達と1週間かけて、\n7枚で1つの作品をつくる。": {
       "localizations": {
         "en": {
@@ -1625,6 +1603,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "오늘은 당신 차례예요. 아직 찍을 수 있어요 (%@)"
+          }
+        }
+      }
+    },
+    "このグループは7人でいっぱいです。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This group already has 7 people."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このグループは7人でいっぱいです。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 그룹은 이미 7명이 모두 찼어요."
+          }
+        }
+      }
+    },
+    "参加すると、今週の作品とメンバーがそのまま見られます。\n今日の1枚がまだ撮られていなければ、今日はあなたの番です。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once you join, you'll see this week's piece and members right away.\nIf today's photo hasn't been taken yet, today is your turn."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参加すると、今週の作品とメンバーがそのまま見られます。\n今日の1枚がまだ撮られていなければ、今日はあなたの番です。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "참여하면 이번 주 작품과 멤버를 바로 볼 수 있어요.\n오늘 사진이 아직 없다면, 오늘은 당신 차례예요."
           }
         }
       }

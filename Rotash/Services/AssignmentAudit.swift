@@ -8,14 +8,19 @@ import Foundation
 /// 避けなければならないのは **食い違ったまま固定されること** の方で、
 /// そのために状態が変わる場所では必ずここを通す。
 ///
-/// やることは2つだけ。
+/// やることは3つだけ。
 ///   1. 今のメンバーに居ない人が担当になっていたら直す
-///   2. まだ来ていない日を、いまのメンバーで組み直す（同じ結果なら何もしない）
+///   2. 今日入った人がいて、今日の番がまだ撮られていなければ、今日の番をその人に渡す
+///   3. まだ来ていない日を、いまのメンバーで組み直す（同じ結果なら何もしない）
 ///
-/// **過ぎた日と今日の担当には絶対に触らない。**
+/// **過ぎた日の担当には絶対に触らない。今日の担当も、2 の場合だけ。**
 /// すでに全員に見えているものをあとから書き換えると、
 /// 「昨日の担当が変わっていた」という一番まずい壊れ方になる。
 /// 担当が食い違ったまま残るより、そちらの方が体験としては悪い。
+///
+/// 2 だけは例外として今日を動かす。入った日に何もできないと、入れたのかどうかも分からないまま
+/// 閉じてしまう（友達テストで実際に起きた）。入ってすぐ本物の番が回ってくるのが、いちばん強い入口になる。
+/// 今日の番を譲った人は、3 の組み直しで（今週の担当回数が少ないぶん）先の日に入りやすくなる。
 enum AssignmentAudit {
 
     // MARK: - 照合コード
@@ -82,6 +87,9 @@ enum AssignmentAudit {
         //    増えるのは同期かバトンで突き合わせたときだけだからである。
         guard updated.members.count > 1 else { return updated }
 
+        // 2. 今日入った人に、今日の番を渡す。
+        handOverToday(&updated.currentWeek, members: updated.members, today: today, now: now)
+
         let futureDays = updated.currentWeek.slots
             .filter { $0.dayIndex > today && !$0.isFilled }
             .map(\.dayIndex)
@@ -119,5 +127,43 @@ enum AssignmentAudit {
 
         updated.currentWeek = planned
         return updated
+    }
+
+    /// 今日入った人がいて、今日の番がまだ撮られていなければ、今日の番をその人に渡す。
+    ///
+    /// - 今日の写真がもうあるなら渡さない（撮った人の1枚を消さない）。その人は先の日に入る。
+    /// - 今日の担当が、すでに今日入った人なら渡さない。同じ日に2人入ったとき、
+    ///   あとから入った人が先に入った人の番を奪わないように（先に入った人のまま）。
+    /// - 今日入った人が何人いても、渡す相手は入った時刻がいちばん早い人（同じなら ID の順）。
+    ///   どの端末で計算しても同じ相手になる。
+    /// - 決定時刻は入った時刻にする（どの端末でも同じ値）。前の決定より新しくなるので、マージで必ずこちらが残る。
+    static func handOverToday(_ week: inout RotashWeek, members: [Member], today: Int, now: Date) {
+        guard let index = week.slots.firstIndex(where: { $0.dayIndex == today }),
+              !week.slots[index].isFilled
+        else { return }
+        let calendar = Calendar.rotash
+        // 週の途中で日付がずれていない（今日がこの週の中にある）ことを確かめる。
+        guard let todayDate = calendar.date(byAdding: .day, value: today, to: week.startDate),
+              calendar.isDate(todayDate, inSameDayAs: now)
+        else { return }
+
+        let joinedToday = members
+            .filter { member in
+                guard member.isActive, let joinedAt = member.joinedAt else { return false }
+                return calendar.isDate(joinedAt, inSameDayAs: now)
+            }
+            .sorted { lhs, rhs in
+                let left = lhs.joinedAt ?? .distantFuture
+                let right = rhs.joinedAt ?? .distantFuture
+                return left == right ? lhs.id.uuidString < rhs.id.uuidString : left < right
+            }
+        guard let newcomer = joinedToday.first, let joinedAt = newcomer.joinedAt else { return }
+        if let current = week.slots[index].assigneeID,
+           joinedToday.contains(where: { $0.id == current }) { return }
+
+        week.slots[index].assigneeID = newcomer.id
+        // 前の決定が入った時刻より後になっていることは普通ないが、念のため必ず新しくする。
+        let previous = week.slots[index].assignedAt ?? .distantPast
+        week.slots[index].assignedAt = max(joinedAt, previous.addingTimeInterval(1))
     }
 }

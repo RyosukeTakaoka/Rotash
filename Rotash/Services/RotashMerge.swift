@@ -58,12 +58,31 @@ enum RotashMerge {
 
     /// 枠の突き合わせ。撮った本人が取り消した写真は、どちらかが取り消しの印を持っていれば消す。
     /// 「写真を絶対に落とさない」の例外はここだけで、本人が消すと決めたものだけを消す。
+    ///
+    /// 取り消したあとで同じ日に撮られた写真（取り消した日の番が、入った人に渡って撮られた等）は、
+    /// 取り消しの対象ではないので残す。
     private static func mergeSlot(local: Slot?, remote: Slot?, dayIndex: Int) -> Slot {
-        let merged = mergeSlotPhotos(local: local, remote: remote, dayIndex: dayIndex)
-        guard let withdrawnAt = [local?.withdrawnAt, remote?.withdrawnAt].compactMap({ $0 }).min() else {
+        let merged = mergeSlotPhotos(local: local.map(unwithdrawnIfRetaken), remote: remote.map(unwithdrawnIfRetaken),
+                                     dayIndex: dayIndex)
+        guard let withdrawnAt = [local?.withdrawnAt, remote?.withdrawnAt].compactMap({ $0 }).max() else {
             return merged
         }
+        if let capturedAt = merged.capturedAt, capturedAt > withdrawnAt, merged.photoURL != nil || merged.photoFilename != nil {
+            var kept = merged
+            kept.withdrawnAt = nil
+            return kept
+        }
         return withdrawn(merged, at: withdrawnAt)
+    }
+
+    /// 取り消しの印より後に撮られた写真を持つ枠は、写真のある枠として突き合わせる。
+    private static func unwithdrawnIfRetaken(_ slot: Slot) -> Slot {
+        guard let withdrawnAt = slot.withdrawnAt, let capturedAt = slot.capturedAt, capturedAt > withdrawnAt else {
+            return slot
+        }
+        var kept = slot
+        kept.withdrawnAt = nil
+        return kept
     }
 
     /// 取り消した枠。写真と、撮った人が分かるものを落とし、担当だけを残す。
@@ -177,13 +196,23 @@ enum RotashMerge {
             }
             // 入った時刻は、古い版のアプリが書き戻すと消える（知らない項目は読み捨てるため）。
             // 手元が知っていれば残す。入った日の番を渡す判断（AssignmentAudit）に要る。
-            if members[index].joinedAt == nil,
-               let joinedAt = local.members.first(where: { $0.id == id })?.joinedAt {
+            // 両方にあれば新しい方（入り直した人は、入り直した時刻）。
+            if let joinedAt = local.members.first(where: { $0.id == id })?.joinedAt,
+               members[index].joinedAt.map({ $0 < joinedAt }) ?? true {
                 members[index].joinedAt = joinedAt
             }
             if members[index].uid == nil,
                let uid = local.members.first(where: { $0.id == id })?.uid {
                 members[index].uid = uid
+            }
+            // 抜けたあとに入り直した人（入った時刻が抜けた時刻より後）は、もう抜けていない。
+            // これが無いと、まだ「抜けた」印を持っている端末が書き戻し続け、入り直した人が当番から外れたままになる。
+            if let leftAt = members[index].leftAt, let joinedAt = members[index].joinedAt, joinedAt > leftAt {
+                members[index].leftAt = nil
+            }
+            // 自分の名前は、この端末が正しい（名前を変えられるのは本人だけ。入り直しで名前を入れ直したときも）。
+            if id == merged.myMemberID, let myName = local.me?.name {
+                members[index].name = myName
             }
         }
         merged.members = members

@@ -58,7 +58,7 @@
 
   // /j/ABC123 の ABC123。紛らわしい文字を除いた大文字6文字だけを受け付ける（アプリの InviteCode と同じ）。
   const raw = (location.pathname.split("/j/")[1] || "").split("/")[0];
-  const code = raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  const code = raw.toUpperCase().replace(/[^ABCDEFGHJKLMNPQRSTUVWXYZ2-9]/g, "").slice(0, 6);
   const valid = code.length === 6;
 
   document.getElementById("code").textContent = valid ? code : "------";
@@ -71,7 +71,8 @@
     if (valid) {
       try {
         // 貼り付けで入るよう、リンクごとコピーする（アプリはリンクからでもコードを読める）。
-        await navigator.clipboard.writeText(location.origin + "/j/" + code);
+        // いつも web.app のリンクにする（firebaseapp.com で開かれても、アプリが読めるリンクに）。
+        await navigator.clipboard.writeText("https://rotash-f83a4.web.app/j/" + code);
         install.textContent = "コピーしました";
         install.classList.add("done");
       } catch (e) { /* コピーできなくても、コードは画面に出ている */ }

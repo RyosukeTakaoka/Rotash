@@ -81,9 +81,10 @@ enum RotashSyncService {
                 working = Self.returning(working, as: previous)
                 rejoined = previous.id
             }
-            // まだサーバーに載っていない自分（いま入ろうとしている）なら、定員を確かめてから加わる。
-            // すでに載っている人（入っている人の普段の同期）は、ここで止めない。
-            if !remote.members.contains(where: { $0.id == working.myMemberID }),
+            // まだサーバーで入っていない自分（いま入ろうとしている、または抜けたあとに入り直している）なら、
+            // 定員を確かめてから加わる。すでに入っている人（普段の同期）は、ここで止めない。
+            let activeOnRemote = remote.members.contains { $0.id == working.myMemberID && $0.isActive }
+            if !activeOnRemote,
                remote.members.filter(\.isActive).count >= RotashGroup.capacity {
                 throw SyncError.groupFull
             }

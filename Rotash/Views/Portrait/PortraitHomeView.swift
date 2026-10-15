@@ -108,7 +108,7 @@ struct PortraitHomeView: View {
 
                 // 今日の1マス（縦は「1日」、横は「1週間」）。担当の名前・横にするきっかけもこの中に出す。
                 TodayCard(week: group.currentWeek,
-                          hides: app.isHidden,
+                          hides: { app.isHidden($0) },
                           todayIndex: app.todayIndex,
                           assigneeName: app.revealedAssignee(forDay: app.todayIndex)?.name,
                           isMine: app.isMyDay(app.todayIndex))
@@ -312,7 +312,7 @@ struct PortraitHomeView: View {
     private func latestCard(_ week: RotashWeek) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             // 横画面で見る作品と同じ形（1枠の縦横比をそろえる）。
-            WeekThumbnailStrip(week: week, height: nil, hides: app.isHidden)
+            WeekThumbnailStrip(week: week, height: nil, hides: { app.isHidden($0) })
                 .aspectRatio(WorkShape.stripAspect, contentMode: .fit)
                 .padding(.bottom, 16)
             if let title = week.title, !title.isEmpty {
@@ -366,7 +366,7 @@ struct PortraitHomeView: View {
     /// 前の週の1行。7分割を小さく、右に日付（始まりと終わりの2行）。
     private func olderRow(_ week: RotashWeek) -> some View {
         HStack(alignment: .center, spacing: 14) {
-            WeekThumbnailStrip(week: week, height: nil, hides: app.isHidden)
+            WeekThumbnailStrip(week: week, height: nil, hides: { app.isHidden($0) })
                 .aspectRatio(WorkShape.stripAspect, contentMode: .fit)
                 .opacity(0.85)
             VStack(alignment: .leading, spacing: 4) {
@@ -411,6 +411,7 @@ struct PortraitHomeView: View {
                             return
                         }
                         app.pendingJoinCode = code
+                        app.pendingJoinCodeIsFromLink = false
                         app.activeSheet = .join
                     }
                 }

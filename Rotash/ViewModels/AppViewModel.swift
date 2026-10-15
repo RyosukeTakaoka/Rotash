@@ -64,6 +64,8 @@ final class AppViewModel: ObservableObject {
 
     /// リンクから来たときに、参加画面へ先に渡しておく招待コード。
     @Published var pendingJoinCode: String?
+    /// pendingJoinCode がリンクから来たか（false なら、参加画面の外で貼り付けたコード）。計測の `via_link` に使う。
+    var pendingJoinCodeIsFromLink = true
 
     /// 共有された作品から来たときの、発行元グループ ID。
     /// グループを作る瞬間まで持っておき、作られた時点で記録する。
@@ -438,6 +440,7 @@ final class AppViewModel: ObservableObject {
                 return
             }
             pendingJoinCode = code
+            pendingJoinCodeIsFromLink = true
             activeSheet = .join
 
         case let .create(origin):
@@ -563,6 +566,8 @@ final class AppViewModel: ObservableObject {
         } else {
             current.currentWeek.slots[index].capturedAt = now
             current.currentWeek.slots[index].retakeCount = nil
+            // 取り消された日（撮った人が抜けて写真を消した日）に撮り直すこともある。新しい1枚は取り消しの対象ではない。
+            current.currentWeek.slots[index].withdrawnAt = nil
         }
         current.currentWeek.slots[index].takenByMemberID = current.myMemberID
         current.currentWeek.slots[index].capturedWithFront = front
@@ -789,7 +794,10 @@ final class AppViewModel: ObservableObject {
                 // 前に抜けたときの「抜けた」知らせがまだ残っていたら、送らない（送ると、また抜けたことになる）。
                 pendingLeaves.removeAll { $0.inviteCode == current.inviteCode && $0.memberID == rejoined }
             }
-            let result = keepingPhotosTakenDuringSync(outcome.group, sent: current, latest: latest)
+            var result = keepingPhotosTakenDuringSync(outcome.group, sent: current, latest: latest)
+            // 見えなくした人・写真はこの端末だけの設定。同期しているあいだに変えた分を、同期前の状態で上書きしない。
+            result.hiddenMemberIDs = latest.hiddenMemberIDs
+            result.hiddenPhotoURLs = latest.hiddenPhotoURLs
             Self.deleteWithdrawnFiles(before: groups[index], after: result)
             groups[index] = result
             // 突き合わせで ID が変わったら（参加した直後など）、開いているグループもそれに合わせる。

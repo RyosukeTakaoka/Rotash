@@ -34,6 +34,12 @@ function newlyFilledSlots(before, after) {
   return (afterWeek.slots || []).filter((slot) => isFilled(slot) && !isFilled(beforeSlots.get(slot.dayIndex)));
 }
 
+/** まだグループにいるか（アプリの Member.isActive と同じ。抜けたあとに入り直した人もいる側）。 */
+function isActive(member) {
+  if (!member.leftAt) return true;
+  return !!member.joinedAt && Date.parse(member.joinedAt) > Date.parse(member.leftAt);
+}
+
 /**
  * 1枚ぶんの知らせの宛先と中身。
  * 宛先は、まだ抜けていないメンバーのうち、撮った本人以外で、uid を持っている人。
@@ -42,7 +48,7 @@ function notificationFor(group, slot) {
   const members = group.members || [];
   const photographer = members.find((m) => m.id === slot.takenByMemberID);
   const recipients = members
-    .filter((m) => !m.leftAt && m.uid && m.id !== slot.takenByMemberID)
+    .filter((m) => isActive(m) && m.uid && m.id !== slot.takenByMemberID)
     .map((m) => m.uid);
   return {
     recipients: Array.from(new Set(recipients)),
@@ -65,4 +71,4 @@ function messageText(language, groupName, photographerName) {
   }
 }
 
-module.exports = { parsePayload, isFilled, newlyFilledSlots, notificationFor, messageText };
+module.exports = { parsePayload, isFilled, isActive, newlyFilledSlots, notificationFor, messageText };

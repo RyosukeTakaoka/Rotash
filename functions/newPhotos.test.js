@@ -44,3 +44,12 @@ test("text follows the device language", () => {
   assert.strictEqual(messageText("ja", "G", "aki").body, "AKI が今日の1枚を撮りました");
   assert.strictEqual(messageText("fr", "G", null).body, "Today's photo is in");
 });
+
+test("someone who left and joined again gets notified again", () => {
+  const rejoined = [
+    { id: "A", name: "aki", uid: "uA" },
+    { id: "C", name: "cho", uid: "uC", leftAt: "2026-10-10T00:00:00Z", joinedAt: "2026-10-12T09:00:00Z" },
+  ];
+  const n = notificationFor({ name: "G", members: rejoined }, { dayIndex: 1, takenByMemberID: "A" });
+  assert.deepStrictEqual(n.recipients, ["uC"]);
+});

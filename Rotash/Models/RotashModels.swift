@@ -25,7 +25,12 @@ struct Member: Identifiable, Codable, Hashable {
     /// 押し出し通知（「◯◯が撮った」）の宛先を引くのにも使う（functions/）。
     var uid: String?
 
-    var isActive: Bool { leftAt == nil }
+    /// まだグループにいるか。抜けたあとに入り直した人（入った時刻が抜けた時刻より後）も、いる側に数える。
+    /// 古い版のアプリが「抜けた」印を書き戻しても、入り直した人が当番から外れないように。
+    var isActive: Bool {
+        guard let leftAt else { return true }
+        return joinedAt.map { $0 > leftAt } ?? false
+    }
 }
 
 // MARK: - Day

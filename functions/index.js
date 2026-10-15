@@ -13,8 +13,13 @@ const { parsePayload, newlyFilledSlots, notificationFor, messageText } = require
 
 admin.initializeApp();
 
+// Firestore のデータベースと同じ場所にする（違うとデプロイで失敗するか、呼ばれない）。
+// コンソール → Firestore Database の上部に出ている「ロケーション」と合わせる。
+// 例: asia-northeast1（東京）。nam5（米国の複数リージョン）なら us-central1。docs/FIREBASE_SETUP.md 4
+const REGION = "asia-northeast1";
+
 exports.notifyNewPhoto = onDocumentWritten(
-  { document: "rotash/{code}", region: "asia-northeast1" },
+  { document: "rotash/{code}", region: REGION },
   async (event) => {
     const beforeDoc = event.data && event.data.before;
     const afterDoc = event.data && event.data.after;

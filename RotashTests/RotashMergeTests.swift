@@ -84,6 +84,50 @@ final class RotashMergeTests: XCTestCase {
         XCTAssertNotNil(merged.member(withID: b)?.leftAt)
     }
 
+    func testRejoinedMemberStaysActiveWhenAnotherDeviceStillHasTheLeftMark() {
+        let leftAt = Fixture.date(day: 1, hour: 9)
+        let rejoinedAt = Fixture.date(day: 3, hour: 9)
+        // 入り直した本人の端末が、新しい名前と入った時刻でサーバーに載せた状態。
+        let rejoined = RotashGroup(name: "G", inviteCode: "ABC234",
+                                   members: [Member(id: a, name: "aki"),
+                                             Member(id: b, name: "ben2", joinedAt: rejoinedAt, uid: "uid-b")],
+                                   myMemberID: b, currentWeek: Fixture.fullWeek(assignees: [a, b]))
+        // まだ「抜けた」印しか知らない友達の端末。
+        let friend = RotashGroup(name: "G", inviteCode: "ABC234",
+                                 members: [Member(id: a, name: "aki"),
+                                           Member(id: b, name: "—", leftAt: leftAt, uid: "uid-b")],
+                                 myMemberID: a, currentWeek: Fixture.fullWeek(assignees: [a, b]))
+
+        let onFriend = RotashMerge.merge(local: friend, remote: RemoteGroupState(group: rejoined))
+        XCTAssertTrue(onFriend.member(withID: b)?.isActive ?? false)
+        XCTAssertNil(onFriend.member(withID: b)?.leftAt)
+
+        // 友達の端末が古い印を書き戻しても、入り直した本人の端末では本人のまま（名前も今回のもの）。
+        var stale = RemoteGroupState(group: friend)
+        stale.members = [Member(id: a, name: "aki"), Member(id: b, name: "—", leftAt: leftAt, uid: "uid-b")]
+        let onRejoined = RotashMerge.merge(local: rejoined, remote: stale)
+        XCTAssertTrue(onRejoined.me?.isActive ?? false)
+        XCTAssertEqual(onRejoined.me?.name, "ben2")
+        XCTAssertEqual(onRejoined.me?.joinedAt, rejoinedAt)
+    }
+
+    func testPhotoTakenAfterAWithdrawalOnTheSameDayIsKept() {
+        let old = Fixture.photo(day: 2, by: a, at: Fixture.date(day: 2, hour: 9), url: "old")
+        let tombstone = RotashMerge.withdrawn(old, at: Fixture.date(day: 2, hour: 10))
+        // 取り消された日の番が入った人に渡り、その人が撮った。
+        var fresh = Fixture.photo(day: 2, by: b, at: Fixture.date(day: 2, hour: 11), url: "fresh")
+        fresh.withdrawnAt = nil
+
+        for (local, remote) in [(fresh, tombstone), (tombstone, fresh)] {
+            let merged = RotashMerge.merge(local: Fixture.week([local]), remote: Fixture.week([remote])).slot(at: 2)
+            XCTAssertEqual(merged?.photoURL, "fresh")
+            XCTAssertNil(merged?.withdrawnAt)
+        }
+        // 古い端末が持っていた取り消し前の写真は、戻らない。
+        let merged = RotashMerge.merge(local: Fixture.week([old]), remote: Fixture.week([tombstone])).slot(at: 2)
+        XCTAssertNil(merged?.photoURL)
+    }
+
     func testWithdrawingMarksEverySlotOfThatPersonOnly() {
         var week = Fixture.week([
             Fixture.photo(day: 0, by: a, at: Fixture.date(day: 0, hour: 9)),

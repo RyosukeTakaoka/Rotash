@@ -8,6 +8,8 @@ struct JoinRotashView: View {
     @State private var code = ""
     @State private var myName = ""
     @State private var fromLink = false
+    /// コードがリンクから来たか（貼り付けたコードでも入力欄は省くが、計測ではリンクとして数えない）。
+    @State private var codeCameFromLink = false
 
     private var canJoin: Bool {
         InviteCode.isValid(code) && !myName.trimmingCharacters(in: .whitespaces).isEmpty
@@ -60,7 +62,7 @@ struct JoinRotashView: View {
                         .lineSpacing(5)
 
                     Button("参加する") {
-                        app.joinRotash(code: code, myName: myName, viaLink: fromLink)
+                        app.joinRotash(code: code, myName: myName, viaLink: fromLink && codeCameFromLink)
                         dismiss()
                     }
                     .buttonStyle(RotashButtonStyle(filled: true))
@@ -80,6 +82,7 @@ struct JoinRotashView: View {
             if let pending = app.pendingJoinCode {
                 code = pending
                 fromLink = true
+                codeCameFromLink = app.pendingJoinCodeIsFromLink
             }
         }
         // 閉じたら、リンクから来たときのコードは使い終わり（次に開いたときに入力できるように）。

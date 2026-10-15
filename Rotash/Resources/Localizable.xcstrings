@@ -1584,6 +1584,50 @@
           }
         }
       }
+    },
+    "今日はあなたの番です。まだ撮れます": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It's your turn today. There's still time to shoot"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今日はあなたの番です。まだ撮れます"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘은 당신 차례예요. 아직 찍을 수 있어요"
+          }
+        }
+      }
+    },
+    "今日はあなたの番です。まだ撮れます（%@）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It's your turn today. There's still time to shoot (%@)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今日はあなたの番です。まだ撮れます（%@）"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘은 당신 차례예요. 아직 찍을 수 있어요 (%@)"
+          }
+        }
+      }
     }
   },
   "version": "1.1"

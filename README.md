@@ -125,7 +125,7 @@ Rotash は「自分の担当日に写真を投稿するアプリ」ではあり�
 | 6 | Memories（過去作品の積層・詳細） | `PortraitHomeView.swift`, `MemoryDetailView.swift` |
 | 7 | Share（9:16 の1枚） | `Services/WorkExporter.swift` |
 | 8 | 招待リンク / 作品リンク | `Services/RotashLink.swift` |
-| 9 | 朝の担当通知（ローカル） | `Services/NotificationScheduler.swift` |
+| 9 | 朝の担当通知と、担当の本人だけへの夜21時の1通（まだ撮っていないときだけ。どちらもローカル） | `Services/NotificationScheduler.swift` |
 
 ## 撮影のつくり
 

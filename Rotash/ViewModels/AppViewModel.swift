@@ -77,7 +77,16 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var isIntroducingWork = UserDefaults.standard.bool(forKey: AppViewModel.introKey)
 
     /// 縦に持っているときに、縦のホームの代わりに横の作品画面を見せるか。
-    var showsWorkInPortrait: Bool { isIntroducingWork && hasGroup && !hasSeenLandscape }
+    /// シート（作った直後の招待コードの画面など）を開いているあいだは出さない（シートごと消えてしまうので）。
+    var showsWorkInPortrait: Bool { isIntroducingWork && hasGroup && !hasSeenLandscape && activeSheet == nil }
+
+    /// 横にしないまま、縦のホームに進む（倒して見せている画面を押したとき）。
+    /// 画面の向きをロックしていて横にできない人が、閉じ込められないように。
+    func endIntroducingWork() {
+        guard isIntroducingWork else { return }
+        isIntroducingWork = false
+        UserDefaults.standard.set(false, forKey: Self.introKey)
+    }
 
     // 保存した値の初期値を読むのに使うので、MainActor の外から呼べるようにしておく。
     private nonisolated static let introKey = "rotash.introducingWork"

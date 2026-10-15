@@ -38,7 +38,7 @@ struct JoinRotashView: View {
                                     placeholder: "XXXXXX",
                                     text: $code,
                                     isInviteCode: true)
-                        // 招待の Web ページでコピーしたコード（またはリンク）を、そのまま入れる。
+                        // 招待のメッセージからコピーしたコード（またはリンク）を、そのまま入れる。
                         // PasteButton は押したときだけ読むので、「ペーストを許可」の確認は出ない。
                         PasteButton(payloadType: String.self) { strings in
                             Task { @MainActor in

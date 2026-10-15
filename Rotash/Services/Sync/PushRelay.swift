@@ -12,8 +12,11 @@ import Foundation
 enum PushRelay {
 
     private static let sentKey = "rotash.pushRelay.sent"
+    /// いま知らせている最中の枠。撮った直後は同期が続けて走るので、同じ知らせを2つ同時に出さないように。
+    @MainActor private static var inFlight = Set<String>()
 
     /// 今日の枠を自分が撮っていて、まだ知らせていなければ知らせる。同期が終わったあとに呼ぶ。
+    @MainActor
     static func notifyIfNeeded(for group: RotashGroup, now: Date = Date()) async {
         guard let url = URL(string: SyncConfig.pushRelayURL), !SyncConfig.pushRelayURL.isEmpty else { return }
         let week = group.currentWeek
@@ -26,7 +29,10 @@ enum PushRelay {
 
         let key = "\(group.inviteCode)|\(Int(week.startDate.timeIntervalSince1970))|\(today)"
         var sent = UserDefaults.standard.stringArray(forKey: sentKey) ?? []
-        guard !sent.contains(key), let idToken = await AuthService.shared.idToken() else { return }
+        guard !sent.contains(key), !inFlight.contains(key) else { return }
+        inFlight.insert(key)
+        defer { inFlight.remove(key) }
+        guard let idToken = await AuthService.shared.idToken() else { return }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

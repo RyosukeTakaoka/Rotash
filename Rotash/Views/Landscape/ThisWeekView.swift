@@ -116,6 +116,7 @@ struct ThisWeekView: View {
         }
         // 振ると、作品ごと裏返る（もう一度振ると表に戻る）。撮っているあいだと全画面で見ているあいだは何もしない。
         .onReceive(NotificationCenter.default.publisher(for: .rotashDeviceShaken)) { _ in
+            guard !isPreview else { return }
             flipAllByShake()
         }
         // 横にした時点で最新を取りに行く。作品を見る画面なので、

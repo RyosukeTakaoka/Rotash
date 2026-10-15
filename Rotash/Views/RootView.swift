@@ -91,18 +91,23 @@ struct RootView: View {
 /// 「横にして見て」と文字で言わなくても、横向きの画面が出ていれば人は自然とスマホを傾ける。
 /// 傾けると本物の横画面に替わり、そのあと縦に戻せばいつもの縦のホームになる。
 /// 多くの人はスマホを左に倒して（反時計回りに）横にするので、その向きで正しく読めるように倒しておく。
-/// これは見せるだけ。押しても何も起きない（撮るのは、横にしてから）。
+/// これは見せるだけで、中のボタンは効かない（撮るのは、横にしてから）。
+/// 押すと、横にしないまま縦のホームに進む（画面の向きをロックしている人が閉じ込められないように）。
 private struct WorkInPortrait: View {
     let size: CGSize
+    @EnvironmentObject private var app: AppViewModel
 
     var body: some View {
         ThisWeekView()
             .environment(\.isWorkPreview, true)
             .frame(width: size.height, height: size.width)
             .rotationEffect(.degrees(90))
-            .frame(width: size.width, height: size.height)
             .allowsHitTesting(false)
+            .frame(width: size.width, height: size.height)
+            .contentShape(Rectangle())
+            .onTapGesture { app.endIntroducingWork() }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text("スマホを横にすると、今週の作品が見られます"))
+            .accessibilityAddTraits(.isButton)
     }
 }

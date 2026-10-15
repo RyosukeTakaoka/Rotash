@@ -8,6 +8,40 @@ import Foundation
 /// まずそれがK-3のどの指標に効くかを先に確認すること。
 enum AnalyticsService {
 
+    // MARK: - 計測に入れない端末
+
+    private static let excludedKey = "rotash.analyticsExcluded"
+
+    /// この端末を計測から外しているか。
+    ///
+    /// 開発者はいちばんよく触るので、その操作が混ざると数字が実際より良く見える。
+    /// 設定画面の隠しスイッチ（バージョン番号を5回押すと出る）で切り替える。
+    /// TestFlight 版と App Store 版は同じアプリなので、どちらでも効く。
+    /// アップデートしても残り、アプリを消して入れ直すと元（計測する）に戻る。
+    static var isDeviceExcluded: Bool {
+        get { UserDefaults.standard.bool(forKey: excludedKey) }
+        set {
+            UserDefaults.standard.set(newValue, forKey: excludedKey)
+            applyDeviceSetting()
+        }
+    }
+
+    /// 計測するかどうかを Firebase に伝える。起動するたびに、`FirebaseApp.configure()` のすぐあとに呼ぶ。
+    ///
+    /// 止めると、自分で送るイベントだけでなく、Firebase が自動で送るもの（セッション・画面表示など）も止まる。
+    /// Xcode から動かす開発中のビルド（DEBUG）では、いつも止める。
+    /// ただし DebugView で確かめたいとき（起動引数に `-FIRAnalyticsDebugEnabled` を付けたとき）だけは送る。
+    static func applyDeviceSetting() {
+        #if DEBUG
+        let enabled = ProcessInfo.processInfo.arguments.contains("-FIRAnalyticsDebugEnabled")
+        #else
+        let enabled = !isDeviceExcluded
+        #endif
+        Analytics.setAnalyticsCollectionEnabled(enabled)
+    }
+
+    // MARK: - イベント
+
     /// グループを作った。`fromOriginGroup`は、公開された作品を見て
     /// 新しいグループを作った（`rotash://new?from=…`経由）場合にtrue。
     /// これがKの計測に直結する。
@@ -98,6 +132,8 @@ enum AnalyticsService {
         #if DEBUG
         print("📊 \(name) \(params)")
         #endif
+        // 計測から外した端末では送らない（Firebase 側でも止めてあるが、念のためここでも止める）。
+        guard !isDeviceExcluded else { return }
         Analytics.logEvent(name, parameters: params)
     }
 }

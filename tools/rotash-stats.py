@@ -8,6 +8,10 @@
   python3 tools/rotash-stats.py --from-file docs.json   # Firestore の代わりに手元の JSON を読む
   python3 tools/rotash-stats.py --codes ABC123,DEF456   # 招待コードを指定して1つずつ読む
                                                         # （ルールで一覧の読み取りが止められているとき）
+  python3 tools/rotash-stats.py --exclude ABC123        # このグループは数えない（動作確認用に作ったものなど）
+
+数えないグループは tools/stats-exclude.txt に1行1つずつ招待コードを書いておいてもよい（# から後はメモ）。
+招待コードを知っていれば誰でもそのグループに入れるので、このファイルは Git に上げない（.gitignore 済み）。
 
 接続情報は環境変数 ROTASH_PROJECT_ID / ROTASH_API_KEY / ROTASH_COLLECTION、
 未設定なら Rotash/Services/Sync/SyncConfig.swift から読む
@@ -110,6 +114,31 @@ def load_file(path: str) -> list[dict]:
             state.setdefault("_updatedAt", None)
             groups.append(state)
     return groups
+
+
+EXCLUDE_FILE = os.path.join(REPO, "tools", "stats-exclude.txt")
+
+
+def normalize_code(code: str) -> str:
+    return code.strip().upper().replace("-", "").replace(" ", "")
+
+
+def excluded_codes(option: str | None) -> set[str]:
+    """数えないグループの招待コード。--exclude と tools/stats-exclude.txt の両方を合わせる。"""
+    codes = {normalize_code(code) for code in (option or "").split(",") if code.strip()}
+    try:
+        with open(EXCLUDE_FILE, encoding="utf-8") as handle:
+            for line in handle:
+                code = normalize_code(line.split("#", 1)[0])
+                if code:
+                    codes.add(code)
+    except OSError:
+        pass
+    return codes
+
+
+def group_code(group: dict) -> str:
+    return normalize_code(str(group.get("inviteCode") or group.get("_docID") or ""))
 
 
 def fetch_documents(project: str, key: str, collection: str) -> list[dict]:
@@ -439,6 +468,8 @@ def main() -> None:
                         help="Firestore の代わりに手元の JSON を読む（REST の一覧レスポンス、またはグループ状態の配列）")
     parser.add_argument("--codes", metavar="CODE,CODE",
                         help="招待コードを指定して1つずつ読む（ルールで一覧の読み取りが止められているとき）")
+    parser.add_argument("--exclude", metavar="CODE,CODE",
+                        help="このグループは数えない（動作確認用に作ったものなど）。tools/stats-exclude.txt にも書ける")
     parser.add_argument("--now", metavar="ISO8601",
                         help="「今日」を指定する（検証用。省略時は現在時刻）")
     args = parser.parse_args()
@@ -454,10 +485,15 @@ def main() -> None:
         project, key, collection = config()
         print(f"取得中: {project}/{collection} …")
         if args.codes:
-            codes = [code.strip().upper().replace("-", "").replace(" ", "") for code in args.codes.split(",") if code.strip()]
+            codes = [normalize_code(code) for code in args.codes.split(",") if code.strip()]
             groups = fetch_by_codes(project, key, collection, codes)
         else:
             groups = fetch_documents(project, key, collection)
+    excluded = excluded_codes(args.exclude)
+    if excluded:
+        before = len(groups)
+        groups = [group for group in groups if group_code(group) not in excluded]
+        print(f"数えないグループ: {before - len(groups)} 件（指定 {len(excluded)} 件）")
     report(groups, now)
     if args.csv:
         write_csv(groups, args.csv, now)

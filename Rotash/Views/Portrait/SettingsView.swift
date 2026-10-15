@@ -9,6 +9,11 @@ struct SettingsView: View {
     @State private var confirmDelete = false
     @State private var showImporter = false
     @State private var batonPayload: SharePayload?
+    /// バージョン番号を押した回数。5回で開発者向けの欄が出る。
+    @State private var versionTaps = 0
+    /// 開発者向けの欄を出しているか。計測から外している端末では、はじめから出しておく（いまの状態が分かるように）。
+    @State private var showsDeveloper = AnalyticsService.isDeviceExcluded
+    @State private var excludesAnalytics = AnalyticsService.isDeviceExcluded
 
     var body: some View {
         ZStack {
@@ -76,6 +81,12 @@ struct SettingsView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.top, 8)
                     }
+
+                    versionLabel
+
+                    if showsDeveloper {
+                        developerBlock
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 40)
@@ -139,6 +150,42 @@ struct SettingsView: View {
                     .lineSpacing(3)
             }
 
+        }
+    }
+
+    /// いちばん下の小さなバージョン番号。5回押すと、開発者向けの欄が出る（ふつうの人は気づかない場所に置く）。
+    private var versionLabel: some View {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "-"
+        let build = info?["CFBundleVersion"] as? String ?? "-"
+        return Text("VERSION \(version) (\(build))")
+            .rotashLabel(8, color: Palette.faint, tracking: 1)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                versionTaps += 1
+                guard versionTaps >= 5, !showsDeveloper else { return }
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                withAnimation(.easeOut(duration: 0.2)) { showsDeveloper = true }
+            }
+    }
+
+    /// 開発者向け。この端末をアナリティクスの計測に入れない（開発者がいちばん触るので、数字が偏らないように）。
+    private var developerBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("開発者").rotashLabel(9, color: Palette.faint, tracking: 2)
+            Toggle(isOn: $excludesAnalytics) {
+                Text("この端末を計測に含めない")
+                    .rotashLabel(10, color: Palette.text, tracking: 0.4)
+            }
+            .tint(Palette.live)
+            .onChange(of: excludesAnalytics) { _, excluded in
+                AnalyticsService.isDeviceExcluded = excluded
+            }
+            Text("オンのあいだ、この端末の操作はアナリティクスに送られません。アップデートしても残ります。アプリを消して入れ直すと、オフに戻ります。")
+                .rotashLabel(9, color: Palette.faint, tracking: 0.4)
+                .lineSpacing(3)
         }
     }
 

@@ -10,6 +10,8 @@ struct RotashApp: App {
 
     init() {
         FirebaseApp.configure()
+        // 開発者の端末（と Xcode から動かしたとき）は計測に入れない（`AnalyticsService.applyDeviceSetting`）。
+        AnalyticsService.applyDeviceSetting()
     }
 
     var body: some Scene {

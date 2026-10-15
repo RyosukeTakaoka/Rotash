@@ -7,13 +7,13 @@
 
 | # | やること | やらないとどうなるか | 急ぎ度 |
 |---|---|---|---|
-| 0 | 準備（Firebase CLI） | 1〜5 ができない | — |
+| 0 | 準備（Firebase CLI） | 1・2・5 ができない | — |
 | 1 | 匿名ログインを有効にする | ログインせずに今までどおり読み書きする。入れ直したときに「前の自分」に戻れない | 高 |
 | 2 | セキュリティルールを反映 | 今コンソールに入っているルールのまま | 高 |
-| 3 | 招待の Web ページ（Hosting）を公開 | 招待リンクは `rotash://` のまま（アプリが無い人には開けない） | 中 |
-| 4 | 「◯◯が撮った」の押し出し通知 | 届かない（ほかは動く） | 中 |
+| 3 | App Store に公開したとき | **何もしなくてよい**（招待に App Store のリンクが自動で付く） | — |
+| 4 | 「◯◯が撮った」の押し出し通知 | **保留**（従量課金の Blaze は使わない。無料の方法を選んでいるところ） | — |
 | 5 | 古いアプリを締め出す | 古い版も読み書きできるまま | 全員が新しい版にしてから |
-| 6 | 連絡先メールを入れる | 設定画面に連絡先が出ない（審査で必要） | 公開前 |
+| 6 | 連絡先メール | **済み**（ryotaka057@gmail.com） | — |
 | 7 | App Store Connect の申告 | 審査に出せない | 公開前 |
 
 ---
@@ -60,57 +60,32 @@ firebase deploy --only firestore:rules
 
 反映したら、手元の iPhone でアプリを開いて、写真が見える・撮れることを確かめる。
 
-## 3. 招待の Web ページを公開する（Universal Links）
+## 3. App Store に公開したとき（招待のリンク）
 
-```sh
-firebase deploy --only hosting
-```
+自前の招待ページは持たない（置いておく負担が重いので、2026-10-15 にやめた）。
+そのかわり、**App Store に公開されると、招待の文章に App Store のリンクが自動で付く**（`AppStoreLink`）。
 
-1. ブラウザで `https://rotash-f83a4.web.app/.well-known/apple-app-site-association` を開き、
-   JSON（`"applinks"` で始まるもの）が表示されることを確かめる。
-2. `https://rotash-f83a4.web.app/j/ABC234` を開くと、招待コードとコピーボタンが出るページになる。
-3. `web/j/index.html` の `INSTALL_URL` に、アプリを入れてもらう URL（TestFlight の公開リンク、のちに App Store の URL）を入れて、
-   もう一度 `firebase deploy --only hosting`。空のままだと「アプリを入れる」ボタンが出ないだけ。
-4. Xcode → ターゲット Rotash → **Signing & Capabilities** に **Associated Domains**（`applinks:rotash-f83a4.web.app`）が出ていることを確かめる
-   （`Supporting/Rotash.entitlements` に書いてある。自動署名なので、Apple 側の設定は Xcode が済ませる）。
-5. `Rotash/App/FeatureFlags.swift` の `usesWebInviteLinks` を `true` にしてビルドし直す。
-   これで、招待を送ると `https://rotash-f83a4.web.app/j/コード` のリンクになる。
-   - アプリが入っている人: リンクを押すとアプリが開いて、参加画面にコードが入る
-   - 入っていない人: Web ページが開いて、コードのコピーとインストールの案内が出る（入れたあと、参加画面の「貼り付け」で入れる）
+- アプリを開いたときに、Apple の検索（iTunes Search API。無料・登録不要）で Rotash が App Store にあるかを確かめる。
+  公開前は見つからないので、これまでどおり「招待コード」だけの文章になる。
+- 公開後に届く文章: 「Rotash で一緒に写真を撮ろう。／招待コード ABC234／アプリ: https://apps.apple.com/…」
+- 受け取った人は、リンクからアプリを入れ、**招待の文章をまるごとコピーして、参加画面の「貼り付け」**を押せばコードが入る
+  （文章の中からコードだけを拾う）。手で6文字を打ってもよい。
+- アプリが入っている人には、これまでどおり `rotash://join/コード` のリンクも添える。
 
-**順番に注意**: 1〜3 を済ませる前に `usesWebInviteLinks` を `true` にすると、押しても開かないリンクを配ってしまう。
+URL を書き換えてアプリを出し直す必要はない。公開した日のうちに、招待する側がアプリを開けば次の招待から付く。
 
-## 4. 「◯◯が撮った」の押し出し通知
+## 4. 「◯◯が撮った」の押し出し通知（保留）
 
-今日の担当が撮ったら、ほかのメンバーに「◯◯が今日の1枚を撮りました」が届く（`functions/`）。
-サーバー側のプログラム（Cloud Functions）が要るので、手順が一番多い。
+今日の担当が撮ったら、ほかのメンバーに「◯◯が今日の1枚を撮りました」を届ける仕組み。
+Firebase の Cloud Functions（`functions/`）で作ったが、**Cloud Functions は従量課金（Blaze）でないと動かせない**ので使わない（2026-10-15、オーナー判断）。
+無料の代わりの方法を選んでいるところ（[`PENDING_DECISIONS.md`](PENDING_DECISIONS.md)）。決まるまで、この通知は届かない（ほかは全部動く）。
 
-1. **料金プランを Blaze（従量課金）にする。** Cloud Functions は無料プランでは動かせない。
-   友達グループの規模なら無料枠に収まるはずだが、念のため Google Cloud の「予算アラート」（例: 月 500 円）を設定しておく。
-2. **APNs キーを作る**: [Apple Developer](https://developer.apple.com/account/resources/authkeys/list) → Keys → ＋ →
+どの方法でも共通して要る準備（無料）:
+
+1. **APNs キーを作る**: [Apple Developer](https://developer.apple.com/account/resources/authkeys/list) → Keys → ＋ →
    「Apple Push Notifications service (APNs)」にチェック → 作成 → `.p8` ファイルをダウンロード（**1回しかダウンロードできない**ので大事に保管）。Key ID を控える。
-3. Firebase コンソール → ⚙ プロジェクトの設定 → **Cloud Messaging** → Apple アプリの構成 → **APNs 認証キー** をアップロード
-   （Key ID と、チーム ID `5B2NQ74986` を入れる）。
-4. Xcode → Signing & Capabilities に **Push Notifications** が出ていることを確かめる（entitlements に書いてある）。
-   `aps-environment` は `development` だが、TestFlight / App Store 用に書き出すときは Xcode が自動で本番用に直す。
-5. **場所を合わせる**: コンソール → Firestore Database の上部に出ている「ロケーション」を見て、
-   `functions/index.js` の `REGION` を同じ場所にする（いまは東京 `asia-northeast1`。`nam5` なら `us-central1`）。
-   違うと、デプロイに失敗するか、写真を撮っても呼ばれない。
-6. デプロイ:
-   ```sh
-   cd functions
-   npm install
-   node --test        # 中身のテスト（7件）。全部 pass になることを確かめる
-   cd ..
-   firebase deploy --only functions
-   ```
-7. 2台の iPhone で確かめる。片方で今日の1枚を撮ると、もう片方に通知が来る。
-
-- 届くのは **新しい版を入れて、通知を許可した人**だけ（宛先は匿名ログインの uid なので、1 が済んでいることも必要）。
-- 撮った本人には届かない。届くのは「今日の担当が撮った」ときだけで、ふつうは1日に1通
-  （古い版の端末が書き戻して写真が一度消え、また上がったときだけ、2通になることがある）。
-- 「見えなくする」はこの端末だけの設定なので、見えなくした人が撮ったときも通知は届く（写真は見えない）。
-- 担当を入った人に渡した日（入った日の番）は、もとの担当の端末に、同期するまで夜21時の「あなたの番」が残ることがある。
+2. Firebase コンソール → ⚙ プロジェクトの設定 → **Cloud Messaging** → Apple アプリの構成 → **APNs 認証キー** をアップロード
+   （Key ID と、チーム ID `5B2NQ74986` を入れる）。Cloud Messaging そのものは無料プラン（Spark）で使える。
 
 ## 5. 古いアプリを締め出す（全員が新しい版にしてから）
 
@@ -132,11 +107,11 @@ function allowsLegacyClients() {
 なので、**全員が新しい版にしてから**本格的に配る。もう1つ、写真の本体は Cloudinary に残る
 （アプリからは消せない仕組みのため。URL はどこにも載らなくなるので、誰の画面にも出ない）。消したいと連絡が来たら、Cloudinary の管理画面で消す。
 
-## 6. 連絡先メールを入れる
+## 6. 連絡先メール（済み）
 
-`Rotash/Services/Sync/SyncConfig.swift` の `supportEmail` に、**人に見せてよい**メールアドレスを入れる。
+`Rotash/Services/Sync/SyncConfig.swift` の `supportEmail` に **ryotaka057@gmail.com** を入れた。
 設定画面に「連絡先」として出る（App Store ガイドライン 1.2 で、利用者が運営に連絡できることが必要）。
-私用のアドレスを出したくなければ、Rotash 用に1つ作るのがおすすめ。空のままなら連絡先の行は出ない。
+App Store Connect の「サポート URL」にも、このアドレスへの案内を書いておく。
 
 ## 7. App Store Connect の申告
 

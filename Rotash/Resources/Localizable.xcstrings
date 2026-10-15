@@ -189,6 +189,28 @@
         }
       }
     },
+    "Rotash で一緒に写真を撮ろう。\n招待コード %@\nアプリ: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Join my group on Rotash.\nInvite code %1$@\nApp: %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotash で一緒に写真を撮ろう。\n招待コード %1$@\nアプリ: %2$@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotash에서 같이 사진 찍자.\n초대 코드 %1$@\n앱: %2$@"
+          }
+        }
+      }
+    },
     "ROTASH について": {
       "localizations": {
         "en": {
@@ -2223,24 +2245,24 @@
         }
       }
     },
-    "招待のページでコードをコピーしてきた人は": {
+    "招待のメッセージをコピーしてきた人は": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Copied a code from the invite page?"
+            "value": "Copied an invite message?"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "招待のページでコードをコピーしてきた人は"
+            "value": "招待のメッセージをコピーしてきた人は"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "초대 페이지에서 코드를 복사해 왔다면"
+            "value": "초대 메시지를 복사해 왔다면"
           }
         }
       }

@@ -137,7 +137,7 @@
 | # | 項目 | 触る | 着手条件 |
 |---|---|---|---|
 | L1 | **撮影画角の分離**（撮影は広く / 表示は7分割のまま） | `Services/CameraController.swift`, `Views/Landscape/ThisWeekView.swift` | **Month 2 の目視分類で自撮り70%超だったら。**その場合は LATER ではなく**最優先に繰り上げる**（7分割は写真の横幅を82%捨てている） |
-| L2 | **「◯◯が撮った」プッシュ通知** | APNs 設定 + サーバー側 | N4（朝の通知）が効いていることが確認できてから。**プッシュ基盤が要るので重い。先に軽い N4 で大半を取る** **→ 2026-10-15 実装済み（Cloud Functions `functions/`。デプロイ手順は [`FIREBASE_SETUP.md`](FIREBASE_SETUP.md) 4）** |
+| L2 | **「◯◯が撮った」プッシュ通知** | APNs 設定 + サーバー側 | N4（朝の通知）が効いていることが確認できてから。**プッシュ基盤が要るので重い。先に軽い N4 で大半を取る** **→ 2026-10-15 アプリ側と Cloud Functions（`functions/`）は作ったが、Cloud Functions は従量課金（Blaze）が要るので使わない。無料の送り方を検討中（[`PENDING_DECISIONS.md`](PENDING_DECISIONS.md)）** |
 | L3 | **当日限定・1回だけの撮り直し** | `App/FeatureFlags.swift` の `allowRetake` を日次1回制限つきで true | ユーザーから**明確な不満**が確認されたら。「便利だから」では入れない。**→ 実験中（実装済み）: 「写真が事故ったときに救えない」という声を受け、「撮った直後30秒だけ撮り直し自由」（`retakeWindowSeconds`）で検証している。`photo_retaken` の秒数分布を見て、撮り比べに使われていたら短くするか 0 に戻す** |
 | L4 | 担当者本人への夜リマインド（**当日1回のみ**） | `Services/NotificationScheduler.swift` | No Shot が「忘れていた」で頻発していたら。**→ 2026-10-15 実装済み（21時。オーナー判断、#21）**。日曜は「今週の Rotash」と同じ時刻なので、まだ撮っていない担当の端末にはリマインドだけを出す |
 | L5 | 参加直後に既存の枠を見せる | `ViewModels/AppViewModel.swift`（`joinRotash` の同期完了まで空を出さない） | 参加直後の離脱が観測されたら。**→ 2026-10 の友達テストで条件を満たした**（途中参加者が「入れたけど進めない」）。#28 と同じ週に入れる（[`EXTERNAL_REVIEW_2026-10.md`](EXTERNAL_REVIEW_2026-10.md) 3-2） **→ 2026-10-15 実装済み**：今日の1枚がまだなら、今日入った人に今日の番を渡す（`AssignmentAudit.handOverToday`）。縦のホームには今日の1マス（`TodayCard`）を出す |
@@ -149,7 +149,7 @@
 | L12 | **「今日の1枚」ウィジェット**（その日撮られた1枚だけ。担当者名・7分割・進捗は出さない） | 新規 Widget Extension、App Group | #28 の後、「コア体験につながるもの」が要ると分かったら。Locket 資料 §1 の DON'T（担当者名の常時表示）には当たらない形に限る（[`EXTERNAL_REVIEW_2026-10.md`](EXTERNAL_REVIEW_2026-10.md) 3-1） |
 | L13 | 計測2つ：開いたときに今日自分が担当か / 初めて横にしたか | `Services/Analytics/AnalyticsService.swift` | L5 と同じ週。PRODUCT_PHILOSOPHY 29-1「担当日以外にも開くか」を直接測る **→ 2026-10-15 実装済み**（`rotash_open`・`week_viewed`・`first_landscape`。`ANALYTICS_SETUP.md` 7章） |
 | L14 | App Store 公開前の必須対応（通報・ブロック・連絡先・サーバー側のデータ削除・年齢区分の回答） | 未定 | 配る範囲を広げる前。中身は [`EXTERNAL_REVIEW_2026-10.md`](EXTERNAL_REVIEW_2026-10.md) 3-3 **→ 2026-10-15 実装済み**（`PhotoSafetyMenu`、設定の「抜ける」2択）。連絡先メールと年齢区分の回答は [`FIREBASE_SETUP.md`](FIREBASE_SETUP.md) 6・7 |
-| L15 | 未インストールの人にも届く招待（Universal Links ＋ Web ページ ＋ コードのコピー） | `Services/RotashLink.swift`、Firebase Hosting | 友達の外に配る前。Firebase Dynamic Links は終了済み（同 3-4） **→ 2026-10-15 実装済み**（`web/`、スイッチ `usesWebInviteLinks` は Hosting 公開まで false。[`FIREBASE_SETUP.md`](FIREBASE_SETUP.md) 3） |
+| L15 | 未インストールの人にも届く招待（Universal Links ＋ Web ページ ＋ コードのコピー） | `Services/RotashLink.swift`、Firebase Hosting | 友達の外に配る前。Firebase Dynamic Links は終了済み（同 3-4） **→ 2026-10-15 いったん Web ページで作ったが、自前のページは負担が重いのでやめた**。App Store 公開後は招待の文章に App Store のリンクが自動で付く（`AppStoreLink`）。アプリを入れたら文章を「貼り付け」 |
 | L11 | 1年前の作品リマインド | 未定 | **1年後。いまは1年前のデータが存在しないので作れない。** 繰り延べコストはゼロ（`archive` が週を消さずに全部持っているため、必要なのは「消さないこと」だけ） |
 
 ---

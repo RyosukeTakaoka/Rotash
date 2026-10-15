@@ -279,7 +279,7 @@ Firebase の Swift Package（12.18.0）から、使う4つだけをリンクし�
 | `FirebaseAuth` | 匿名ログイン（`AuthService`）。ID トークンを Firestore への REST の読み書きに添える。入れ直しても同じ uid なので「前の自分」に戻れる |
 | `FirebaseMessaging` | 「◯◯が撮った」の押し出し通知の宛先（`PushService`。端末のトークンを `devices/{uid}` に置く） |
 
-サーバー側は `firebase.json`（Hosting・ルール・Functions）、`firestore.rules`、`functions/`（Cloud Functions）、`web/`（招待ページ）にあります。
+サーバー側は `firebase.json`（ルール・Functions）、`firestore.rules`、`functions/`（Cloud Functions。従量課金が要るので**今は使っていない**）にあります。
 コンソールでの有効化とデプロイの手順は [`docs/FIREBASE_SETUP.md`](docs/FIREBASE_SETUP.md)。
 
 同期そのものは、Firestore を REST API で叩いて **URLSession だけで実装**しています。
@@ -365,17 +365,16 @@ Firebase の Swift Package（12.18.0）から、使う4つだけをリンクし�
 
 | | 用途 | 公開してよいか |
 |---|---|---|
-| `rotash://join/ABC123`（Web のリンクにしたあとは `https://rotash-f83a4.web.app/j/ABC123`） | 自分のグループの空き枠に呼ぶ | **不可**。Story に貼ると他人が7枠に入れる |
+| `rotash://join/ABC123` | 自分のグループの空き枠に呼ぶ | **不可**。Story に貼ると他人が7枠に入れる |
 | `rotash://new?from=<UUID>` | 公開した作品を見た人が、自分たちのグループを作る | 可 |
 
 `new` に付く `from` は、**その作品から新しいグループがいくつ生まれたか**を
 知るための唯一の手がかりです。受け取る側（`AppViewModel.handle`）は実装してありますが、
 **いまはどの共有にもこのリンクを載せていません**（上の「共有」の理由）。
 そのため、公開した作品から生まれたグループ（K）は、今のところ測れません。
-**アプリが入っていない人にも届く招待リンク**（Universal Links）: `https://rotash-f83a4.web.app/j/コード` を押すと、
-アプリがあればアプリが開き、無ければ Web ページ（`web/j/index.html`）でコードのコピーとインストールの案内が出ます。
-Web ページ（Firebase Hosting）を公開するまではスイッチ `RotashFeatureFlags.usesWebInviteLinks` を false にしてあり、
-招待は今までどおり `rotash://` のリンクです（[`docs/FIREBASE_SETUP.md`](docs/FIREBASE_SETUP.md) 3）。
+**アプリが入っていない人**: 自前の招待ページは持ちません（置いておく負担が重いため）。
+App Store に公開されると、招待の文章に **App Store のリンクが自動で付きます**（`AppStoreLink`。起動時に Apple の検索で確かめる）。
+受け取った人はアプリを入れてから、招待の文章をコピーして参加画面の「貼り付け」を押せば入れます。
 
 同期が未設定のときは、コードだけでは相手のグループを見つけられないので、
 参加後にバトンを受け取ってもらう必要があります。
@@ -567,8 +566,7 @@ Rotash/
   Resources/    Localizable.xcstrings ほか   … 日本語・韓国語・英語、アイコン、プライバシーマニフェスト
 Supporting/     Info.plist・Rotash.entitlements（通知・Associated Domains）
 RotashTests/    自動テスト（⌘U）
-functions/      Cloud Functions（「◯◯が撮った」の押し出し通知）
-web/            招待の Web ページと apple-app-site-association（Firebase Hosting）
+functions/      Cloud Functions（「◯◯が撮った」の押し出し通知。従量課金が要るので今は使っていない）
 firestore.rules Firestore のセキュリティルール
 docs/           戦略・診断・保留事項などの資料
 tools/          rotash-stats.py（Firestore の集計）/ feedback-form.gs（ふりかえりフォームの作成）
@@ -586,8 +584,8 @@ MVVM。日付計算・担当者決定・突き合わせは副作用のない純�
 `Services/NotificationScheduler.swift`。下の3種類は**ローカル通知**で、サーバーも APNs も使いません。
 担当は週の開始時点で内部的に決まっているので、その週の分をまとめて予約するだけで足ります。
 
-これとは別に、**「◯◯が今日の1枚を撮りました」の押し出し通知**を、撮った人以外のメンバーに1通だけ送ります
-（`functions/`・`PushService`。Cloud Functions のデプロイと APNs キーの登録が済むまでは届きません。[`docs/FIREBASE_SETUP.md`](docs/FIREBASE_SETUP.md) 4）。
+これとは別に、**「◯◯が今日の1枚を撮りました」の押し出し通知**を、撮った人以外のメンバーに1通だけ送る仕組みを作ってあります
+（`PushService`）。ただし送る側に Cloud Functions（従量課金）が要るため、**今は届きません**。無料の方法を検討中です（[`docs/PENDING_DECISIONS.md`](docs/PENDING_DECISIONS.md)）。
 
 送るのは3種類、どの端末にも **1日2通まで**。
 

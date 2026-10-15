@@ -5,10 +5,5 @@
 	<!-- 押し出し通知（「◯◯が撮った」）。TestFlight / App Store 向けに書き出すと Xcode が production に置き換える。 -->
 	<key>aps-environment</key>
 	<string>development</string>
-	<!-- 招待リンク（https://rotash-f83a4.web.app/j/CODE）をアプリで開くため。docs/FIREBASE_SETUP.md -->
-	<key>com.apple.developer.associated-domains</key>
-	<array>
-		<string>applinks:rotash-f83a4.web.app</string>
-	</array>
 </dict>
 </plist>

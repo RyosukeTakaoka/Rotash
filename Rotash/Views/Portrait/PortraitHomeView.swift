@@ -399,10 +399,10 @@ struct PortraitHomeView: View {
             Button("招待コードで参加") { app.activeSheet = .join }
                 .buttonStyle(RotashButtonStyle())
 
-            // 招待の Web ページでコードをコピーしてからアプリを入れた人のための近道。
+            // 招待の文章をコピーしてからアプリを入れた人のための近道。
             // 押したときだけクリップボードを読む（勝手には読まない）。
             VStack(alignment: .leading, spacing: 8) {
-                Text("招待のページでコードをコピーしてきた人は")
+                Text("招待のメッセージをコピーしてきた人は")
                     .rotashLabel(9, color: Palette.faint, tracking: 0.4)
                 PasteButton(payloadType: String.self) { strings in
                     Task { @MainActor in

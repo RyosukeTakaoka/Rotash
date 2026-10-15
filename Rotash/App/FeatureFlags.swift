@@ -44,12 +44,4 @@ enum RotashFeatureFlags {
     /// 7分割の枠は細く、普通の広角では「自撮り以外に撮るものがない」が起きやすいため。
     /// false に戻すと、これまでどおりの 1倍カメラになる。
     static let prefersUltraWideBackCamera = true
-
-    /// 招待リンクを Web のリンク（`https://rotash-f83a4.web.app/j/ABC123`）で送るか。
-    ///
-    /// アプリが入っていない人にも届く（Web のページでコードをコピーして、アプリを入れてから貼り付ける）。
-    /// **Firebase Hosting に `web/` を公開してから true にする**（`docs/FIREBASE_SETUP.md`）。
-    /// 公開する前に true にすると、押した人に「ページが見つかりません」が出る。
-    /// false のあいだは、これまでどおり `rotash://join/ABC123`（アプリが入っている人だけに効く）。
-    static let usesWebInviteLinks = false
 }

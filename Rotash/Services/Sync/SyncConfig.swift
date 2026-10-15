@@ -75,7 +75,7 @@ enum SyncConfig {
 
     /// 報告・問い合わせを受ける連絡先（App Store ガイドライン 1.2 で、公開した連絡先が必要）。
     /// 空のあいだは、設定画面に連絡先を出さない。App Store に出す前に必ず入れること。
-    static let supportEmail = ""
+    static let supportEmail = "ryotaka057@gmail.com"
 
     static var cloudinaryUploadURL: URL? {
         URL(string: "https://api.cloudinary.com/v1_1/\(cloudinaryCloudName)/image/upload")

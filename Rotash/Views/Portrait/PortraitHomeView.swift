@@ -111,7 +111,8 @@ struct PortraitHomeView: View {
                           hides: { app.isHidden($0) },
                           todayIndex: app.todayIndex,
                           assigneeName: app.revealedAssignee(forDay: app.todayIndex)?.name,
-                          isMine: app.isMyDay(app.todayIndex))
+                          isMine: app.isMyDay(app.todayIndex),
+                          showsRotateHint: !app.hasSeenLandscape)
                     .containerRelativeFrame(.vertical) { length, _ in length * 0.5 }
                     .padding(.top, 8)
 

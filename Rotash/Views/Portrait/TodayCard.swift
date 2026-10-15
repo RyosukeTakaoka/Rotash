@@ -17,6 +17,8 @@ import SwiftUI
 ///
 /// 横にするきっかけは、文字ではなく、スマホの形が横に倒れる動きで示す。
 /// 「視差効果を減らす」がオンの人には動かさない。
+/// 一度でも横にしたことがある人には出さない（`showsRotateHint`。知っている人には、うるさいだけ）。
+/// そのときも、自分の番でまだ撮っていない日だけは「今日はあなたの番」を出す。
 struct TodayCard: View {
     let week: RotashWeek
     /// この端末で見えなくしている写真か（ブロック・報告）。見えなくした写真は、ふたの下にも出さない。
@@ -25,17 +27,21 @@ struct TodayCard: View {
     /// 今日の担当（その日になっているので公開してよい）。
     let assigneeName: String?
     let isMine: Bool
+    /// 横にするきっかけ（倒れるスマホと「横にして見る」）を出すか。まだ一度も横にしたことがない人だけ。
+    let showsRotateHint: Bool
 
     init(week: RotashWeek,
          hides: @escaping (Slot) -> Bool = { _ in false },
          todayIndex: Int,
          assigneeName: String?,
-         isMine: Bool) {
+         isMine: Bool,
+         showsRotateHint: Bool = true) {
         self.week = week
         self.hides = hides
         self.todayIndex = todayIndex
         self.assigneeName = assigneeName
         self.isMine = isMine
+        self.showsRotateHint = showsRotateHint
     }
 
     /// となりの日が見えている幅。
@@ -104,13 +110,16 @@ struct TodayCard: View {
                         .minimumScaleFactor(0.6)
                 }
                 Spacer(minLength: 0)
-                RotateHint(reduceMotion: reduceMotion, nudges: nudges)
-                Text(hintText)
-                    .rotashLabel(10, color: isMine && !(today?.isFilled ?? false) ? Palette.live : Palette.text,
-                                 tracking: 0.8)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 6)
-                    .fixedSize(horizontal: false, vertical: true)
+                if showsRotateHint {
+                    RotateHint(reduceMotion: reduceMotion, nudges: nudges)
+                }
+                if let hintText {
+                    Text(hintText)
+                        .rotashLabel(10, color: isMyTurnToShoot ? Palette.live : Palette.text, tracking: 0.8)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 6)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(.top, 16)
             .padding(.bottom, 22)
@@ -119,18 +128,22 @@ struct TodayCard: View {
         .overlay(Rectangle().stroke(Palette.line, lineWidth: 1))
     }
 
-    /// ふたの上の一言。いま横にすると何ができるか。
-    private var hintText: String {
+    private var isMyTurnToShoot: Bool { isMine && !(today?.isFilled ?? false) }
+
+    /// ふたの上の一言。いま横にすると何ができるか。横にしたことがある人には、自分の番のときだけ。
+    private var hintText: String? {
+        if isMyTurnToShoot { return String(localized: "今日はあなたの番\n横にして撮る") }
+        guard showsRotateHint else { return nil }
         if today?.isFilled ?? false { return String(localized: "横にして開く") }
-        if isMine { return String(localized: "今日はあなたの番\n横にして撮る") }
         return String(localized: "横にして見る")
     }
 
     private var accessibilityText: Text {
+        let hint = hintText ?? String(localized: "横にして見る")
         if let assigneeName {
-            return Text("今日の担当 \(assigneeName)。\(hintText)")
+            return Text("今日の担当 \(assigneeName)。\(hint)")
         }
-        return Text(hintText)
+        return Text(hint)
     }
 
     // MARK: - となりの日

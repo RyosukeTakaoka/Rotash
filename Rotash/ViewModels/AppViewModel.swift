@@ -62,6 +62,41 @@ final class AppViewModel: ObservableObject {
     /// 入力中のシートが勝手に閉じてしまうので、ここで保持する。
     @Published var activeSheet: PortraitSheet?
 
+    // MARK: 初めて入った直後
+
+    /// この端末で横の作品画面（THIS WEEK）を一度でも見たか。
+    ///
+    /// 見るまでは、縦のホームの今日の1マスに「横にして見る」のきっかけを出す。見たあとは出さない
+    /// （横にすれば作品が出ることはもう知っているので、出し続けるとうるさいだけ）。
+    @Published private(set) var hasSeenLandscape = AppViewModel.loadHasSeenLandscape()
+    /// 初めてグループを作った・入った直後か。
+    ///
+    /// このあいだは、縦に持っていても縦のホームではなく、横の作品画面をそのまま横に倒して見せる（`RootView`）。
+    /// 説明の文字を出さなくても、人は横向きの画面を見れば自然とスマホを傾ける。
+    /// 一度横にしたら（`hasSeenLandscape`）終わりで、縦に戻せば、あとはいつもの縦のホームになる。
+    @Published private(set) var isIntroducingWork = UserDefaults.standard.bool(forKey: AppViewModel.introKey)
+
+    /// 縦に持っているときに、縦のホームの代わりに横の作品画面を見せるか。
+    var showsWorkInPortrait: Bool { isIntroducingWork && hasGroup && !hasSeenLandscape }
+
+    // 保存した値の初期値を読むのに使うので、MainActor の外から呼べるようにしておく。
+    private nonisolated static let introKey = "rotash.introducingWork"
+    private nonisolated static let seenLandscapeKey = "rotash.hasSeenLandscape"
+
+    private nonisolated static func loadHasSeenLandscape() -> Bool {
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: seenLandscapeKey) { return true }
+        // この印より前の版で、グループごとの「初めて横にした」を記録していた人は、もう見ている。
+        return defaults.dictionaryRepresentation().keys.contains { $0.hasPrefix("rotash.firstLandscape.") }
+    }
+
+    /// 初めてのグループができたとき（作った・入った）に呼ぶ。
+    private func beginIntroducingWorkIfFirst(wasEmpty: Bool) {
+        guard wasEmpty, !hasSeenLandscape else { return }
+        isIntroducingWork = true
+        UserDefaults.standard.set(true, forKey: Self.introKey)
+    }
+
     /// リンクから来たときに、参加画面へ先に渡しておく招待コード。
     @Published var pendingJoinCode: String?
     /// pendingJoinCode がリンクから来たか（false なら、参加画面の外で貼り付けたコード）。計測の `via_link` に使う。
@@ -243,6 +278,7 @@ final class AppViewModel: ObservableObject {
         newGroup.originGroupID = pendingOriginGroupID
         pendingOriginGroupID = nil
         // 掛け持ちに加えて、作ったグループを開く。
+        beginIntroducingWorkIfFirst(wasEmpty: groups.isEmpty)
         groups.append(newGroup)
         currentGroupID = newGroup.id
         persist()
@@ -285,6 +321,7 @@ final class AppViewModel: ObservableObject {
             myMemberID: me.id,
             currentWeek: Self.makeJoiningWeek(memberID: me.id)
         )
+        beginIntroducingWorkIfFirst(wasEmpty: groups.isEmpty)
         groups.append(newGroup)
         currentGroupID = newGroup.id
         persist()
@@ -465,6 +502,14 @@ final class AppViewModel: ObservableObject {
 
     /// 横画面が出たとき（ThisWeekView から）。そのグループで初めてなら、それも記録する。
     func logWeekViewed() {
+        if !hasSeenLandscape {
+            hasSeenLandscape = true
+            UserDefaults.standard.set(true, forKey: Self.seenLandscapeKey)
+        }
+        if isIntroducingWork {
+            isIntroducingWork = false
+            UserDefaults.standard.set(false, forKey: Self.introKey)
+        }
         guard let group else { return }
         let today = todayIndex
         AnalyticsService.weekViewed(isMyDay: group.isMyDay(today, in: group.currentWeek),

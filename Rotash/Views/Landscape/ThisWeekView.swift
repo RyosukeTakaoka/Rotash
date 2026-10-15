@@ -2,11 +2,25 @@ import Combine
 import SwiftUI
 import UIKit
 
+/// 横の作品画面を、縦に持ったまま見せているか（初めて入った直後。`RootView` の `WorkInPortrait`）。
+/// このあいだはカメラを動かさず、見た記録も付けない（本当に横にしたときに付ける）。
+private struct WorkPreviewKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var isWorkPreview: Bool {
+        get { self[WorkPreviewKey.self] }
+        set { self[WorkPreviewKey.self] = newValue }
+    }
+}
+
 /// 横向きのメイン体験。
 /// 7分割は誰にでも常に全部見える。撮影だけがその日の担当者に限られる。
 struct ThisWeekView: View {
 
     @EnvironmentObject private var app: AppViewModel
+    @Environment(\.isWorkPreview) private var isPreview
     @StateObject private var camera = CameraController()
 
     @State private var manualSelection: Int?
@@ -39,7 +53,7 @@ struct ThisWeekView: View {
     /// 週の最後の1枚を撮ると週は「完成」になるが、撮った直後の撮り直しだけは
     /// 他の日と同じようにできるようにする（最後の1枚だけ事故を救えないのは不公平なので）。
     private var activeDay: Int? {
-        guard let week else { return nil }
+        guard !isPreview, let week else { return nil }
         if let manualSelection, app.canShoot(dayIndex: manualSelection) { return manualSelection }
         guard !week.isFinished else { return nil }
         return app.autoActiveDay
@@ -77,7 +91,7 @@ struct ThisWeekView: View {
         }
         .onAppear {
             syncCamera()
-            app.logWeekViewed()
+            if !isPreview { app.logWeekViewed() }
         }
         .onDisappear { camera.stop() }
         .onChange(of: activeDay) { oldDay, newDay in

@@ -2,6 +2,8 @@ import Combine
 import SwiftUI
 
 /// 縦は「準備するところ」、横は「Rotash 体験そのもの」。
+///
+/// 例外は、初めてグループを作った・入った直後（`AppViewModel.showsWorkInPortrait`）。
 struct RootView: View {
 
     @EnvironmentObject private var app: AppViewModel
@@ -23,6 +25,9 @@ struct RootView: View {
                     } else {
                         LandscapeEmptyView()
                     }
+                } else if app.showsWorkInPortrait {
+                    // 初めて入った直後は、縦に持っていても横の作品画面を見せる（横にすれば、そのまま正しい向きになる）。
+                    WorkInPortrait(size: geometry.size)
                 } else {
                     PortraitHomeView()
                 }
@@ -78,5 +83,26 @@ struct RootView: View {
                                     set: { if !$0 { app.alertMessage = nil } })) {
             Button("OK", role: .cancel) {}
         }
+    }
+}
+
+/// 初めてグループに入った直後の縦画面。横の作品画面（THIS WEEK）を、そのまま横に倒して見せる。
+///
+/// 「横にして見て」と文字で言わなくても、横向きの画面が出ていれば人は自然とスマホを傾ける。
+/// 傾けると本物の横画面に替わり、そのあと縦に戻せばいつもの縦のホームになる。
+/// 多くの人はスマホを左に倒して（反時計回りに）横にするので、その向きで正しく読めるように倒しておく。
+/// これは見せるだけ。押しても何も起きない（撮るのは、横にしてから）。
+private struct WorkInPortrait: View {
+    let size: CGSize
+
+    var body: some View {
+        ThisWeekView()
+            .environment(\.isWorkPreview, true)
+            .frame(width: size.height, height: size.width)
+            .rotationEffect(.degrees(90))
+            .frame(width: size.width, height: size.height)
+            .allowsHitTesting(false)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("スマホを横にすると、今週の作品が見られます"))
     }
 }

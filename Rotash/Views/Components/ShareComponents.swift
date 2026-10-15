@@ -8,12 +8,13 @@ struct SharePayload: Identifiable {
 
 struct ActivityView: UIViewControllerRepresentable {
     let items: [Any]
-    var onComplete: ((Bool) -> Void)? = nil
+    /// 送ったか（取り消しではないか）と、送り先の種類（Instagram・LINE など）。
+    var onComplete: ((Bool, UIActivity.ActivityType?) -> Void)? = nil
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
         let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
-        controller.completionWithItemsHandler = { _, completed, _, _ in
-            onComplete?(completed)
+        controller.completionWithItemsHandler = { activityType, completed, _, _ in
+            onComplete?(completed, activityType)
         }
         return controller
     }
@@ -93,9 +94,10 @@ struct WorkShareButton<Label: View>: View {
         }
         .buttonStyle(.plain)
         .sheet(item: $payload) { payload in
-            ActivityView(items: payload.items) { completed in
+            ActivityView(items: payload.items) { completed, activityType in
                 if completed {
-                    AnalyticsService.workShareCompleted(isComplete: week.isComplete)
+                    AnalyticsService.workShareCompleted(isComplete: week.isComplete,
+                                                        destination: activityType?.rawValue)
                 }
             }
         }

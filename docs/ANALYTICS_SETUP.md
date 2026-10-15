@@ -184,7 +184,10 @@ App Store Connectでアプリ情報を登録する際、データを収集する
 | `week_completed` | 週が切り替わるとき、7/7 だった | `member_count`, `is_first_week` |
 | `invite_share_tapped` | 招待の共有シートを開いた | — |
 | `work_share_tapped` | 作品の共有シートを開いた | `filled_count`, `is_complete` |
-| `work_share_completed` | 共有シートで送信まで完了した | `is_complete` |
+| `work_share_completed` | 共有シートで送信まで完了した | `is_complete`, `destination`（送り先の種類。Instagram は `com.burbn.instagram.shareextension`） |
+| `rotash_open` | アプリが前面に来た（起動・戻ってきた） | `is_my_day`（今日自分が担当か）, `today_filled`, `group_count` |
+| `week_viewed` | 横にして今週の作品を見た | `is_my_day`, `today_filled` |
+| `first_landscape` | そのグループで初めて横にした | `minutes_since_join`（招待で入ってから何分後か。作った人は -1） |
 
 `week_completed` は「その週が終わって次の週に切り替わった瞬間」に、全枠が写真で埋まっていた場合だけ送られる
 （`AppViewModel.rolledWeek`）。7枚目を撮った瞬間ではない。
@@ -210,7 +213,8 @@ App Store Connectでアプリ情報を登録する際、データを収集する
 |---|---|---|
 | ① 1人がどれくらい招待するか（何グループ作るか・何人誘うか） | Firebase コンソール → Analytics → イベント | `group_created`・`invite_share_tapped` を「ユーザーあたり」で。実際に入った人は `group_joined` |
 | ② グループの稼働率（作品が完成するか・翌週も続くか） | `tools/rotash-stats.py` | 完成率・週次継続率（Firestore の実データから出す。Analytics より確実） |
-| ③ ストーリーなどにあげる割合 | Firebase コンソール → Analytics → イベント | `work_share_completed`（`is_complete` が true）÷ `week_completed` |
+| ③ ストーリーなどにあげる割合 | Firebase コンソール → Analytics → イベント | `work_share_completed`（`is_complete` が true）÷ `week_completed`。Instagram に出した分は `destination` で分ける |
+| （コア仮説）担当日以外にも開くか | 同上 | `rotash_open` のうち `is_my_day` が false の割合。横にしたかは `week_viewed` |
 
 結果としての数字は `GROWTH_STRATEGY.md` K の **WCG（その週に作品が完成したグループ数）**。
 ①〜③はそれを増やすための3つのレバーで、`WCG(t+1) = WCG(t) × (R + K) + S` の S・R・K にほぼ対応する。

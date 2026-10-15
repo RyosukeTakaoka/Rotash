@@ -60,8 +60,38 @@ enum AnalyticsService {
     }
 
     /// 共有シートで実際に送信まで完了した（キャンセルではない）。Kの実測値に最も近い。
-    static func workShareCompleted(isComplete: Bool) {
-        log("work_share_completed", params: ["is_complete": isComplete])
+    ///
+    /// `destination` は送り先の種類（`com.burbn.instagram.shareextension` なら Instagram、
+    /// `jp.naver.line.Share` なら LINE など）。「ストーリーなどにあげる割合」を見るのに使う。
+    /// Instagram の中でストーリーかフィードかまでは分からない。
+    static func workShareCompleted(isComplete: Bool, destination: String?) {
+        var params: [String: Any] = ["is_complete": isComplete]
+        // Analytics のパラメータの値は100文字まで。
+        if let destination { params["destination"] = String(destination.prefix(100)) }
+        log("work_share_completed", params: params)
+    }
+
+    /// アプリを開いた（前面に来た）。今日、自分が担当か・今日の写真がもう撮られているか。
+    ///
+    /// PRODUCT_PHILOSOPHY 29-1「自分の担当日以外にもアプリを開くか」を直接測るためのもの。
+    /// `is_my_day` が false の開き方が多ければ、撮らない日にも見に来ている。
+    static func appOpened(isMyDay: Bool, todayFilled: Bool, groupCount: Int) {
+        log("rotash_open", params: [
+            "is_my_day": isMyDay,
+            "today_filled": todayFilled,
+            "group_count": groupCount,
+        ])
+    }
+
+    /// 横にして今週の作品を見た（横画面が出るたび）。
+    static func weekViewed(isMyDay: Bool, todayFilled: Bool) {
+        log("week_viewed", params: ["is_my_day": isMyDay, "today_filled": todayFilled])
+    }
+
+    /// そのグループで初めて横にした。招待で入った人は、入ってから何分後か（作った人は -1）。
+    /// 「横にすると見られる」が伝わっているか（#27）を見る。
+    static func firstLandscape(minutesSinceJoin: Int?) {
+        log("first_landscape", params: ["minutes_since_join": minutesSinceJoin ?? -1])
     }
 
     private static func log(_ name: String, params: [String: Any]) {

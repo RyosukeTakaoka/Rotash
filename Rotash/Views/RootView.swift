@@ -40,11 +40,13 @@ struct RootView: View {
         // ここで最初の一回を必ず走らせる（これが無いと、開いただけでは同期されない）。
         .task {
             app.rollWeekIfNeeded()
+            app.logAppOpened()
             await app.sync()
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 app.rollWeekIfNeeded()
+                app.logAppOpened()
                 // 戻ってきたときに他の人の写真を取りに行く（リアルタイム購読は使わない）。
                 Task { await app.sync() }
             }

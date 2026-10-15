@@ -401,6 +401,32 @@ final class AppViewModel: ObservableObject {
         }
     }
 
+    // MARK: - 計測
+
+    /// アプリが前面に来たとき（RootView から）。
+    func logAppOpened() {
+        guard let group else { return }
+        let today = todayIndex
+        AnalyticsService.appOpened(isMyDay: group.isMyDay(today, in: group.currentWeek),
+                                   todayFilled: group.currentWeek.slot(at: today)?.isFilled ?? false,
+                                   groupCount: groups.count)
+    }
+
+    /// 横画面が出たとき（ThisWeekView から）。そのグループで初めてなら、それも記録する。
+    func logWeekViewed() {
+        guard let group else { return }
+        let today = todayIndex
+        AnalyticsService.weekViewed(isMyDay: group.isMyDay(today, in: group.currentWeek),
+                                    todayFilled: group.currentWeek.slot(at: today)?.isFilled ?? false)
+
+        // 招待コードで入り直すと別のグループ ID になるので、グループごとに一度だけ。
+        let key = "rotash.firstLandscape.\(group.id.uuidString)"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        let minutes = group.me?.joinedAt.map { Int(Date().timeIntervalSince($0) / 60) }
+        AnalyticsService.firstLandscape(minutesSinceJoin: minutes)
+    }
+
     // MARK: - 通知
 
     /// 通知の許可を求める。起動直後ではなく、グループができてから聞く

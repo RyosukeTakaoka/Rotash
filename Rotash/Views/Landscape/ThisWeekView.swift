@@ -75,7 +75,10 @@ struct ThisWeekView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
         }
-        .onAppear { syncCamera() }
+        .onAppear {
+            syncCamera()
+            app.logWeekViewed()
+        }
         .onDisappear { camera.stop() }
         .onChange(of: activeDay) { oldDay, newDay in
             // 撮り始めるたびに、ライブビューは元の7分割の枠の大きさから始める。

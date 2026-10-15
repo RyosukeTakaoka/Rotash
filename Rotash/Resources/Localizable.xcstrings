@@ -1673,46 +1673,46 @@
         }
       }
     },
-    "横にして見る": {
+    "今日の担当 %@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Turn sideways to see"
+            "value": "Today: %@"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "横にして見る"
+            "value": "今日の担当 %@"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "가로로 돌려서 보기"
+            "value": "오늘의 담당 %@"
           }
         }
       }
     },
-    "今日の担当 %@。%@": {
+    "今日はあなたの番です": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Today: %1$@. %2$@"
+            "value": "Today is your turn"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "今日の担当 %1$@。%2$@"
+            "value": "今日はあなたの番です"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "오늘 담당 %1$@. %2$@"
+            "value": "오늘은 당신 차례예요"
           }
         }
       }

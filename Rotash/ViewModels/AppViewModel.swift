@@ -64,10 +64,7 @@ final class AppViewModel: ObservableObject {
 
     // MARK: 初めて入った直後
 
-    /// この端末で横の作品画面（THIS WEEK）を一度でも見たか。
-    ///
-    /// 見るまでは、縦のホームの今日の1マスに「横にして見る」のきっかけを出す。見たあとは出さない
-    /// （横にすれば作品が出ることはもう知っているので、出し続けるとうるさいだけ）。
+    /// この端末で横の作品画面（THIS WEEK）を一度でも見たか。見たら、初めて入った直後の案内（下）は終わり。
     @Published private(set) var hasSeenLandscape = AppViewModel.loadHasSeenLandscape()
     /// 初めてグループを作った・入った直後か。
     ///

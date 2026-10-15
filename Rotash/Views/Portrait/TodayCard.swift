@@ -5,102 +5,54 @@ import SwiftUI
 /// # 縦は「1日」、横は「1週間」
 ///
 /// 縦では今週の7分割を見せない（横にした瞬間に現れるのが Rotash の体験だから）。
-/// ただし何も見せないと、横にすれば作品が見られることに気づけない（友達テストで実際に起きた、#27）。
-/// そこで縦には**今日の1マスだけ**を大きく置く。7分割の1枠は縦に細長いので、縦に持った画面とよく合う。
-/// 左右には、となりの日が少しだけはみ出して見える。「横に続きがある」ことが、言葉なしで分かる。
-/// さらにその外側（`PortraitHomeView`）にメンバーの丸を並べる。
+/// 縦に出すのは今日の1枚だけで、縦に持った画面に合う縦長の形で大きく置く。
+/// 横画面の1枠よりは太い（細長いままだと写真がほとんど見えず、左右が空きすぎるので。2026-10-15）。
 ///
-/// 今日の写真は、ぼかさずそのまま見せる。
-/// 以前は「ふた」（ぼかし）をかけて横にすると開くようにしていたが、外した（2026-10-15）。
-/// 横にするきっかけは初めて入った直後の画面（`RootView`）が担うようになり、
-/// 「◯◯が撮った」の通知から開いた人には、その1枚がすぐ見えるほうがいい。横にすると見えるのは、1週間の全体。
+/// 今日の写真は、ぼかさずそのまま見せる。「◯◯が撮った」の通知から開いた人に、その1枚がすぐ見えるように。
+/// 横にすると見えるのは、1週間の全体。
 ///
-/// 横にするきっかけは、文字ではなく、スマホの形が横に倒れる動きで示す。
-/// 「視差効果を減らす」がオンの人には動かさない。
-/// 一度でも横にしたことがある人には出さない（`showsRotateHint`。知っている人には、うるさいだけ）。
-/// そのときも、自分の番でまだ撮っていない日だけは「今日はあなたの番」を出す。
+/// 「横にして見る」のような案内は出さない（うるさいだけなので。横にすることは、
+/// 初めて入った直後に横の作品画面を見せて覚えてもらう。`RootView`）。
+/// 出すのは、自分の番でまだ撮っていない日の「今日はあなたの番 / 横にして撮る」だけ。
 struct TodayCard: View {
     let week: RotashWeek
-    /// この端末で見えなくしている写真か（ブロック・報告）。見えなくした写真は、ふたの下にも出さない。
+    /// この端末で見えなくしている写真か（ブロック・報告）。見えなくした写真は出さない。
     var hides: (Slot) -> Bool = { _ in false }
     let todayIndex: Int
     /// 今日の担当（その日になっているので公開してよい）。
     let assigneeName: String?
     let isMine: Bool
-    /// 横にするきっかけ（倒れるスマホと「横にして見る」）を出すか。まだ一度も横にしたことがない人だけ。
-    let showsRotateHint: Bool
 
     init(week: RotashWeek,
          hides: @escaping (Slot) -> Bool = { _ in false },
          todayIndex: Int,
          assigneeName: String?,
-         isMine: Bool,
-         showsRotateHint: Bool = true) {
+         isMine: Bool) {
         self.week = week
         self.hides = hides
         self.todayIndex = todayIndex
         self.assigneeName = assigneeName
         self.isMine = isMine
-        self.showsRotateHint = showsRotateHint
     }
 
-    /// となりの日が見えている幅。
-    private static let peek: CGFloat = 26
-    private static let gap: CGFloat = 2
-    private var peek: CGFloat { Self.peek }
-    private var gap: CGFloat { Self.gap }
-
-    /// 高さが決まったときの、このカードのちょうどの幅（今日の枠＋左右にはみ出すとなりの日）。
-    /// これより広い幅を渡されても、余りは左右の空白になるだけ。
-    @MainActor static func naturalWidth(forHeight height: CGFloat) -> CGFloat {
-        height * WorkShape.cellAspect + (peek + gap) * 2
-    }
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 押したときに、横にするきっかけを一度だけ大きく揺らす。
-    @State private var nudges = 0
+    /// 高さに対する幅。横画面の1枠（およそ 1 : 3.2）より太くして、写真が見えるようにする。
+    static let aspect: CGFloat = 0.48
 
     private var today: Slot? { week.slot(at: todayIndex) }
+    private var isMyTurnToShoot: Bool { isMine && !(today?.isFilled ?? false) }
 
     var body: some View {
-        GeometryReader { geometry in
-            let height = geometry.size.height
-            let cellWidth = min(height * WorkShape.cellAspect,
-                                max(geometry.size.width - (peek + gap) * 2, 40))
-            HStack(spacing: gap) {
-                neighbor(dayIndex: todayIndex - 1)
-                    .frame(width: peek, height: height)
-                todayCell
-                    .frame(width: cellWidth, height: height)
-                neighbor(dayIndex: todayIndex + 1)
-                    .frame(width: peek, height: height)
-            }
-            .frame(width: geometry.size.width, height: height)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            UISelectionFeedbackGenerator().selectionChanged()
-            nudges += 1
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText)
-        .accessibilityHint(Text("スマホを横にすると、今週の作品が見られます"))
-    }
-
-    // MARK: - 今日
-
-    private var todayCell: some View {
         ZStack {
             if let today, today.isFilled, hides(today) {
                 HiddenPhotoPlaceholder()
             } else if let today, today.isFilled {
-                PhotoImageView(slot: today, maxPixel: 480)
+                PhotoImageView(slot: today, maxPixel: 720)
                     // 上の曜日・名前と下の一言が、写真の上でも読めるように、上下だけ少し暗くする。
                     .overlay(
-                        LinearGradient(stops: [.init(color: .black.opacity(0.55), location: 0),
-                                               .init(color: .clear, location: 0.22),
-                                               .init(color: .clear, location: 0.72),
-                                               .init(color: .black.opacity(0.55), location: 1)],
+                        LinearGradient(stops: [.init(color: .black.opacity(0.5), location: 0),
+                                               .init(color: .clear, location: 0.2),
+                                               .init(color: .clear, location: 0.75),
+                                               .init(color: .black.opacity(0.45), location: 1)],
                                        startPoint: .top, endPoint: .bottom)
                     )
             } else {
@@ -123,12 +75,9 @@ struct TodayCard: View {
                         .minimumScaleFactor(0.6)
                 }
                 Spacer(minLength: 0)
-                if showsRotateHint {
-                    RotateHint(reduceMotion: reduceMotion, nudges: nudges)
-                }
-                if let hintText {
-                    Text(hintText)
-                        .rotashLabel(10, color: isMyTurnToShoot ? Palette.live : Palette.text, tracking: 0.8)
+                if isMyTurnToShoot {
+                    Text("今日はあなたの番\n横にして撮る")
+                        .rotashLabel(10, color: Palette.live, tracking: 0.8)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 6)
                         .fixedSize(horizontal: false, vertical: true)
@@ -139,74 +88,16 @@ struct TodayCard: View {
         }
         .clipped()
         .overlay(Rectangle().stroke(Palette.line, lineWidth: 1))
-    }
-
-    private var isMyTurnToShoot: Bool { isMine && !(today?.isFilled ?? false) }
-
-    /// 下の一言。いま横にすると何ができるか。横にしたことがある人には、自分の番のときだけ。
-    private var hintText: String? {
-        if isMyTurnToShoot { return String(localized: "今日はあなたの番\n横にして撮る") }
-        guard showsRotateHint else { return nil }
-        return String(localized: "横にして見る")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+        .accessibilityHint(Text("スマホを横にすると、今週の作品が見られます"))
     }
 
     private var accessibilityText: Text {
-        let hint = hintText ?? String(localized: "横にして見る")
-        if let assigneeName {
-            return Text("今日の担当 \(assigneeName)。\(hint)")
+        let name = assigneeName ?? ""
+        if isMyTurnToShoot {
+            return Text("今日はあなたの番です")
         }
-        return Text(hint)
-    }
-
-    // MARK: - となりの日
-
-    /// となりの日の端。写真があれば端だけ少し暗くして見せる。週の外（月曜の前・日曜の後）は空ける。
-    @ViewBuilder
-    private func neighbor(dayIndex: Int) -> some View {
-        if let slot = week.slot(at: dayIndex) {
-            ZStack {
-                if slot.isFilled, !hides(slot) {
-                    PhotoImageView(slot: slot, maxPixel: 120)
-                        .overlay(Color.black.opacity(0.45))
-                } else {
-                    Palette.surfaceDeep
-                }
-            }
-            .clipped()
-            .opacity(0.7)
-        } else {
-            Color.clear
-        }
-    }
-}
-
-/// 横にするきっかけ。スマホの形が、縦から横へゆっくり倒れては戻る。
-private struct RotateHint: View {
-    let reduceMotion: Bool
-    let nudges: Int
-
-    var body: some View {
-        Group {
-            if reduceMotion {
-                Image(systemName: "iphone.landscape")
-            } else {
-                Image(systemName: "iphone")
-                    .phaseAnimator([0.0, -90.0]) { content, angle in
-                        content.rotationEffect(.degrees(angle))
-                    } animation: { angle in
-                        // 倒れるのはゆっくり、戻るのは少し間を置いてから。ずっと繰り返す。
-                        angle == 0 ? .easeInOut(duration: 0.5).delay(1.4) : .easeInOut(duration: 0.8).delay(0.6)
-                    }
-            }
-        }
-        // 押したときだけ、ひと回り大きく弾ませて「これを横に」と伝える。
-        .phaseAnimator([1.0, 1.35, 1.0], trigger: nudges) { content, scale in
-            content.scaleEffect(scale)
-        } animation: { _ in
-            .spring(duration: 0.25)
-        }
-        .font(.system(size: 22, weight: .light))
-        .foregroundStyle(Palette.text)
-        .frame(height: 30)
+        return Text("今日の担当 \(name)")
     }
 }

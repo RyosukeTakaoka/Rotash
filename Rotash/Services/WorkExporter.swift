@@ -23,18 +23,14 @@ enum ShareCardFormat {
 
 /// 作品を1枚の画像として書き出す。加工はしない。写真そのもの。
 ///
-/// # いまは「撮影画面をそのまま倒したもの」
+/// # いまは「横帯 × 7」（`.story`）
 ///
-/// 組むのは横長 1920 × 1080 の7分割 —— 撮影画面と同じ並び。
-/// それを**中身に一切手を入れず、時計まわりに90度倒して** 1080 × 1920 で書き出す。
+/// 7枚を横長の帯に組み直して、上から月曜→日曜に積む。写真はまっすぐ立ち、1枚あたりの写る量も多い。
+/// ストーリーで首をかしげずに見られ、dump と同じ見え方になる（2026-10-15 に `.screen` から切り替えた）。
 ///
-/// 7枚を積み直して縦組みにすると1枠あたりの写真は多く見えるが、並びが画面と別物になり、
-/// 受け取った人が画像とアプリを結びつけられない。倒すだけなら並びは画面のままで、
-/// しかも縦のフィードで大きく表示される。器と中身を別々に決められる。
-///
-/// 積み直した縦のほうがよいと分かったら
-/// `RotashFeatureFlags.shareCardFormat` を `.story` に変える。
-/// 倒さず横長のまま出したくなったら、`Layout.rotates` を false にする。
+/// もう1つの形 `.screen` は、撮影画面の7分割を**中身に一切手を入れず、時計まわりに90度倒した**もの。
+/// 受け取った人が端末を横にすればアプリと同じ並びが出てくるが、写真も文字も横向きのまま縦に並ぶ。
+/// 戻したくなったら `RotashFeatureFlags.shareCardFormat` を `.screen` にする。
 ///
 /// # 何を足して、何を足さないか
 ///
@@ -151,9 +147,12 @@ enum WorkExporter {
                 labelInset = 26
                 liveBar = 5
             case .story:
+                // ストーリーは上（進み具合の線と名前）と下（返信の欄）に Instagram の表示が重なる。
+                // 文字はどちらにも入らないよう、上下およそ 250px を避けて置く（Meta の目安）。
+                // 写真の帯はそのあいだいっぱいに使う。
                 canvas = CGSize(width: 1080, height: 1920)
                 rotates = false
-                frames = CGRect(x: 24, y: 160, width: 1032, height: 1579)
+                frames = CGRect(x: 24, y: 318, width: 1032, height: 1272)
                 margin = 24
                 gap = 3
                 headline = 30
@@ -205,11 +204,11 @@ enum WorkExporter {
             UIRectFill(CGRect(x: 0, y: layout.frames.minY - 1, width: layout.canvas.width, height: 1))
 
         case .story:
-            draw("THIS WEEK", at: CGPoint(x: layout.margin, y: 52),
+            draw("THIS WEEK", at: CGPoint(x: layout.margin, y: 228),
                  size: layout.headline, weight: .semibold, color: .rotashText, tracking: 6)
-            draw(week.dateRange, at: CGPoint(x: layout.margin, y: 100),
+            draw(week.dateRange, at: CGPoint(x: layout.margin, y: 274),
                  size: layout.caption, color: .rotashFaint, tracking: 3)
-            drawRightAligned(counter(week), rightEdge: layout.canvas.width - layout.margin, y: 100,
+            drawRightAligned(counter(week), rightEdge: layout.canvas.width - layout.margin, y: 274,
                              size: layout.caption, color: .rotashDim, tracking: 3)
         }
     }
@@ -310,8 +309,9 @@ enum WorkExporter {
             draw(day, at: CGPoint(x: rect.minX + layout.labelInset, y: top),
                  size: layout.dayLabel, color: dayColor, tracking: 3)
             if let name {
+                // 写真の上でも読めるよう、画面と同じく白に近い色にする。
                 draw(name, at: CGPoint(x: rect.minX + layout.labelInset + 90, y: top + 4),
-                     size: layout.nameLabel, color: .rotashDim, tracking: 1.4)
+                     size: layout.nameLabel, color: UIColor.rotashText.withAlphaComponent(0.85), tracking: 1.4)
             }
         }
     }
@@ -443,12 +443,14 @@ enum WorkExporter {
             }
 
         case .story:
+            // 帯のすぐ下。タイトルがあればその下に ROTASH（どちらも返信の欄より上に収まる）。
+            let firstLine = layout.frames.maxY + 22
             if !title.isEmpty {
-                draw(title, at: CGPoint(x: layout.margin, y: 1768),
+                draw(title, at: CGPoint(x: layout.margin, y: firstLine),
                      size: layout.headline, weight: .regular, color: .rotashText,
                      tracking: 1, monospaced: false)
             }
-            let wordmarkY: CGFloat = 1834
+            let wordmarkY: CGFloat = title.isEmpty ? firstLine : firstLine + 50
             draw("ROTASH", at: CGPoint(x: layout.margin, y: wordmarkY),
                  size: wordmarkSize, weight: .bold, color: .rotashText, tracking: wordmarkTracking)
 

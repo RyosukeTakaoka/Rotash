@@ -93,4 +93,28 @@ targets:
         ENABLE_PREVIEWS: YES
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
     # Shared scheme "Rotash" (Rotash.xcodeproj/xcshareddata/xcschemes).
-    scheme: {}
+    # ⌘U runs RotashTests.
+    scheme:
+      testTargets:
+        - RotashTests
+  RotashTests:
+    # Unit tests for the parts that must never break: sync merge, assignment,
+    # invite links, notification scheduling. Hosted in the app (@testable import Rotash).
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: RotashTests
+        type: syncedFolder
+    dependencies:
+      - target: Rotash
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.takaoka.com.RorashTests
+        PRODUCT_NAME: $(TARGET_NAME)
+        DEVELOPMENT_TEAM: 5B2NQ74986
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Rotash.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Rotash"
+        BUNDLE_LOADER: "$(TEST_HOST)"

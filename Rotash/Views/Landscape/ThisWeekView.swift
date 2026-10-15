@@ -97,6 +97,10 @@ struct ThisWeekView: View {
             // 描き直しも起きないので RETAKE ボタンや残り秒数が画面に残ったままになる。
             if let deadline = app.latestRetakeDeadline, now <= deadline { now = date }
         }
+        // 振ると、作品ごと裏返る（もう一度振ると表に戻る）。撮っているあいだと全画面で見ているあいだは何もしない。
+        .onReceive(NotificationCenter.default.publisher(for: .rotashDeviceShaken)) { _ in
+            flipAllByShake()
+        }
         // 横にした時点で最新を取りに行く。作品を見る画面なので、
         // ここに来たら必ず最新が見えている状態にしたい。
         .task { await app.sync() }
@@ -364,6 +368,17 @@ struct ThisWeekView: View {
         .onLongPressGesture(minimumDuration: 0.25) {
             guard !isActive, slot.hasReverse else { return }
             toggleFlip(day)
+        }
+    }
+
+    /// 振ったとき。裏のある枠がひとつでも表なら全部を裏に、全部裏なら全部を表に戻す。
+    private func flipAllByShake() {
+        guard activeDay == nil, viewerDay == nil, let week else { return }
+        let flippable = Set(week.slots.filter(\.hasReverse).map(\.dayIndex))
+        guard !flippable.isEmpty else { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        withAnimation(.easeInOut(duration: 0.28)) {
+            flippedDays = flippable.isSubset(of: flippedDays) ? [] : flippable
         }
     }
 

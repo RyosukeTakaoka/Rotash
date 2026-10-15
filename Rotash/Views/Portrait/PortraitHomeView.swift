@@ -2,8 +2,8 @@ import SwiftUI
 import UIKit
 
 /// 縦向き。Rotash の入口。管理画面ではないので、ここに置くのは
-/// グループ名 / 招待コード / 今日の担当者 / Memories / 設定 だけ。
-/// 今週の7分割そのもの（進行中の作品）はここでは絶対に見せない。
+/// グループ名 / 招待コード / 今日の1マス / メンバー / Memories / 設定 だけ。
+/// 今週の7分割そのもの（進行中の作品）はここでは見せない。見せるのは今日の1マスだけ（ふたつき。`TodayCard`）。
 /// 横にした瞬間に「THIS WEEK」が現れることが Rotash 独自の体験になる。
 struct PortraitHomeView: View {
 
@@ -104,18 +104,18 @@ struct PortraitHomeView: View {
                 if group.currentWeek.isFinished {
                     Text("今週の作品ができました")
                         .rotashLabel(11, color: Palette.text, tracking: 0.6)
-                } else {
-                    HStack(spacing: 8) {
-                        Text("今日の担当").rotashLabel(9, color: Palette.faint, tracking: 1.6)
-                        Text(app.revealedAssignee(forDay: app.todayIndex)?.name.uppercased() ?? "-")
-                            .rotashLabel(12, color: app.isMyDay(app.todayIndex) ? Palette.live : Palette.text, tracking: 0.6)
-                    }
                 }
-                Text("→ 横にして見る")
-                    .rotashLabel(9, color: Palette.faint, tracking: 1.2)
+
+                // 今日の1マス（縦は「1日」、横は「1週間」）。担当の名前・横にするきっかけもこの中に出す。
+                TodayCard(week: group.currentWeek,
+                          todayIndex: app.todayIndex,
+                          assigneeName: app.revealedAssignee(forDay: app.todayIndex)?.name,
+                          isMine: app.isMyDay(app.todayIndex))
+                    .containerRelativeFrame(.vertical) { length, _ in length * 0.5 }
+                    .padding(.top, 8)
 
                 membersRow(group)
-                    .padding(.top, 14)
+                    .padding(.top, 18)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

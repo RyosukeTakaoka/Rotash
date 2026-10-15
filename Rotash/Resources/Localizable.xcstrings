@@ -1650,6 +1650,116 @@
           }
         }
       }
+    },
+    "横にして開く": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn sideways to open"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "横にして開く"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "가로로 돌려서 열기"
+          }
+        }
+      }
+    },
+    "今日はあなたの番\n横にして撮る": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your turn today\nTurn sideways to shoot"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今日はあなたの番\n横にして撮る"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘은 당신 차례\n가로로 돌려서 찍기"
+          }
+        }
+      }
+    },
+    "横にして見る": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn sideways to see"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "横にして見る"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "가로로 돌려서 보기"
+          }
+        }
+      }
+    },
+    "今日の担当 %@。%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today: %1$@. %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今日の担当 %1$@。%2$@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘 담당 %1$@. %2$@"
+          }
+        }
+      }
+    },
+    "スマホを横にすると、今週の作品が見られます": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn your phone sideways to see this week's piece"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スマホを横にすると、今週の作品が見られます"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "휴대폰을 가로로 돌리면 이번 주 작품을 볼 수 있어요"
+          }
+        }
+      }
     }
   },
   "version": "1.1"

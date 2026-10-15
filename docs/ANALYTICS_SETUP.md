@@ -6,8 +6,12 @@ for Firebase）を導入した。**無料**で、イベント数の上限なく�
 （詳細は[公式の料金ページ](https://firebase.google.com/pricing)を参照。有料なのは
 BigQueryへの生データエクスポート等の追加機能で、標準の集計・ダッシュボード閲覧は無料）。
 
-このドキュメントは**Xcodeでの作業手順**（コードはこの変更で既に実装済み）をまとめる。
+このドキュメントは**Xcodeでの作業手順**（コードは既に実装済み）をまとめる。
 実装したコードの内容は [`Services/Analytics/AnalyticsService.swift`](../Rotash/Services/Analytics/AnalyticsService.swift) を参照。
+
+> **2026-10-15 時点の状態**：1〜3章の作業は作者の環境では済んでいる
+> （`GoogleService-Info.plist` は `Rotash/Services/` にあり、Firebase の Swift Package は 12.18.0 が入っている）。
+> 自分の Firebase プロジェクトで一からやり直すときの手順として読む。
 
 ---
 
@@ -27,8 +31,8 @@ Firestore用に**Firebaseプロジェクト（プロジェクトID: `rotash-f83a
    **`rotash-f83a4`** を選択する
 2. 左上の歯車アイコン →「プロジェクトの設定」を開く
 3. 「マイアプリ」セクションで「アプリを追加」→ iOSのアイコンを選ぶ
-4. 「iOSバンドルID」に **`com.rotash.mvp`**（`project.yml`の
-   `PRODUCT_BUNDLE_IDENTIFIER`と同じ値）を入力する。ニックネームは任意（例: Rotash）
+4. 「iOSバンドルID」に **`app.takaoka.com.Rorash`**（`project.yml`と`Rotash.xcodeproj`の
+   `PRODUCT_BUNDLE_IDENTIFIER`と同じ値。綴りが `Rorash` なのは実際の値のまま）を入力する。ニックネームは任意（例: Rotash）
 5. 「アプリを登録」を押すと、**`GoogleService-Info.plist`** というファイルが
    ダウンロードできるようになる。これをダウンロードしておく
    （この後のXcode作業で使う）
@@ -49,7 +53,8 @@ Firestore用に**Firebaseプロジェクト（プロジェクトID: `rotash-f83a
    - **「Copy items if needed」にチェックが入っている**
    - **「Add to targets」で `Rotash` にチェックが入っている**
 
-置き場所はどこでもよいが、`Rotash/Resources/` に置くと他のリソースと揃う。
+置き場所はどこでもよい（現在は `Rotash/Services/GoogleService-Info.plist`）。
+`BUNDLE_ID` が Xcode の `PRODUCT_BUNDLE_IDENTIFIER` と一致していないと、イベントが届かない。
 
 > **Gitへのコミットについて**：`GoogleService-Info.plist`は秘密鍵ではない
 > （`SyncConfig.swift`のFirebase APIキーと同じ性質。公開前提のクライアント設定値）。
@@ -69,13 +74,17 @@ Firestore用に**Firebaseプロジェクト（プロジェクトID: `rotash-f83a
    https://github.com/firebase/firebase-ios-sdk
    ```
 3. 「Dependency Rule」は **Up to Next Major Version** のまま、バージョンは
-   `11.0.0` 以上を指定してAddを押す
+   `11.0.0` 以上を指定してAddを押す（作者の環境では `12.18.0`）
 4. パッケージの内容が表示されたら、**Rotashターゲットに追加するProductとして**
    以下の2つ「だけ」にチェックを入れる：
    - **FirebaseCore**
    - **FirebaseAnalytics**
    （他にも大量のProductが一覧に出るが、今回使わないものにはチェックしない。
    ビルド時間とアプリサイズが不必要に増えるのを避けるため）
+
+   > 作者の環境では、このとき他のProductも全部チェックされたまま追加されていて、
+   > 現在は計24個がリンクされている（コードから使っているのは Core と Analytics だけ）。
+   > 外す件は [`PENDING_DECISIONS.md`](PENDING_DECISIONS.md)。`project.yml` の `dependencies` も同じ24個。
 5. 「Add Package」を押すと、ダウンロード・リンクが始まる（数分かかることがある）
 
 ---
@@ -116,7 +125,7 @@ Appleは2024年5月以降、`UserDefaults`のような「Required Reason API」�
 その理由をアプリ自身の`PrivacyInfo.xcprivacy`で申告するよう義務付けている。
 
 **Firebase SDK自身が使うAPIは、Firebase側が自分のマニフェストを既に同梱しているため
-対応不要。** ただし、**Rotash自身のコード**（`AppViewModel.swift`が
+対応不要。** ただし、**Rotash自身のコード**（`Design/Theme.swift` の `WorkShape` が
 `UserDefaults.standard.set`を直接呼んでいる）は対象で、これはFirebase追加とは無関係に
 以前から必要だった申告である。今回、`Rotash/Resources/PrivacyInfo.xcprivacy`を
 新規作成し、理由コード**`CA92.1`**（自分のアプリだけがアクセスする設定値の読み書き）を
@@ -160,7 +169,27 @@ App Store Connectでアプリ情報を登録する際、データを収集する
 
 ---
 
-## 6. 今後の運用について
+## 6. 送っているイベント
+
+`AnalyticsService.swift` に定義があるのは9つ。**実際に送られているのは8つ**で、`member_added` は定義だけあって
+どこからも呼ばれていない（途中参加の人数を測りたければ、呼ぶか、消すかを決める）。
+
+| イベント | いつ送るか | 主なパラメータ |
+|---|---|---|
+| `group_created` | グループを作った | `from_origin_group`（`rotash://new?from=…` 経由か） |
+| `group_joined` | 招待コードで参加した | — |
+| `member_added` | （定義のみ。送られていない） | `member_count` |
+| `photo_captured` | 担当日に撮った | `filled_count` |
+| `photo_retaken` | 撮った直後の撮り直し | `seconds_after_first`（最初の1枚から何秒後か） |
+| `week_completed` | 週が切り替わるとき、7/7 だった | `member_count`, `is_first_week` |
+| `invite_share_tapped` | 招待の共有シートを開いた | — |
+| `work_share_tapped` | 作品の共有シートを開いた | `filled_count`, `is_complete` |
+| `work_share_completed` | 共有シートで送信まで完了した | `is_complete` |
+
+`week_completed` は「その週が終わって次の週に切り替わった瞬間」に、全枠が写真で埋まっていた場合だけ送られる
+（`AppViewModel.rolledWeek`）。7枚目を撮った瞬間ではない。
+
+## 7. 今後の運用について
 
 - 追加したイベントと、それが`docs/DEFENSIBILITY.md` §4のどの指標に対応するかは
   `Services/Analytics/AnalyticsService.swift`のコメントを参照
@@ -173,7 +202,7 @@ App Store Connectでアプリ情報を登録する際、データを収集する
 
 ---
 
-## 7. 見方 — オーナーの3つの指標と、どこを見ればいいか（2026-10-14 追記）
+## 8. 見方 — オーナーの3つの指標と、どこを見ればいいか（2026-10-14 追記）
 
 オーナーが置いた戦略の指標は3つ。
 
@@ -198,3 +227,5 @@ App Store Connectでアプリ情報を登録する際、データを収集する
   Analytics → カスタム定義 で、パラメータ名をカスタムディメンションとして登録する（登録した日以降の分だけ集計される）
 - ③は「共有シートで送信まで完了した」までしか分からない。Instagram に出したかどうかは、今は区別できない
 - レポートへの反映は最大24時間後。すぐ確かめたいときは 4章の DebugView
+- 公開した作品から生まれたグループ（K）は、今は測れない。`group_created` の `from_origin_group` は、
+  `rotash://new?from=…` から作られたときだけ true になるが、そのリンクをどの共有にも載せていないため（README「リンク」）

@@ -57,56 +57,17 @@ targets:
       - path: Rotash
         type: syncedFolder
     # Exactly the products the .xcodeproj links (Frameworks build phase).
-    # Only FirebaseCore and FirebaseAnalytics are imported by the Swift code.
+    # FirebaseCore + FirebaseAnalytics (measurement), FirebaseAuth (anonymous
+    # sign-in for Firestore REST), FirebaseMessaging (push). Sync itself is REST.
     dependencies:
-      - package: firebase-ios-sdk
-        product: FirebaseAI
-      - package: firebase-ios-sdk
-        product: FirebaseAILogic
       - package: firebase-ios-sdk
         product: FirebaseAnalytics
       - package: firebase-ios-sdk
-        product: FirebaseAnalyticsCore
-      - package: firebase-ios-sdk
-        product: FirebaseAnalyticsIdentitySupport
-      - package: firebase-ios-sdk
-        product: FirebaseAppCheck
-      - package: firebase-ios-sdk
-        product: FirebaseAppDistribution-Beta
-      - package: firebase-ios-sdk
         product: FirebaseAuth
-      - package: firebase-ios-sdk
-        product: FirebaseAuthCombine-Community
       - package: firebase-ios-sdk
         product: FirebaseCore
       - package: firebase-ios-sdk
-        product: FirebaseCrashlytics
-      - package: firebase-ios-sdk
-        product: FirebaseDatabase
-      - package: firebase-ios-sdk
-        product: FirebaseFirestore
-      - package: firebase-ios-sdk
-        product: FirebaseFirestoreCombine-Community
-      - package: firebase-ios-sdk
-        product: FirebaseFunctions
-      - package: firebase-ios-sdk
-        product: FirebaseFunctionsCombine-Community
-      - package: firebase-ios-sdk
-        product: FirebaseInAppMessaging-Beta
-      - package: firebase-ios-sdk
-        product: FirebaseInstallations
-      - package: firebase-ios-sdk
-        product: FirebaseMLModelDownloader
-      - package: firebase-ios-sdk
         product: FirebaseMessaging
-      - package: firebase-ios-sdk
-        product: FirebasePerformance
-      - package: firebase-ios-sdk
-        product: FirebaseRemoteConfig
-      - package: firebase-ios-sdk
-        product: FirebaseStorage
-      - package: firebase-ios-sdk
-        product: FirebaseStorageCombine-Community
     settings:
       base:
         # Must equal BUNDLE_ID in Rotash/Services/GoogleService-Info.plist.

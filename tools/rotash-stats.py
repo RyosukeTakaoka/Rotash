@@ -23,8 +23,8 @@
 archive だけを見ると「誰も撮らなかった週」が分母から消え、完成率も継続率も実際より高く出る。
 そこで、グループの最初の週（archive + currentWeek の startDate のうち一番古いもの）から
 今日を含む週までを7日刻みで並べ、archive に無い週は「0枚の週」として扱う。
-K（作品あたり新規グループ数）は招待リンクの originGroupID が要るので、
-N2 が入ってグループが動き出してから出る。
+K（作品あたり新規グループ数）は rotash://new?from=… 経由で作られたグループの originGroupID が要る。
+そのリンクは受け取りだけ実装してあり、いまはどの共有にも載せていないので、実際には出ない。
 """
 
 from __future__ import annotations
@@ -390,7 +390,7 @@ def report(groups: list[dict], now: dt.datetime) -> None:
         print(f"   親グループ数: {len(by_parent)}   K = {len(origins) / len(by_parent):.2f}")
     else:
         print("   originGroupID を持つグループがまだありません。")
-        print("   （N2 の招待リンクが入って、そこから作られたグループが出てから測れます）")
+        print("   （rotash://new?from=… 経由で作られたグループが出てから測れます。いまはそのリンクを共有に載せていません）")
     print()
 
 

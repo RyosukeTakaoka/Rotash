@@ -2222,6 +2222,50 @@
           }
         }
       }
+    },
+    "招待のページでコードをコピーしてきた人は": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copied a code from the invite page?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "招待のページでコードをコピーしてきた人は"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "초대 페이지에서 코드를 복사해 왔다면"
+          }
+        }
+      }
+    },
+    "招待コードが見つかりませんでした。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No invite code found."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "招待コードが見つかりませんでした。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "초대 코드를 찾지 못했어요."
+          }
+        }
+      }
     }
   },
   "version": "1.1"

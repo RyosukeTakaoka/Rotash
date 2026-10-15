@@ -64,7 +64,9 @@ struct RootView: View {
             app.rollWeekIfNeeded()
             Task { await app.sync() }
         }
+        // バトン（ファイル）を受け取ったとき。招待などのリンクは RotashApp の方で受ける。
         .onOpenURL { url in
+            guard url.isFileURL else { return }
             do {
                 try app.importBaton(from: url)
             } catch {

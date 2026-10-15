@@ -36,6 +36,16 @@ struct JoinRotashView: View {
                                     placeholder: "XXXXXX",
                                     text: $code,
                                     isInviteCode: true)
+                        // 招待の Web ページでコピーしたコード（またはリンク）を、そのまま入れる。
+                        // PasteButton は押したときだけ読むので、「ペーストを許可」の確認は出ない。
+                        PasteButton(payloadType: String.self) { strings in
+                            Task { @MainActor in
+                                if let pasted = RotashLink.code(fromPasted: strings.first) { code = pasted }
+                            }
+                        }
+                        .labelStyle(.titleAndIcon)
+                        .buttonBorderShape(.capsule)
+                        .tint(Palette.surface)
                     }
 
                     RotashField(title: "あなたの名前", placeholder: "NAME", text: $myName)
@@ -50,7 +60,7 @@ struct JoinRotashView: View {
                         .lineSpacing(5)
 
                     Button("参加する") {
-                        app.joinRotash(code: code, myName: myName)
+                        app.joinRotash(code: code, myName: myName, viaLink: fromLink)
                         dismiss()
                     }
                     .buttonStyle(RotashButtonStyle(filled: true))

@@ -116,7 +116,8 @@ targets:
         CURRENT_PROJECT_VERSION: "9"
         DEVELOPMENT_TEAM: 5B2NQ74986
         CODE_SIGN_STYLE: Automatic
-        # No CODE_SIGN_ENTITLEMENTS: the .xcodeproj has no entitlements file.
+        # Associated Domains (invite links on rotash-f83a4.web.app). See docs/FIREBASE_SETUP.md.
+        CODE_SIGN_ENTITLEMENTS: Supporting/Rotash.entitlements
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Supporting/Info.plist
         SWIFT_VERSION: "5.0"

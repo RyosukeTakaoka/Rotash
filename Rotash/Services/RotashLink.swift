@@ -13,9 +13,20 @@ import Foundation
 ///
 /// そして `new` に載る `from` が、K（作品ひとつから生まれた新しいグループの数）を
 /// 測れる唯一の手がかりになる。
+///
+/// # Web のリンク（Universal Links）
+///
+/// `rotash://` はアプリが入っている人にしか効かない（入っていない人が押しても何も起きない）。
+/// そこで招待は `https://rotash-f83a4.web.app/j/ABC123` でも送れるようにしてある。
+///   - アプリが入っていれば、そのまま参加画面が開く（apple-app-site-association）
+///   - 入っていなければ Web のページが開き、コードのコピーとアプリの入手先が出る（`web/j/index.html`）
+///   - アプリを入れたあとは、参加画面の「貼り付け」でコードが入る（`code(fromPasted:)`）
+/// Web 側（Firebase Hosting）を公開するまでは `RotashFeatureFlags.usesWebInviteLinks` を false にしておく。
 enum RotashLink {
 
     static let scheme = "rotash"
+    /// 招待の Web ページを置いている場所（Firebase Hosting）。
+    static let webHost = "rotash-f83a4.web.app"
 
     /// 受け取った URL の意味。
     enum Destination: Equatable {
@@ -29,7 +40,25 @@ enum RotashLink {
 
     /// 空き枠に友達を呼ぶリンク。**公開の場には出さないこと。**
     static func joinURL(code: String) -> URL? {
-        URL(string: "\(scheme)://join/\(InviteCode.normalize(code))")
+        let normalized = InviteCode.normalize(code)
+        if RotashFeatureFlags.usesWebInviteLinks {
+            return URL(string: "https://\(webHost)/j/\(normalized)")
+        }
+        return URL(string: "\(scheme)://join/\(normalized)")
+    }
+
+    /// 貼り付けられた文字から招待コードを取り出す。コードそのもの・Web のリンク・`rotash://` のリンクのどれでもよい。
+    static func code(fromPasted text: String?) -> String? {
+        guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+        if let url = URL(string: text), case let .join(code)? = destination(for: url) { return code }
+        // 文章ごと貼られた（「招待コード ABC123」）ときは、その中のリンクかコードを探す。
+        for word in text.split(whereSeparator: { $0.isWhitespace || $0 == "\n" }) {
+            let token = String(word)
+            if let url = URL(string: token), case let .join(code)? = destination(for: url) { return code }
+            let normalized = InviteCode.normalize(token)
+            if normalized.count == token.count, InviteCode.isValid(normalized) { return normalized }
+        }
+        return nil
     }
 
     /// 公開された作品に添えるリンク。誰が見てもよい。
@@ -46,6 +75,23 @@ enum RotashLink {
     // MARK: - 読む
 
     static func destination(for url: URL) -> Destination? {
+        // Web のリンク（https://rotash-f83a4.web.app/j/ABC123 ・ /new?from=…）。
+        if url.scheme?.lowercased() == "https", url.host?.lowercased() == webHost {
+            let parts = url.pathComponents.filter { $0 != "/" && !$0.isEmpty }
+            switch parts.first?.lowercased() {
+            case "j":
+                guard let raw = parts.dropFirst().first else { return nil }
+                let code = InviteCode.normalize(raw)
+                return InviteCode.isValid(code) ? .join(code: code) : nil
+            case "new":
+                let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
+                let from = query?.first { $0.name == "from" }?.value
+                return .create(origin: from.flatMap(UUID.init(uuidString:)))
+            default:
+                return nil
+            }
+        }
+
         guard url.scheme?.lowercased() == scheme else { return nil }
 
         // rotash://join/ABC123 は host = "join" / path = "/ABC123"、

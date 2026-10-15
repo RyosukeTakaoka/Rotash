@@ -1,0 +1,13 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["5B2NQ74986.app.takaoka.com.Rorash"],
+        "components": [
+          { "/": "/j/*", "comment": "招待リンク。アプリが入っていれば参加画面が開く" },
+          { "/": "/new", "comment": "公開された作品から来た人が、自分たちのグループを作る" }
+        ]
+      }
+    ]
+  }
+}

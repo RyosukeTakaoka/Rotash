@@ -15,9 +15,9 @@ enum AnalyticsService {
         log("group_created", params: ["from_origin_group": fromOriginGroup])
     }
 
-    /// 招待コードで参加した。
-    static func groupJoined() {
-        log("group_joined", params: [:])
+    /// 招待コードで参加した。`viaLink` は招待リンクから来たか（手で入力・貼り付けではなく）。
+    static func groupJoined(viaLink: Bool) {
+        log("group_joined", params: ["via_link": viaLink])
     }
 
     /// メンバーが追加された（途中参加）。`memberCount`は追加後の人数で、

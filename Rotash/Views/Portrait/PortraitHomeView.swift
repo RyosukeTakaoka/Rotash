@@ -398,6 +398,27 @@ struct PortraitHomeView: View {
                 .buttonStyle(RotashButtonStyle(filled: true))
             Button("招待コードで参加") { app.activeSheet = .join }
                 .buttonStyle(RotashButtonStyle())
+
+            // 招待の Web ページでコードをコピーしてからアプリを入れた人のための近道。
+            // 押したときだけクリップボードを読む（勝手には読まない）。
+            VStack(alignment: .leading, spacing: 8) {
+                Text("招待のページでコードをコピーしてきた人は")
+                    .rotashLabel(9, color: Palette.faint, tracking: 0.4)
+                PasteButton(payloadType: String.self) { strings in
+                    Task { @MainActor in
+                        guard let code = RotashLink.code(fromPasted: strings.first) else {
+                            app.alertMessage = String(localized: "招待コードが見つかりませんでした。")
+                            return
+                        }
+                        app.pendingJoinCode = code
+                        app.activeSheet = .join
+                    }
+                }
+                .labelStyle(.titleAndIcon)
+                .buttonBorderShape(.capsule)
+                .tint(Palette.surface)
+            }
+            .padding(.top, 18)
         }
         .padding(.horizontal, 24)
     }

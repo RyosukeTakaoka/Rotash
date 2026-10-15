@@ -261,7 +261,7 @@ final class AppViewModel: ObservableObject {
                                    previousWeek: nil)
     }
 
-    func joinRotash(code: String, myName: String) {
+    func joinRotash(code: String, myName: String, viaLink: Bool = false) {
         let normalized = InviteCode.normalize(code)
         let name = Self.tidy(myName)
         guard normalized.count == 6, !name.isEmpty else { return }
@@ -288,7 +288,7 @@ final class AppViewModel: ObservableObject {
         persist()
         pendingJoinCode = nil
         prepareNotifications()
-        AnalyticsService.groupJoined()
+        AnalyticsService.groupJoined(viaLink: viaLink)
 
         // 同期が有効なら、招待コードだけで今週の作品とメンバーが揃う。
         // 未設定のときはバトンを受け取るまでローカルのまま。

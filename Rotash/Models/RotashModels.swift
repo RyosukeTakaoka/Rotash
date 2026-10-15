@@ -91,10 +91,16 @@ struct Slot: Identifiable, Codable, Hashable {
     /// 裏の写真を内カメで撮ったか。
     var reverseCapturedWithFront: Bool?
     var takenByMemberID: UUID?
+    /// 撮った本人がグループを抜けるときに「自分の写真も消す」を選んで、取り消した時刻。
+    ///
+    /// 写真は「絶対に落とさない」ように同期しているので、ただ消すだけだと、まだ持っている端末が
+    /// 書き戻して元に戻ってしまう。取り消したという印を残し、どちらかが印を持っていれば
+    /// 写真を消す側に倒す（`RotashMerge`）。取り消した枠は、撮られなかった日（—）と同じに見える。
+    var withdrawnAt: Date?
 
     /// 写真がある枠かどうか。
     /// 他の端末で撮られてまだダウンロードしていない状態も「写真がある」として扱う。
-    var isFilled: Bool { photoFilename != nil || photoURL != nil }
+    var isFilled: Bool { withdrawnAt == nil && (photoFilename != nil || photoURL != nil) }
 
     /// 裏の写真があるか（他の端末で撮られてまだダウンロードしていない状態も含む）。
     /// 表の写真があるときだけ裏があるとみなす（裏だけ先に同期で届いた枠を、裏返せる枠にしないため）。
@@ -169,6 +175,13 @@ struct RotashWeek: Identifiable, Codable, Hashable {
 
     var dayIndices: [Int] { slots.map(\.dayIndex).sorted() }
     var filledCount: Int { slots.filter(\.isFilled).count }
+
+    /// 記録として残しておく週か。写真が1枚でもあるか、取り消しの印がある週。
+    ///
+    /// 取り消しの印だけの週も捨てない。捨てると、まだ写真を持っている端末から見て
+    /// 「相手には無い週」になり、その端末の写真がそのまま戻ってきてしまう。
+    /// 画面に出すかどうかは別（`RotashGroup.memories`）。
+    var isWorthKeeping: Bool { filledCount > 0 || slots.contains { $0.withdrawnAt != nil } }
 
     /// すべての枠が写真で埋まった、欠けのない状態。
     var isComplete: Bool { !slots.isEmpty && filledCount == slots.count }
@@ -262,8 +275,26 @@ struct RotashGroup: Identifiable, Codable {
     /// K（作品ひとつから生まれた新しいグループの数）を測るための唯一の手がかりで、
     /// これが無いと「シェアが効いたのか」が原理的に分からない。
     var originGroupID: UUID?
+    /// この端末で見えなくしている人（ブロック）。その人の写真は、この端末では表示も共有もしない。
+    /// 自分の端末だけの設定で、ほかのメンバーには伝わらない（サーバーにも載せない）。
+    var hiddenMemberIDs: Set<UUID>?
+    /// この端末で見えなくしている写真（報告した写真）。写真の URL で覚える（枠の ID は端末ごとに違うことがある）。
+    var hiddenPhotoURLs: Set<String>?
 
     var me: Member? { members.first { $0.id == myMemberID } }
+
+    /// Memories に出す週（写真が1枚でもある週）。取り消しの印だけが残った週は出さない。
+    var memories: [RotashWeek] { archive.filter { $0.filledCount > 0 } }
+
+    /// この端末で見えなくしている写真か（ブロックした人の写真、または報告した写真）。
+    func isHidden(_ slot: Slot) -> Bool {
+        if let taker = slot.takenByMemberID, hiddenMemberIDs?.contains(taker) ?? false { return true }
+        if let url = slot.photoURL, hiddenPhotoURLs?.contains(url) ?? false { return true }
+        return false
+    }
+
+    /// その人を見えなくしているか。
+    func isHiddenMember(_ id: UUID) -> Bool { hiddenMemberIDs?.contains(id) ?? false }
 
     /// まだ抜けていないメンバー。当番を組むのはこの人たちだけ。
     var activeMembers: [Member] { members.filter(\.isActive) }
@@ -279,7 +310,7 @@ struct RotashGroup: Identifiable, Codable {
     func latestReverseSlot(of memberID: UUID) -> Slot? {
         ([currentWeek] + archive)
             .flatMap(\.slots)
-            .filter { $0.takenByMemberID == memberID && $0.hasReverse }
+            .filter { $0.takenByMemberID == memberID && $0.hasReverse && !isHidden($0) }
             .max { ($0.capturedAt ?? .distantPast) < ($1.capturedAt ?? .distantPast) }
     }
 

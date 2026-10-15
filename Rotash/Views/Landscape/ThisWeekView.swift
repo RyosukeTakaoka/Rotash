@@ -64,7 +64,7 @@ struct ThisWeekView: View {
                 }
             }
 
-            if let viewerDay, let slot = week?.slot(at: viewerDay), slot.isFilled {
+            if let viewerDay, let slot = week?.slot(at: viewerDay), slot.isFilled, !app.isHidden(slot) {
                 photoViewer(slot)
                     .transition(.opacity)
                     .zIndex(1)
@@ -271,6 +271,8 @@ struct ThisWeekView: View {
     private func cell(slot: Slot, week: RotashWeek) -> some View {
         let day = slot.dayIndex
         let isActive = activeDay == day
+        // この端末で見えなくしている写真（ブロックした人・報告した写真）。
+        let hidden = slot.isFilled && app.isHidden(slot)
         let shootable = app.canShoot(dayIndex: day)
         // 未来の枠は担当者を出さない。空いた枠だけが見えている状態を保つ。
         let assignee = app.revealedAssignee(forDay: day)
@@ -283,6 +285,8 @@ struct ThisWeekView: View {
                 // 撮影中／撮り直し中のライブビューは、この枠を広げた `expandedLive` に出す
                 // （カメラの映像は1か所にしか置けないので、ここには出さない）。
                 Palette.surfaceDeep
+            } else if hidden {
+                HiddenPhotoPlaceholder()
             } else if slot.isFilled {
                 // 元の写真（約1200万画素）をそのまま7枚読むとメモリを大きく使うので、
                 // 枠の高さに足りる大きさに縮めて読む（720pt → 3倍の画面で 2160px）。
@@ -330,7 +334,7 @@ struct ThisWeekView: View {
                 Spacer(minLength: 0)
             }
 
-            if slot.isFilled, slot.hasReverse, !isActive {
+            if slot.isFilled, slot.hasReverse, !isActive, !hidden {
                 // 大きく出ていない方を丸で添える。裏返すと、丸には表が入る。
                 // 細い枠は下の真ん中、横に広い枠（週の途中から始めた最初の週）は右下（ReverseBadge.placement）。
                 GeometryReader { geometry in
@@ -358,7 +362,7 @@ struct ThisWeekView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             // 撮っている枠は上にライブビュー（expandedLive）が重なっていて、押すとそちらで撮る。
-            guard !isActive else { return }
+            guard !isActive, !hidden else { return }
             if slot.isFilled {
                 // 写真のある枠は、全画面で大きく見る（撮り直しは下の RETAKE から）。
                 viewerSwapped = false
@@ -369,7 +373,7 @@ struct ThisWeekView: View {
         }
         // 押してすぐ離すと全画面、少し長く押すと裏返す。短すぎると、ふつうに押したつもりでも裏返る。
         .onLongPressGesture(minimumDuration: 0.25) {
-            guard !isActive, slot.hasReverse else { return }
+            guard !isActive, slot.hasReverse, !hidden else { return }
             toggleFlip(day)
         }
     }
@@ -377,7 +381,7 @@ struct ThisWeekView: View {
     /// 振ったとき。裏のある枠がひとつでも表なら全部を裏に、全部裏なら全部を表に戻す。
     private func flipAllByShake() {
         guard activeDay == nil, viewerDay == nil, let week else { return }
-        let flippable = Set(week.slots.filter(\.hasReverse).map(\.dayIndex))
+        let flippable = Set(week.slots.filter { $0.hasReverse && !app.isHidden($0) }.map(\.dayIndex))
         guard !flippable.isEmpty else { return }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         withAnimation(.easeInOut(duration: 0.28)) {
@@ -467,6 +471,9 @@ struct ThisWeekView: View {
                                 .rotashLabel(10, color: Palette.faint, tracking: 1)
                         }
                         Spacer()
+                        if let week {
+                            PhotoSafetyMenu(slot: slot, week: week) { closeViewer() }
+                        }
                         Button { closeViewer() } label: {
                             Text("×")
                                 .rotashLabel(18, color: Palette.text, tracking: 0)

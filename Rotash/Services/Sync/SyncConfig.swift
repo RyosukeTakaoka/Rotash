@@ -51,6 +51,22 @@ enum SyncConfig {
         return components?.url
     }
 
+    /// 報告を置くコレクション（`FirestoreClient.send(_:)`）。
+    static var reportsURL: URL? {
+        var components = URLComponents(
+            string: "https://firestore.googleapis.com/v1/projects/\(firebaseProjectID)"
+                + "/databases/(default)/documents/reports"
+        )
+        components?.queryItems = [URLQueryItem(name: "key", value: firebaseAPIKey)]
+        return components?.url
+    }
+
+    // MARK: - 問い合わせ先
+
+    /// 報告・問い合わせを受ける連絡先（App Store ガイドライン 1.2 で、公開した連絡先が必要）。
+    /// 空のあいだは、設定画面に連絡先を出さない。App Store に出す前に必ず入れること。
+    static let supportEmail = ""
+
     static var cloudinaryUploadURL: URL? {
         URL(string: "https://api.cloudinary.com/v1_1/\(cloudinaryCloudName)/image/upload")
     }

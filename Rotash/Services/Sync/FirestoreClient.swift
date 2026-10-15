@@ -8,6 +8,17 @@ import Foundation
 ///
 /// 状態はフィールドを細かく分けず、グループ全体を JSON 文字列 1 個として持つ。
 /// 既存の Codable のモデルとマージ処理をそのまま使えるため、MVP では扱いが単純になる。
+/// 写真の報告（App Store ガイドライン 1.2）。
+struct PhotoReport {
+    var inviteCode: String
+    var weekStart: Date
+    var dayIndex: Int
+    var photoURL: String
+    var reversePhotoURL: String?
+    var reportedMemberID: UUID?
+    var reporterMemberID: UUID
+}
+
 enum FirestoreClient {
 
     private enum Field {
@@ -36,6 +47,32 @@ enum FirestoreClient {
         else { throw SyncError.malformedPayload }
 
         return try RotashCoding.decoder.decode(RemoteGroupState.self, from: payloadData)
+    }
+
+    /// 報告を1件書き込む（`reports` コレクションに新しいドキュメントを作る）。
+    /// 報告は誰も読めず、書くだけ（セキュリティルールで読み取りを止める）。運営が Firebase コンソールで見る。
+    static func send(_ report: PhotoReport) async throws {
+        guard SyncConfig.isConfigured, let url = SyncConfig.reportsURL else { throw SyncError.notConfigured }
+
+        var fields: [String: Any] = [
+            "inviteCode": ["stringValue": report.inviteCode],
+            "weekStart": ["timestampValue": ISO8601DateFormatter().string(from: report.weekStart)],
+            "dayIndex": ["integerValue": String(report.dayIndex)],
+            "photoURL": ["stringValue": report.photoURL],
+            "reporterMemberID": ["stringValue": report.reporterMemberID.uuidString],
+            "createdAt": ["timestampValue": ISO8601DateFormatter().string(from: Date())]
+        ]
+        if let reverse = report.reversePhotoURL { fields["reversePhotoURL"] = ["stringValue": reverse] }
+        if let reported = report.reportedMemberID { fields["reportedMemberID"] = ["stringValue": reported.uuidString] }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["fields": fields])
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw SyncError.malformedPayload }
+        guard (200..<300).contains(http.statusCode) else { throw SyncError.badResponse(http.statusCode) }
     }
 
     /// サーバー上の状態を書く。ドキュメントが無ければ作られる。

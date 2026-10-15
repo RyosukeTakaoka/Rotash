@@ -348,14 +348,18 @@ final class AppViewModel: ObservableObject {
 
     /// いま開いているグループから抜ける（この端末からそのグループと写真を消す）。
     /// ほかのグループに入っていれば、そちらを開く。
-    func deleteRotash() {
+    ///
+    /// - Parameter withdrawingPhotos: true なら、自分が撮った写真をみんなの作品からも消し、名前も伏せる
+    ///   （App Store の「アカウントと、そのデータを消せること」にあたる）。false なら写真は友達の作品に残る。
+    func deleteRotash(withdrawingPhotos: Bool = false) {
         if let current = group {
             // 抜けたことを、ほかのメンバーに伝える（伝わると、まだ来ていない日の当番から外れる）。
             // すぐには送らず、同期の最後に送る。同期の途中で送ると、そのあとに届く同期の書き戻しで
             // 「抜けた」印が消えてしまう。届くまで（通信できないときも）、同期のたびに送り直す。
             pendingLeaves.append(PendingLeave(inviteCode: current.inviteCode,
                                               memberID: current.myMemberID,
-                                              leftAt: Date()))
+                                              leftAt: Date(),
+                                              withdrawsPhotos: withdrawingPhotos ? true : nil))
             let weeks = [current.currentWeek] + current.archive
             for week in weeks {
                 for slot in week.slots {
@@ -367,6 +371,50 @@ final class AppViewModel: ObservableObject {
         group = nil
         persist()
         Task { await sync() }
+    }
+
+    // MARK: - 見えなくする・報告する（App Store ガイドライン 1.2）
+
+    /// この端末で見えなくしている写真か。
+    func isHidden(_ slot: Slot) -> Bool { group?.isHidden(slot) ?? false }
+
+    /// その人の写真を、この端末では見えなくする（ブロック）／元に戻す。ほかのメンバーには伝わらない。
+    func setMemberHidden(_ memberID: UUID, hidden: Bool) {
+        guard var current = group, memberID != current.myMemberID else { return }
+        var ids = current.hiddenMemberIDs ?? []
+        if hidden { ids.insert(memberID) } else { ids.remove(memberID) }
+        current.hiddenMemberIDs = ids.isEmpty ? nil : ids
+        group = current
+        persist()
+    }
+
+    /// 写真を報告する。この端末ではすぐに見えなくし、報告をサーバーに残す（運営が確かめて対応する）。
+    func report(_ slot: Slot, in week: RotashWeek) {
+        guard var current = group, let url = slot.photoURL else {
+            alertMessage = String(localized: "この写真はまだ送られていないので、報告できません。")
+            return
+        }
+        var urls = current.hiddenPhotoURLs ?? []
+        urls.insert(url)
+        current.hiddenPhotoURLs = urls
+        group = current
+        persist()
+
+        let report = PhotoReport(inviteCode: current.inviteCode,
+                                 weekStart: week.startDate,
+                                 dayIndex: slot.dayIndex,
+                                 photoURL: url,
+                                 reversePhotoURL: slot.reversePhotoURL,
+                                 reportedMemberID: slot.takenByMemberID,
+                                 reporterMemberID: current.myMemberID)
+        Task {
+            do {
+                try await FirestoreClient.send(report)
+                alertMessage = String(localized: "報告しました。この写真はこの端末では表示されません。")
+            } catch {
+                alertMessage = String(localized: "報告を送れませんでした。この写真はこの端末では表示されません。")
+            }
+        }
     }
 
     // MARK: - リンクから入ってくる
@@ -553,7 +601,7 @@ final class AppViewModel: ObservableObject {
         // 担当履歴は「入れ替える前」に取る（currentWeek と archive の二重計上を避ける）。
         let history = current.cumulativeAssignmentCounts
 
-        if finished.filledCount > 0 {
+        if finished.isWorthKeeping {
             current.archive.insert(finished, at: 0)
         }
         if finished.isComplete {
@@ -732,6 +780,7 @@ final class AppViewModel: ObservableObject {
             else { return }
             let sentID = groups[index].id
             let result = keepingPhotosTakenDuringSync(outcome.group, sent: current, latest: groups[index])
+            Self.deleteWithdrawnFiles(before: groups[index], after: result)
             groups[index] = result
             // 突き合わせで ID が変わったら（参加した直後など）、開いているグループもそれに合わせる。
             if currentGroupID == sentID { currentGroupID = result.id }
@@ -795,6 +844,20 @@ final class AppViewModel: ObservableObject {
             syncAgainWhenFinished = true
         }
         return result
+    }
+
+    /// 撮った本人が取り消した写真を、この端末のキャッシュからも消す（同期の突き合わせで取り消しが届いたとき）。
+    private static func deleteWithdrawnFiles(before: RotashGroup, after: RotashGroup) {
+        let weeks = [after.currentWeek] + after.archive
+        let previous = [before.currentWeek] + before.archive
+        for week in weeks {
+            guard let old = previous.first(where: { $0.startDate == week.startDate }) else { continue }
+            for slot in week.slots where slot.withdrawnAt != nil {
+                guard let stale = old.slot(at: slot.dayIndex) else { continue }
+                if let filename = stale.photoFilename { PhotoStore.shared.delete(filename) }
+                if let filename = stale.reversePhotoFilename { PhotoStore.shared.delete(filename) }
+            }
+        }
     }
 
     // MARK: -

@@ -19,14 +19,28 @@ import SwiftUI
 /// 「視差効果を減らす」がオンの人には動かさない。
 struct TodayCard: View {
     let week: RotashWeek
+    /// この端末で見えなくしている写真か（ブロック・報告）。見えなくした写真は、ふたの下にも出さない。
+    var hides: (Slot) -> Bool = { _ in false }
     let todayIndex: Int
     /// 今日の担当（その日になっているので公開してよい）。
     let assigneeName: String?
     let isMine: Bool
 
+    init(week: RotashWeek,
+         hides: @escaping (Slot) -> Bool = { _ in false },
+         todayIndex: Int,
+         assigneeName: String?,
+         isMine: Bool) {
+        self.week = week
+        self.hides = hides
+        self.todayIndex = todayIndex
+        self.assigneeName = assigneeName
+        self.isMine = isMine
+    }
+
     /// となりの日が見えている幅。
-    private let peek: CGFloat = 26
-    private let gap: CGFloat = 2
+    private var peek: CGFloat { 26 }
+    private var gap: CGFloat { 2 }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 押したときに、横にするきっかけを一度だけ大きく揺らす。
@@ -63,7 +77,9 @@ struct TodayCard: View {
 
     private var todayCell: some View {
         ZStack {
-            if let today, today.isFilled {
+            if let today, today.isFilled, hides(today) {
+                HiddenPhotoPlaceholder()
+            } else if let today, today.isFilled {
                 // ふた。写真はぼかして、何となく色と形だけ分かるようにする。
                 PhotoImageView(slot: today, maxPixel: 240)
                     .blur(radius: 22, opaque: true)
@@ -124,7 +140,7 @@ struct TodayCard: View {
     private func neighbor(dayIndex: Int) -> some View {
         if let slot = week.slot(at: dayIndex) {
             ZStack {
-                if slot.isFilled {
+                if slot.isFilled, !hides(slot) {
                     PhotoImageView(slot: slot, maxPixel: 120)
                         .blur(radius: 10, opaque: true)
                         .overlay(Color.black.opacity(0.45))

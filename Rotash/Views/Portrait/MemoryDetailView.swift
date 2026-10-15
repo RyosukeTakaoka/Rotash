@@ -124,10 +124,12 @@ struct MemoryDetailView: View {
 
     @ViewBuilder
     private func workCell(_ slot: Slot) -> some View {
-        if slot.isFilled {
+        if slot.isFilled, app.isHidden(slot) {
+            HiddenPhotoPlaceholder()
+        } else if slot.isFilled {
             // 左から1枚ずつ裏返る。
             // 並んでいる順に待たせる（曜日で待たせると、週の途中から始めた週で最初の1枚まで間が空く）。
-            FlipCard(flipped: flipped && slot.hasReverse,
+            FlipCard(flipped: flipped && slot.hasReverse && !app.isHidden(slot),
                      delay: Double(slots.firstIndex(where: { $0.id == slot.id }) ?? 0) * 0.07) {
                 PhotoImageView(slot: slot, maxPixel: 300)
             } back: {
@@ -143,7 +145,7 @@ struct MemoryDetailView: View {
 
     @ViewBuilder
     private var flipButton: some View {
-        if week.slots.contains(where: { $0.hasReverse }) {
+        if week.slots.contains(where: { $0.hasReverse && !app.isHidden($0) }) {
             Button {
                 flipped.toggle()
                 swappedDays = []
@@ -173,14 +175,27 @@ struct MemoryDetailView: View {
             .aspectRatio(4.0 / 3.0, contentMode: .fit)
 
             if let slot = week.slot(at: currentDay) {
-                dayCaption(slot)
+                HStack {
+                    dayCaption(slot)
+                    if slot.isFilled, !app.isHidden(slot) {
+                        PhotoSafetyMenu(slot: slot, week: week)
+                    }
+                }
             }
         }
     }
 
     @ViewBuilder
     private func dayPage(_ slot: Slot) -> some View {
-        if slot.isFilled {
+        if slot.isFilled, app.isHidden(slot) {
+            ZStack {
+                HiddenPhotoPlaceholder()
+                Text("この写真は、この端末では表示していません")
+                    .rotashLabel(9, color: Palette.faint, tracking: 0.6)
+                    .padding(.top, 60)
+            }
+            .overlay(Rectangle().stroke(Palette.line, lineWidth: 1))
+        } else if slot.isFilled {
             // 裏返しているときは裏を大きく出す。丸を押した日は、さらに入れ替える。
             let showsReverse = slot.hasReverse && (flipped != swappedDays.contains(slot.dayIndex))
             ZStack(alignment: .bottomTrailing) {

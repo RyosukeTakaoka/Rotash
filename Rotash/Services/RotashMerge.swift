@@ -56,7 +56,26 @@ enum RotashMerge {
         return abs(aAt.timeIntervalSince(bAt)) < 1
     }
 
+    /// 枠の突き合わせ。撮った本人が取り消した写真は、どちらかが取り消しの印を持っていれば消す。
+    /// 「写真を絶対に落とさない」の例外はここだけで、本人が消すと決めたものだけを消す。
     private static func mergeSlot(local: Slot?, remote: Slot?, dayIndex: Int) -> Slot {
+        let merged = mergeSlotPhotos(local: local, remote: remote, dayIndex: dayIndex)
+        guard let withdrawnAt = [local?.withdrawnAt, remote?.withdrawnAt].compactMap({ $0 }).min() else {
+            return merged
+        }
+        return withdrawn(merged, at: withdrawnAt)
+    }
+
+    /// 取り消した枠。写真と、撮った人が分かるものを落とし、担当だけを残す。
+    static func withdrawn(_ slot: Slot, at date: Date) -> Slot {
+        var cleared = Slot(id: slot.id, dayIndex: slot.dayIndex)
+        cleared.assigneeID = slot.assigneeID
+        cleared.assignedAt = slot.assignedAt
+        cleared.withdrawnAt = date
+        return cleared
+    }
+
+    private static func mergeSlotPhotos(local: Slot?, remote: Slot?, dayIndex: Int) -> Slot {
         switch (local, remote) {
         case let (local?, remote?):
             // 同じ枠に両方写真があるなら、先に撮られた方をその日の1枚とする。
@@ -170,13 +189,13 @@ enum RotashMerge {
         if remote.currentWeek.startDate == local.currentWeek.startDate {
             merged.currentWeek = merge(local: local.currentWeek, remote: remote.currentWeek)
         } else if remote.currentWeek.startDate > local.currentWeek.startDate {
-            if local.currentWeek.filledCount > 0 {
+            if local.currentWeek.isWorthKeeping {
                 archive.append(local.currentWeek)
             }
             merged.currentWeek = remote.currentWeek
         } else {
             merged.currentWeek = local.currentWeek
-            if remote.currentWeek.filledCount > 0 {
+            if remote.currentWeek.isWorthKeeping {
                 archive.append(remote.currentWeek)
             }
         }
@@ -202,7 +221,7 @@ enum RotashMerge {
         }
         if let currentStart { byStart.removeValue(forKey: currentStart) }
         return byStart.values
-            .filter { $0.filledCount > 0 }
+            .filter(\.isWorthKeeping)
             .sorted { $0.startDate > $1.startDate }
     }
 }
@@ -228,6 +247,24 @@ struct RemoteGroupState: Codable {
         self.currentWeek = Self.shared(group.currentWeek)
         self.archive = group.archive.map(Self.shared)
         self.originGroupID = group.originGroupID
+    }
+
+    /// その人が撮った（まだ取り消していない）枠の数。今週と Memories の全部。
+    func slotsTaken(by memberID: UUID) -> Int {
+        ([currentWeek] + archive).flatMap(\.slots)
+            .filter { $0.takenByMemberID == memberID && $0.withdrawnAt == nil }
+            .count
+    }
+
+    /// その人が撮った枠すべてに、取り消しの印を付ける。
+    mutating func withdrawPhotos(of memberID: UUID, at date: Date) {
+        func apply(_ week: inout RotashWeek) {
+            for index in week.slots.indices where week.slots[index].takenByMemberID == memberID {
+                week.slots[index] = RotashMerge.withdrawn(week.slots[index], at: date)
+            }
+        }
+        apply(&currentWeek)
+        for index in archive.indices { apply(&archive[index]) }
     }
 
     /// 端末固有の情報を落として、他の人に渡してよい形にする。

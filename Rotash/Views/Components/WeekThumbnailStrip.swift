@@ -14,13 +14,17 @@ struct WeekThumbnailStrip: View {
     /// 帯の高さ。nil なら決めず、呼び出し側の形（`.aspectRatio(WorkShape.stripAspect, ...)` など）に合わせて伸びる。
     var height: CGFloat? = 16
     var flipped = false
+    /// この端末で見えなくしている写真か（ブロック・報告）。見えなくした写真は暗い枠にする。
+    var hides: (Slot) -> Bool = { _ in false }
 
     var body: some View {
         HStack(spacing: 2) {
             let sorted = week.slots.sorted(by: { $0.dayIndex < $1.dayIndex })
             ForEach(Array(sorted.enumerated()), id: \.element.id) { position, slot in
                 Group {
-                    if slot.isFilled {
+                    if slot.isFilled, hides(slot) {
+                        HiddenPhotoPlaceholder()
+                    } else if slot.isFilled {
                         FlipCard(flipped: flipped && slot.hasReverse, delay: Double(position) * 0.07) {
                             PhotoImageView(slot: slot, maxPixel: 160)
                         } back: {

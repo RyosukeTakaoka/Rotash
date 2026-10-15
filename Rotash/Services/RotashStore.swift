@@ -14,6 +14,8 @@ struct PendingLeave: Codable, Hashable {
     var inviteCode: String
     var memberID: UUID
     var leftAt: Date
+    /// 抜けるときに「自分が撮った写真も消す」を選んだか。消すときは名前も伏せる（「—」にする）。
+    var withdrawsPhotos: Bool?
 }
 
 /// 保存層のインターフェース。

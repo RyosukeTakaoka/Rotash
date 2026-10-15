@@ -108,6 +108,7 @@ struct PortraitHomeView: View {
 
                 // 今日の1マス（縦は「1日」、横は「1週間」）。担当の名前・横にするきっかけもこの中に出す。
                 TodayCard(week: group.currentWeek,
+                          hides: app.isHidden,
                           todayIndex: app.todayIndex,
                           assigneeName: app.revealedAssignee(forDay: app.todayIndex)?.name,
                           isMine: app.isMyDay(app.todayIndex))
@@ -134,11 +135,26 @@ struct PortraitHomeView: View {
                     ForEach(group.activeMembers) { member in
                         VStack(spacing: 6) {
                             memberIcon(member, in: group)
+                                .opacity(group.isHiddenMember(member.id) ? 0.35 : 1)
                             Text(member.name.uppercased())
                                 .rotashLabel(8, color: member.id == group.myMemberID ? Palette.live : Palette.dim,
                                              tracking: 0.6)
                                 .lineLimit(1)
                                 .frame(maxWidth: 56)
+                        }
+                        // 長く押すと、その人の写真をこの端末で見えなくする／元に戻す（ブロック）。
+                        .contextMenu {
+                            if member.id != group.myMemberID {
+                                if group.isHiddenMember(member.id) {
+                                    Button { app.setMemberHidden(member.id, hidden: false) } label: {
+                                        Label("写真をまた表示する", systemImage: "eye")
+                                    }
+                                } else {
+                                    Button(role: .destructive) { app.setMemberHidden(member.id, hidden: true) } label: {
+                                        Label("この人の写真を見えなくする", systemImage: "eye.slash")
+                                    }
+                                }
+                            }
                         }
                     }
                     InviteShareButton {
@@ -229,12 +245,12 @@ struct PortraitHomeView: View {
             HStack {
                 Text("MEMORIES").rotashLabel(10, tracking: 3)
                 Spacer()
-                Text("\(group.archive.count)").rotashLabel(10, color: Palette.faint)
+                Text("\(group.memories.count)").rotashLabel(10, color: Palette.faint)
             }
             .padding(.top, 18)
             .padding(.bottom, 14)
 
-            if group.archive.isEmpty {
+            if group.memories.isEmpty {
                 Text("完成した作品はまだありません。")
                     .rotashLabel(10, color: Palette.faint, tracking: 0.4)
                     .padding(.bottom, 24)
@@ -246,7 +262,7 @@ struct PortraitHomeView: View {
                 // 7人のうち誰か1人がコケるだけで壊れる（毎週およそ3割）。
                 // 壊れたときに「お前のせいで切れた」が起きると、共同制作が相互監視に変わる。
                 // 積み上がる一方で減らないものだけを、継続の報酬にする。
-                if let latest = group.archive.first {
+                if let latest = group.memories.first {
                     NavigationLink(value: latest) {
                         latestCard(latest)
                     }
@@ -254,7 +270,7 @@ struct PortraitHomeView: View {
                     .padding(.bottom, 18)
                 }
 
-                let older = Array(group.archive.dropFirst())
+                let older = Array(group.memories.dropFirst())
                 if !older.isEmpty {
                     HairLine()
                         .padding(.bottom, 18)
@@ -296,7 +312,7 @@ struct PortraitHomeView: View {
     private func latestCard(_ week: RotashWeek) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             // 横画面で見る作品と同じ形（1枠の縦横比をそろえる）。
-            WeekThumbnailStrip(week: week, height: nil)
+            WeekThumbnailStrip(week: week, height: nil, hides: app.isHidden)
                 .aspectRatio(WorkShape.stripAspect, contentMode: .fit)
                 .padding(.bottom, 16)
             if let title = week.title, !title.isEmpty {
@@ -350,7 +366,7 @@ struct PortraitHomeView: View {
     /// 前の週の1行。7分割を小さく、右に日付（始まりと終わりの2行）。
     private func olderRow(_ week: RotashWeek) -> some View {
         HStack(alignment: .center, spacing: 14) {
-            WeekThumbnailStrip(week: week, height: nil)
+            WeekThumbnailStrip(week: week, height: nil, hides: app.isHidden)
                 .aspectRatio(WorkShape.stripAspect, contentMode: .fit)
                 .opacity(0.85)
             VStack(alignment: .leading, spacing: 4) {

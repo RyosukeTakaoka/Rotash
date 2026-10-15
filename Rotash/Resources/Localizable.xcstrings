@@ -1760,6 +1760,468 @@
           }
         }
       }
+    },
+    "この写真はまだ送られていないので、報告できません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This photo hasn't been uploaded yet, so it can't be reported."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この写真はまだ送られていないので、報告できません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 사진은 아직 전송되지 않아 신고할 수 없어요."
+          }
+        }
+      }
+    },
+    "報告しました。この写真はこの端末では表示されません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reported. This photo won't be shown on this device."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "報告しました。この写真はこの端末では表示されません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "신고했어요. 이 사진은 이 기기에서 더 이상 보이지 않아요."
+          }
+        }
+      }
+    },
+    "報告を送れませんでした。この写真はこの端末では表示されません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't send the report. This photo won't be shown on this device."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "報告を送れませんでした。この写真はこの端末では表示されません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "신고를 보내지 못했어요. 이 사진은 이 기기에서 더 이상 보이지 않아요."
+          }
+        }
+      }
+    },
+    "この写真を報告する": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Report this photo"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この写真を報告する"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 사진 신고하기"
+          }
+        }
+      }
+    },
+    "この人の写真を見えなくする": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide this person's photos"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この人の写真を見えなくする"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 사람의 사진 숨기기"
+          }
+        }
+      }
+    },
+    "この写真を報告しますか？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Report this photo?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この写真を報告しますか？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 사진을 신고할까요?"
+          }
+        }
+      }
+    },
+    "報告する": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Report"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "報告する"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "신고하기"
+          }
+        }
+      }
+    },
+    "やめる": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "やめる"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "취소"
+          }
+        }
+      }
+    },
+    "運営が確認して対応します。この写真は、この端末ではすぐに表示されなくなります。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "We'll review it and take action. This photo will stop showing on this device right away."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "運営が確認して対応します。この写真は、この端末ではすぐに表示されなくなります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "운영팀이 확인하고 조치할게요. 이 사진은 이 기기에서 바로 보이지 않게 돼요."
+          }
+        }
+      }
+    },
+    "この人の写真を見えなくしますか？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide this person's photos?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この人の写真を見えなくしますか？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 사람의 사진을 숨길까요?"
+          }
+        }
+      }
+    },
+    "見えなくする": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "見えなくする"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "숨기기"
+          }
+        }
+      }
+    },
+    "この人": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "this person"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この人"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 사람"
+          }
+        }
+      }
+    },
+    "%@ の写真が、この端末では表示されなくなります。相手には伝わりません。ホームのメンバーを長く押すと元に戻せます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@'s photos will no longer show on this device. They won't be told. Long-press them in Members on the home screen to undo."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ の写真が、この端末では表示されなくなります。相手には伝わりません。ホームのメンバーを長く押すと元に戻せます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 님의 사진이 이 기기에서 보이지 않게 돼요. 상대에게는 알려지지 않아요. 홈의 멤버를 길게 누르면 되돌릴 수 있어요."
+          }
+        }
+      }
+    },
+    "この写真は、この端末では表示していません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This photo is hidden on this device"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この写真は、この端末では表示していません"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 사진은 이 기기에서 숨겨져 있어요"
+          }
+        }
+      }
+    },
+    "写真をまた表示する": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show their photos again"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "写真をまた表示する"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사진 다시 보이기"
+          }
+        }
+      }
+    },
+    "お問い合わせ・報告": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contact & reports"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "お問い合わせ・報告"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "문의 및 신고"
+          }
+        }
+      }
+    },
+    "困った写真は、写真の「…」から報告できます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can report a problem photo from its “…” menu."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "困った写真は、写真の「…」から報告できます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "문제가 있는 사진은 사진의 「…」에서 신고할 수 있어요."
+          }
+        }
+      }
+    },
+    "このグループから抜けますか？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave this group?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このグループから抜けますか？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 그룹에서 나갈까요?"
+          }
+        }
+      }
+    },
+    "抜ける（写真は友達の作品に残す）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave (keep my photos in friends' pieces)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "抜ける（写真は友達の作品に残す）"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "나가기 (사진은 친구들 작품에 남기기)"
+          }
+        }
+      }
+    },
+    "抜けて、自分が撮った写真も消す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave and delete the photos I took"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "抜けて、自分が撮った写真も消す"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "나가고 내가 찍은 사진도 삭제하기"
+          }
+        }
+      }
+    },
+    "この端末からは、このグループと写真が消えます。写真も消すと、みんなの作品からあなたの写真と名前が消え、元に戻せません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This group and its photos will be removed from this device. If you also delete your photos, your photos and name disappear from everyone's pieces, and this can't be undone."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この端末からは、このグループと写真が消えます。写真も消すと、みんなの作品からあなたの写真と名前が消え、元に戻せません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 기기에서 이 그룹과 사진이 삭제돼요. 사진도 삭제하면 모두의 작품에서 당신의 사진과 이름이 사라지며 되돌릴 수 없어요."
+          }
+        }
+      }
     }
   },
   "version": "1.1"

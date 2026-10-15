@@ -52,23 +52,29 @@ struct SettingsView: View {
                             .lineSpacing(5)
                     }
 
+                    // 報告・問い合わせの連絡先（App Store ガイドライン 1.2）。設定されているときだけ出す。
+                    if !SyncConfig.supportEmail.isEmpty,
+                       let mail = URL(string: "mailto:\(SyncConfig.supportEmail)") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("お問い合わせ・報告").rotashLabel(9, color: Palette.faint, tracking: 2)
+                            Link(SyncConfig.supportEmail, destination: mail)
+                                .font(Typo.label(11, weight: .semibold))
+                                .foregroundStyle(Palette.text)
+                            Text("困った写真は、写真の「…」から報告できます。")
+                                .rotashLabel(9, color: Palette.faint, tracking: 0.4)
+                        }
+                    }
+
                     Button("とじる") { dismiss() }
                         .buttonStyle(RotashButtonStyle())
 
                     if app.hasGroup {
-                        Button(confirmDelete ? "本当に抜ける（この端末からこのグループの写真が消えます）" : "このグループから抜ける") {
-                            if confirmDelete {
-                                app.deleteRotash()
-                                dismiss()
-                            } else {
-                                confirmDelete = true
-                            }
-                        }
-                        .font(Typo.label(10))
-                        .tracking(1)
-                        .foregroundStyle(confirmDelete ? Palette.live : Palette.faint)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 8)
+                        Button("このグループから抜ける") { confirmDelete = true }
+                            .font(Typo.label(10))
+                            .tracking(1)
+                            .foregroundStyle(Palette.faint)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 8)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -77,6 +83,21 @@ struct SettingsView: View {
             .scrollIndicators(.hidden)
         }
         .presentationBackground(Palette.background)
+        // 抜けるとき、自分の写真を友達の作品に残すか、いっしょに消すかを選ぶ。
+        // 消すほうは「アカウントとデータの削除」にあたる（App Store ガイドライン 5.1.1(v)）。
+        .confirmationDialog("このグループから抜けますか？", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("抜ける（写真は友達の作品に残す）", role: .destructive) {
+                app.deleteRotash()
+                dismiss()
+            }
+            Button("抜けて、自分が撮った写真も消す", role: .destructive) {
+                app.deleteRotash(withdrawingPhotos: true)
+                dismiss()
+            }
+            Button("やめる", role: .cancel) {}
+        } message: {
+            Text("この端末からは、このグループと写真が消えます。写真も消すと、みんなの作品からあなたの写真と名前が消え、元に戻せません。")
+        }
         .sheet(item: $batonPayload) { payload in ActivityView(items: payload.items) }
         .fileImporter(isPresented: $showImporter,
                       allowedContentTypes: [BatonTransfer.fileType]) { result in

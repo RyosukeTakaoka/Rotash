@@ -28,15 +28,30 @@ enum RotashSyncService {
     /// - Returns: サーバーに印が載っているのを確かめられたら true。いま書き込んだだけなら false
     ///   （ほぼ同時にほかの端末が古い状態を書き戻すと消えることがあるので、次の同期でもう一度確かめる）。
     ///   サーバーにそのグループや本人が無ければ、伝える相手もいないので true。
+    ///
+    /// 「自分の写真も消す」を選んでいたら、その人が撮った枠すべてに取り消しの印を付け、名前も「—」に伏せる。
+    /// 取り消しの印はマージで必ず残る側なので、写真をまだ持っている端末が書き戻しても元に戻らない。
     static func publishLeave(_ leave: PendingLeave) async throws -> Bool {
         guard isEnabled else { throw SyncError.notConfigured }
         guard var remote = try await FirestoreClient.fetch(inviteCode: leave.inviteCode) else { return true }
         guard let index = remote.members.firstIndex(where: { $0.id == leave.memberID }) else { return true }
-        if remote.members[index].leftAt != nil { return true }
-        remote.members[index].leftAt = leave.leftAt
+
+        let withdraws = leave.withdrawsPhotos ?? false
+        let remaining = withdraws ? remote.slotsTaken(by: leave.memberID) : 0
+        let anonymized = !withdraws || remote.members[index].name == Self.withdrawnName
+        if remote.members[index].leftAt != nil, remaining == 0, anonymized { return true }
+
+        remote.members[index].leftAt = remote.members[index].leftAt ?? leave.leftAt
+        if withdraws {
+            remote.members[index].name = Self.withdrawnName
+            remote.withdrawPhotos(of: leave.memberID, at: leave.leftAt)
+        }
         try await FirestoreClient.push(remote)
         return false
     }
+
+    /// 写真ごと抜けた人の名前の代わり。
+    static let withdrawnName = "—"
 
     /// 同期して、突き合わせ後のグループを返す。
     static func sync(group: RotashGroup) async throws -> Outcome {

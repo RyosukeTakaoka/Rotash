@@ -250,7 +250,9 @@ enum WorkExporter {
         // 写真は枠いっぱいに収める（画面の PhotoImageView と同じ scaledToFill）。
         // 横長の枠は画面とほぼ同じ比率なので、切れ方も画面で見たときと同じになる。
         // 写真は表（撮るとき大きい画面に映っていた方）。裏は下に丸で添える（drawReverseBadge）。
-        if let image = photo(for: slot),
+        // この端末で見えなくしている写真（ブロック・報告）は、共有画像にも載せない。
+        let hidden = group.isHidden(slot)
+        if !hidden, let image = photo(for: slot),
            let context = UIGraphicsGetCurrentContext() {
             context.saveGState()
             context.clip(to: rect)
@@ -263,7 +265,7 @@ enum WorkExporter {
         }
 
         drawLabelScrim(in: rect, layout: layout)
-        drawReverseBadge(slot: slot, in: rect, layout: layout)
+        if !hidden { drawReverseBadge(slot: slot, in: rect, layout: layout) }
 
         // 未来の担当者は誰にも見せていない。共有画像でも同じ扱いにする。
         // ここを漏らすと、Rotash 最大の資産（次に誰が撮るか分からないこと）が

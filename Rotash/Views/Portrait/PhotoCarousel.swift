@@ -35,8 +35,7 @@ struct PhotoCarousel: View {
     var onOpen: (Item, Bool) -> Void
 
     /// 1枚の「幅 ÷ 高さ」。横画面の1枠（およそ 1 : 3.2）より太くして、写真が見えるようにする（`TodayCard` と同じ）。
-    /// 太すぎると圧が強いので、細めにする（2026-10-16）。
-    static let aspect: CGFloat = 0.40
+    static let aspect: CGFloat = 0.48
     /// 写真の上に重ねる黒の濃さ。真ん中もまぶしすぎないよう少しだけ落とし、横の写真はぐっと暗くする（2026-10-16）。
     private static let centerDim: Double = 0.15
     private static let sideDim: Double = 0.6
@@ -66,7 +65,9 @@ struct PhotoCarousel: View {
                     let position = CGFloat(index - entry.offset) + drag.offset / layout.spacing
                     card(entry.element, position: position, isCenter: entry.offset == index)
                         .frame(width: layout.cardSize.width, height: layout.cardSize.height)
-                        .modifier(CoverEffect(position: position, spacing: layout.spacing))
+                        .modifier(CoverEffect(position: position,
+                                              spacing: layout.spacing,
+                                              sideSqueeze: layout.sideSqueeze))
                         // 真ん中から2枚ぶん離れると消える。
                         .opacity(Double(min(max(2 - abs(position), 0), 1)))
                         .zIndex(-Double(abs(position)))
@@ -174,15 +175,26 @@ struct PhotoCarousel: View {
         let cardSize: CGSize
         /// 真ん中の写真の中心から、隣の写真の中心までの距離。
         let spacing: CGFloat
+        /// 横にあるときの、横の縮み（1 = そのまま）。
+        let sideSqueeze: CGFloat
+
+        /// 隣の写真がのぞく帯の幅（画面の幅に対する割合）。
+        ///
+        /// 真ん中の写真の大きさとは別に決める。真ん中は大きく見せたいが、隣まで大きいと圧が強いので、
+        /// 隣は細い帯がのぞくだけにする（2026-10-16）。
+        private static let sideStripRatio: CGFloat = 0.093
 
         init(size: CGSize) {
-            // 縦長の1枚。高さに収まる大きさにしつつ、左右に隣の写真がのぞく幅を残す（画面の幅の 4 割まで）。
-            let width = max(1, min(size.height * PhotoCarousel.aspect, size.width * 0.4))
+            // 縦長の1枚。高さに収まる大きさにしつつ、左右に隣の写真がのぞく幅を残す（画面の幅の 56% まで）。
+            let width = max(1, min(size.height * PhotoCarousel.aspect, size.width * 0.56))
             cardSize = CGSize(width: width, height: width / PhotoCarousel.aspect)
+            // 隣の写真が、決めた幅の帯になるだけ横に縮める。
+            let strip = size.width * Self.sideStripRatio
+            sideSqueeze = min(1, strip / (CoverEffect.sideScale * width))
             // 傾いた隣の写真の内側の辺が、真ん中の写真の辺から少し（12pt）離れたところに来るように。
             let gap: CGFloat = 12
             spacing = width / 2 + gap
-                + CoverEffect.sideScale * CoverEffect.sideSqueeze * width / (2 * (1 - CoverEffect.sideTilt))
+                + CoverEffect.sideScale * sideSqueeze * width / (2 * (1 - CoverEffect.sideTilt))
         }
     }
 }
@@ -280,8 +292,6 @@ private struct CarouselCard: View {
 /// 傾きは `rotation3DEffect` ではなく、遠近の変形を直接組み立てて作る。
 /// 「どちらの辺が奥へ行くか」を、角度の向きの約束に頼らず、ここで確実に決めるため。
 private struct CoverEffect: GeometryEffect {
-    /// 横にあるときの、横の縮み（1 = そのまま）。細い帯がのぞくくらいにする（2026-10-16）。
-    static let sideSqueeze: CGFloat = 0.27
     /// 横にあるときの、全体の縮み。
     static let sideScale: CGFloat = 0.88
     /// 横にあるときの傾きの強さ。外側の辺は 1 / (1 + これ) 倍、内側の辺は 1 / (1 - これ) 倍の高さになる。
@@ -289,6 +299,8 @@ private struct CoverEffect: GeometryEffect {
 
     var position: CGFloat
     var spacing: CGFloat
+    /// 横にあるときの、横の縮み（1 = そのまま）。細い帯がのぞくくらいにする（`Layout.sideSqueeze`）。
+    var sideSqueeze: CGFloat
 
     var animatableData: CGFloat {
         get { position }
@@ -302,7 +314,7 @@ private struct CoverEffect: GeometryEffect {
 
         let amount = min(abs(position), 1)
         let direction: CGFloat = position < 0 ? -1 : 1
-        let squeeze = 1 - (1 - Self.sideSqueeze) * amount
+        let squeeze = 1 - (1 - sideSqueeze) * amount
         let scale = 1 - (1 - Self.sideScale) * amount
         // 遠近の強さ。左の写真（direction = -1）は左の辺が、右の写真は右の辺が奥へ下がる。
         let perspective = direction * Self.sideTilt * amount / (width / 2)

@@ -3,8 +3,9 @@ import UIKit
 
 /// 縦向き。Rotash の入口。管理画面ではないので、ここに置くのは
 /// グループ名 / 招待コード / 今日の1マス / メンバー / Memories / 設定 だけ。
-/// 今週の7分割そのもの（進行中の作品）はここでは見せない。見せるのは今日の1マスだけ（`TodayCard`）。
-/// メンバーの丸は今日の1マスの上に横一列。Memories は先週の作品だけを小さく置き、全部は別の画面（`MemoriesView`）。
+/// 今週の7分割そのもの（進行中の作品）はここでは見せない。見せるのは撮られた写真を1枚ずつ（`PhotoCarousel`）。
+/// 真ん中がいちばん新しく撮られた1枚で、左にそれより前の写真がのぞく（まだ1枚も無いときは今日の1マス、`TodayCard`）。
+/// メンバーの丸は写真の上に横一列。Memories は先週の作品だけを小さく置き、全部は別の画面（`MemoriesView`）。
 /// 縦のホームを1画面に収めるため（2026-10-15）。
 /// 横にした瞬間に「THIS WEEK」が現れることが Rotash 独自の体験になる。
 struct PortraitHomeView: View {
@@ -12,6 +13,14 @@ struct PortraitHomeView: View {
     @EnvironmentObject private var app: AppViewModel
 
     @State private var copied = false
+    /// 全画面で大きく見ている写真（写真の並びの真ん中を押すと開く）。
+    @State private var viewing: ViewerTarget?
+
+    private struct ViewerTarget {
+        let item: PhotoCarousel.Item
+        /// 裏返したまま開いたか（全画面も裏から見せる）。
+        let reversed: Bool
+    }
 
     var body: some View {
         NavigationStack {
@@ -44,6 +53,20 @@ struct PortraitHomeView: View {
             }
         }
         .tint(Palette.text)
+        // 横の7分割で写真を押したときと同じ全画面。
+        .overlay {
+            if let viewing {
+                PhotoViewer(slot: viewing.item.slot,
+                            week: viewing.item.week,
+                            name: app.group.flatMap { photographerName(viewing.item, in: $0) },
+                            showsDate: true,
+                            startsReversed: viewing.reversed) {
+                    withAnimation(.easeOut(duration: 0.2)) { self.viewing = nil }
+                }
+                .id(viewing.item.id)
+                .transition(.opacity)
+            }
+        }
         .sheet(item: $app.activeSheet) { sheet in
             Group {
                 switch sheet {
@@ -110,23 +133,45 @@ struct PortraitHomeView: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
+                let photos = recentPhotos(in: group)
+
                 if group.currentWeek.isFinished {
                     Text("今週の作品ができました")
                         .rotashLabel(11, color: Palette.text, tracking: 0.6)
+                } else if !photos.isEmpty, isMyTurnToShoot(in: group) {
+                    // 真ん中は今日の1マスではなく撮られた写真なので、自分の番であることはここで伝える。
+                    Text("今日はあなたの番 ・ 横にして撮る")
+                        .rotashLabel(11, color: Palette.live, tracking: 0.6)
                 }
 
                 membersRow(group)
                     .padding(.top, 4)
 
-                // 今日の1マス（縦は「1日」、横は「1週間」）。ほかを置いて余った高さを全部使う。
-                TodayCard(week: group.currentWeek,
-                          hides: { app.isHidden($0) },
-                          todayIndex: app.todayIndex,
-                          assigneeName: app.revealedAssignee(forDay: app.todayIndex)?.name,
-                          isMine: app.isMyDay(app.todayIndex))
-                    .aspectRatio(TodayCard.aspect, contentMode: .fit)
+                if photos.isEmpty {
+                    // まだ1枚も撮られていないときは、今日の1マス。ほかを置いて余った高さを全部使う。
+                    TodayCard(week: group.currentWeek,
+                              hides: { app.isHidden($0) },
+                              todayIndex: app.todayIndex,
+                              assigneeName: app.revealedAssignee(forDay: app.todayIndex)?.name,
+                              isMine: app.isMyDay(app.todayIndex))
+                        .aspectRatio(TodayCard.aspect, contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.top, 12)
+                } else {
+                    // 撮られた写真の並び。ほかを置いて余った高さを全部使う。
+                    // 左右の余白（24pt）の外まで広げて、隣の写真が画面の端までのぞけるようにする。
+                    PhotoCarousel(items: photos,
+                                  currentWeekID: group.currentWeek.id,
+                                  todayIndex: app.todayIndex,
+                                  name: { photographerName($0, in: group) }) { item, reversed in
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            viewing = ViewerTarget(item: item, reversed: reversed)
+                        }
+                    }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.horizontal, -24)
                     .padding(.top, 12)
+                }
             }
             .frame(maxHeight: .infinity)
         }
@@ -134,6 +179,27 @@ struct PortraitHomeView: View {
         .padding(.horizontal, 24)
         .padding(.top, 16)
         .padding(.bottom, 18)
+    }
+
+    /// 撮られた写真を新しい順に（今週と、これまでの週の全部）。この端末で見えなくしている写真は入れない。
+    private func recentPhotos(in group: RotashGroup) -> [PhotoCarousel.Item] {
+        ([group.currentWeek] + group.archive)
+            .flatMap { week in
+                week.slots
+                    .filter { $0.isFilled && !group.isHidden($0) }
+                    .map { PhotoCarousel.Item(slot: $0, week: week) }
+            }
+            .sorted { $0.takenAt > $1.takenAt }
+    }
+
+    /// 撮った人の名前（記録の無い古い写真は、その日の担当）。
+    private func photographerName(_ item: PhotoCarousel.Item, in group: RotashGroup) -> String? {
+        (item.slot.takenByMemberID ?? item.slot.assigneeID).flatMap { group.member(withID: $0)?.name }
+    }
+
+    /// 今日が自分の番で、まだ撮っていないか。
+    private func isMyTurnToShoot(in group: RotashGroup) -> Bool {
+        app.isMyDay(app.todayIndex) && !(group.currentWeek.slot(at: app.todayIndex)?.isFilled ?? false)
     }
 
     /// メンバー。丸は、その人が最後に撮った裏の写真（たいてい本人の顔）。撮るたびに替わる。

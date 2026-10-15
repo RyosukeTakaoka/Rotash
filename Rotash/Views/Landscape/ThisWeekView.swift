@@ -36,8 +36,6 @@ struct ThisWeekView: View {
     @State private var pinchBaseScale: CGFloat?
     /// 全画面で大きく見ている日（写真のある枠を押すと開く）。
     @State private var viewerDay: Int?
-    /// 全画面で、丸を押して大きい写真と丸を入れ替えているか。
-    @State private var viewerSwapped = false
     @State private var draftTitle = ""
     /// 撮り直せる残り時間を数えるための「いま」。撮り直せるあいだだけ進める。
     /// 表示を描き直すきっかけとして使う。撮れるかどうかの判定そのものは常に本物の現在時刻で行う。
@@ -78,8 +76,13 @@ struct ThisWeekView: View {
                 }
             }
 
-            if let viewerDay, let slot = week?.slot(at: viewerDay), slot.isFilled, !app.isHidden(slot) {
-                photoViewer(slot)
+            if let viewerDay, let week, let slot = week.slot(at: viewerDay), slot.isFilled, !app.isHidden(slot) {
+                // 枠を裏返している日は裏から見せる。
+                PhotoViewer(slot: slot,
+                            week: week,
+                            name: app.revealedAssignee(forDay: viewerDay)?.name,
+                            startsReversed: flippedDays.contains(viewerDay)) { closeViewer() }
+                    .id(slot.id)
                     .transition(.opacity)
                     .zIndex(1)
             }
@@ -380,7 +383,6 @@ struct ThisWeekView: View {
             guard !isActive, !hidden else { return }
             if slot.isFilled {
                 // 写真のある枠は、全画面で大きく見る（撮り直しは下の RETAKE から）。
-                viewerSwapped = false
                 withAnimation(.easeOut(duration: 0.2)) { viewerDay = day }
             } else if shootable {
                 manualSelection = day
@@ -426,90 +428,7 @@ struct ThisWeekView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - 全画面で見る
-
-    /// 写真のある枠を押したときの全画面。写真そのものの形で大きく出し、右下の丸（もう一方のカメラ）を押すと入れ替わる。
-    /// 背景か「×」を押すと閉じる。
-    private func photoViewer(_ slot: Slot) -> some View {
-        let day = slot.dayIndex
-        // 枠を裏返している日は裏から見せる。丸を押すか写真を長押しすると、さらに入れ替わる。
-        let showsReverse = slot.hasReverse && (flippedDays.contains(day) != viewerSwapped)
-        return GeometryReader { geometry in
-            // 写真は画面の高さいっぱい（上下の端まで）。丸はその高さの 1/3。
-            let fullHeight = geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom
-            let diameter = (fullHeight / 3).rounded()
-            ZStack {
-                Color.black
-                    .ignoresSafeArea()
-                    .onTapGesture { closeViewer() }
-
-                // 1つの PhotoImageView のまま中身だけ替える（作り直すと、入れ替えるたびに一瞬暗くなる）。
-                // 読む大きさは画面に出る大きさまで（4:3 を画面の高さいっぱいに出すとき、横は高さの 4/3）。
-                PhotoImageView(filename: showsReverse ? slot.reversePhotoFilename : slot.photoFilename,
-                               remoteURL: showsReverse ? slot.reversePhotoURL : slot.photoURL,
-                               maxPixel: (fullHeight * 4 / 3).rounded())
-                    .natural()
-                .overlay(alignment: .bottomTrailing) {
-                    if slot.hasReverse {
-                        Button { swapViewer() } label: {
-                            PhotoImageView(filename: showsReverse ? slot.photoFilename : slot.reversePhotoFilename,
-                                           remoteURL: showsReverse ? slot.photoURL : slot.reversePhotoURL,
-                                           maxPixel: diameter)
-                            .frame(width: diameter, height: diameter)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.white, lineWidth: 3))
-                            .contentShape(Circle())
-                        }
-                        .buttonStyle(.plain)
-                        .padding(diameter / 8)
-                    }
-                }
-                // 写真を長押ししても、表と裏が入れ替わる（7分割の枠と同じ）。
-                .contentShape(Rectangle())
-                .onLongPressGesture(minimumDuration: 0.3) {
-                    guard slot.hasReverse else { return }
-                    swapViewer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .ignoresSafeArea(edges: .vertical)
-
-                VStack {
-                    HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        Text(RotashDay.label(for: day))
-                            .rotashLabel(11, color: Palette.text, tracking: 1.8)
-                        if let name = app.revealedAssignee(forDay: day)?.name {
-                            Text(name.uppercased())
-                                .rotashLabel(10, color: Palette.dim, tracking: 0.8)
-                        }
-                        if let capturedAt = slot.capturedAt {
-                            Text(RotashDateFormat.time.string(from: capturedAt))
-                                .rotashLabel(10, color: Palette.faint, tracking: 1)
-                        }
-                        Spacer()
-                        if let week {
-                            PhotoSafetyMenu(slot: slot, week: week) { closeViewer() }
-                        }
-                        Button { closeViewer() } label: {
-                            Text("×")
-                                .rotashLabel(18, color: Palette.text, tracking: 0)
-                                .frame(width: 44, height: 44)
-                                .background(Color.black.opacity(0.4))
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.horizontal, 24)
-                    Spacer()
-                }
-                .padding(.top, 4)
-            }
-        }
-    }
-
-    private func swapViewer() {
-        UISelectionFeedbackGenerator().selectionChanged()
-        withAnimation(.easeInOut(duration: 0.2)) { viewerSwapped.toggle() }
-    }
+    // MARK: - 全画面で見る（`PhotoViewer`）
 
     private func closeViewer() {
         withAnimation(.easeOut(duration: 0.2)) { viewerDay = nil }

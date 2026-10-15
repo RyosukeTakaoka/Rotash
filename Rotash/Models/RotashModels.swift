@@ -236,6 +236,11 @@ struct RotashWeek: Identifiable, Codable, Hashable {
         slots.first { $0.dayIndex == dayIndex }
     }
 
+    /// その枠の日付（その日の 00:00）。
+    func date(of slot: Slot) -> Date? {
+        Calendar.rotash.date(byAdding: .day, value: slot.dayIndex, to: startDate)
+    }
+
     /// 曜日 -> 担当者。担当者の決定履歴として使う（表示用ではない）。
     var assignments: [Int: UUID] {
         var result: [Int: UUID] = [:]
@@ -387,6 +392,13 @@ enum RotashDateFormat {
     static let day: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy.MM.dd"
+        return formatter
+    }()
+
+    /// 縦のホームの写真と全画面で、今週ではない写真に添える短い日付。
+    static let monthDay: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM.dd"
         return formatter
     }()
 

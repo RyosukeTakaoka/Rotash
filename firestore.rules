@@ -1,0 +1,51 @@
+rules_version = '2';
+
+// Rotash の Firestore セキュリティルール。docs/FIREBASE_SETUP.md の手順で反映する。
+//
+// グループの状態は、招待コード（6文字）をドキュメント ID にして、JSON 文字列 1 個（payload）で持つ。
+// 中身を細かく見て「メンバーだけ」に絞ることはできない（payload の中はルールから読めない）ので、
+//   - 一覧の読み取り（list）は誰にもさせない … 招待コードを知らないと、どのグループも読めない
+//   - 読み書きは、アプリの匿名ログイン（AuthService）を済ませた人だけ
+//   - 消すことは誰にもさせない
+// にしている。
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 古いアプリ（匿名ログインの前の版）も読み書きできるようにしておくか。
+    // 友達全員が新しい版に上げたら false にして、もう一度ルールを反映する。
+    function allowsLegacyClients() {
+      return true;
+    }
+
+    function signedIn() {
+      return request.auth != null || allowsLegacyClients();
+    }
+
+    match /rotash/{code} {
+      allow get: if signedIn() && code.size() == 6;
+      allow list: if false;
+      allow create, update: if signedIn()
+        && code.size() == 6
+        && request.resource.data.keys().hasOnly(['payload', 'updatedAt'])
+        && request.resource.data.payload is string
+        && request.resource.data.payload.size() < 900000;
+      allow delete: if false;
+    }
+
+    // 写真の報告（App Store ガイドライン 1.2）。書くだけ。読むのは運営が Firebase コンソールで。
+    match /reports/{reportId} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+             'inviteCode', 'weekStart', 'dayIndex', 'photoURL', 'reversePhotoURL',
+             'reportedMemberID', 'reporterMemberID', 'createdAt'
+           ]);
+      allow read, update, delete: if false;
+    }
+
+    // 押し出し通知の宛先（端末ごとの FCM トークン）。本人が自分の分だけ書ける。読むのは Cloud Functions だけ。
+    match /devices/{uid} {
+      allow create, update, delete: if request.auth != null && request.auth.uid == uid;
+      allow read: if false;
+    }
+  }
+}

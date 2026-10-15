@@ -181,6 +181,10 @@ enum RotashMerge {
                let joinedAt = local.members.first(where: { $0.id == id })?.joinedAt {
                 members[index].joinedAt = joinedAt
             }
+            if members[index].uid == nil,
+               let uid = local.members.first(where: { $0.id == id })?.uid {
+                members[index].uid = uid
+            }
         }
         merged.members = members
 

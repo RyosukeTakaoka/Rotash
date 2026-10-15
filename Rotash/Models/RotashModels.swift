@@ -18,6 +18,12 @@ struct Member: Identifiable, Codable, Hashable {
     /// 入った直後に何もできないと、入れたのかどうかも分からないまま閉じてしまうため。
     /// 端末をまたいで同じ判断になるよう、秒より下は切り捨てて持つ（サーバーの日付も秒まで）。
     var joinedAt: Date?
+    /// 匿名ログインの uid（`AuthService`）。この人が使っている端末の利用者。
+    ///
+    /// アプリを入れ直しても uid は変わらないので、同じグループに入り直したとき、
+    /// 新しい人ではなく前の自分として戻れる。入り直すたびに別人が増えるのを防ぐ。
+    /// 押し出し通知（「◯◯が撮った」）の宛先を引くのにも使う（functions/）。
+    var uid: String?
 
     var isActive: Bool { leftAt == nil }
 }

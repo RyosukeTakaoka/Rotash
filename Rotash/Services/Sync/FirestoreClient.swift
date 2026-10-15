@@ -32,7 +32,7 @@ enum FirestoreClient {
             throw SyncError.notConfigured
         }
 
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await URLSession.shared.data(for: await authorized(URLRequest(url: url)))
         guard let http = response as? HTTPURLResponse else { throw SyncError.malformedPayload }
         if http.statusCode == 404 { return nil }
         guard (200..<300).contains(http.statusCode) else {
@@ -47,6 +47,15 @@ enum FirestoreClient {
         else { throw SyncError.malformedPayload }
 
         return try RotashCoding.decoder.decode(RemoteGroupState.self, from: payloadData)
+    }
+
+    /// 匿名ログインの ID トークンを添える（`AuthService`）。ログインできなければ、そのまま送る。
+    private static func authorized(_ request: URLRequest) async -> URLRequest {
+        var request = request
+        if let token = await AuthService.shared.idToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        return request
     }
 
     /// 報告を1件書き込む（`reports` コレクションに新しいドキュメントを作る）。
@@ -70,7 +79,7 @@ enum FirestoreClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["fields": fields])
 
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await URLSession.shared.data(for: await authorized(request))
         guard let http = response as? HTTPURLResponse else { throw SyncError.malformedPayload }
         guard (200..<300).contains(http.statusCode) else { throw SyncError.badResponse(http.statusCode) }
     }
@@ -98,7 +107,7 @@ enum FirestoreClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await URLSession.shared.data(for: await authorized(request))
         guard let http = response as? HTTPURLResponse else { throw SyncError.malformedPayload }
         guard (200..<300).contains(http.statusCode) else {
             throw SyncError.badResponse(http.statusCode)

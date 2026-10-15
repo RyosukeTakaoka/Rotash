@@ -779,7 +779,15 @@ final class AppViewModel: ObservableObject {
                     ?? groups.firstIndex(where: { $0.inviteCode == current.inviteCode })
             else { return }
             let sentID = groups[index].id
-            let result = keepingPhotosTakenDuringSync(outcome.group, sent: current, latest: groups[index])
+            var latest = groups[index]
+            // 入り直して前の自分に戻ったなら、手元の「自分」もそれに合わせる（同期しているあいだに撮った写真ごと）。
+            if let rejoined = outcome.rejoinedMemberID, latest.myMemberID != rejoined {
+                let previous = outcome.group.members.first { $0.id == rejoined }
+                if let previous { latest = RotashSyncService.returning(latest, as: previous) }
+                // 前に抜けたときの「抜けた」知らせがまだ残っていたら、送らない（送ると、また抜けたことになる）。
+                pendingLeaves.removeAll { $0.inviteCode == current.inviteCode && $0.memberID == rejoined }
+            }
+            let result = keepingPhotosTakenDuringSync(outcome.group, sent: current, latest: latest)
             Self.deleteWithdrawnFiles(before: groups[index], after: result)
             groups[index] = result
             // 突き合わせで ID が変わったら（参加した直後など）、開いているグループもそれに合わせる。

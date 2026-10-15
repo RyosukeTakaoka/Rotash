@@ -20,6 +20,8 @@ enum RotashSyncService {
         var group: RotashGroup
         var failedUploads: Int
         var failureReason: String?
+        /// 入り直した人が、前の自分（同じ uid のメンバー）として戻ったときの、そのメンバーの ID。
+        var rejoinedMemberID: UUID?
     }
 
     /// グループから抜けたことだけをサーバーに伝える（サーバーの状態に「抜けた」印を付けて書き戻す）。
@@ -63,7 +65,22 @@ enum RotashSyncService {
                                                 failures: &failures,
                                                 failureReason: &failureReason)
 
+        // 自分にまだ uid が付いていなければ付ける（入り直したときに前の自分を見つけるため）。
+        let uid = await AuthService.shared.uid()
+        if let uid, let index = working.members.firstIndex(where: { $0.id == working.myMemberID }),
+           working.members[index].uid == nil {
+            working.members[index].uid = uid
+        }
+
+        var rejoined: UUID?
         if let remote = try await FirestoreClient.fetch(inviteCode: working.inviteCode) {
+            // 入り直し: サーバーにまだ載っていない自分だが、同じ uid のメンバーがいる → 前の自分として戻る。
+            if let uid,
+               !remote.members.contains(where: { $0.id == working.myMemberID }),
+               let previous = remote.members.first(where: { $0.uid == uid }) {
+                working = Self.returning(working, as: previous)
+                rejoined = previous.id
+            }
             // まだサーバーに載っていない自分（いま入ろうとしている）なら、定員を確かめてから加わる。
             // すでに載っている人（入っている人の普段の同期）は、ここで止めない。
             if !remote.members.contains(where: { $0.id == working.myMemberID }),
@@ -76,7 +93,31 @@ enum RotashSyncService {
         await cacheMissingPhotos(in: &working)
 
         try await FirestoreClient.push(RemoteGroupState(group: working))
-        return Outcome(group: working, failedUploads: failures, failureReason: failureReason)
+        return Outcome(group: working, failedUploads: failures, failureReason: failureReason,
+                       rejoinedMemberID: rejoined)
+    }
+
+    /// 入り直した人を、前の自分（同じ uid のメンバー）に戻した状態。
+    ///
+    /// 参加した直後の端末は、自分ひとりの仮のグループ（新しいメンバー ID、仮の担当）を持っている。
+    /// メンバー ID を前の自分のものに付け替え、抜けた印を外し、名前は今回入れたものにする。
+    /// 担当は仮のまま（決定時刻なし）なので、このあとのマージでサーバーの本物に置き換わる。
+    static func returning(_ group: RotashGroup, as previous: Member) -> RotashGroup {
+        var updated = group
+        let newID = group.myMemberID
+        var me = previous
+        me.leftAt = nil
+        if let current = group.me {
+            me.name = current.name
+            me.joinedAt = current.joinedAt
+        }
+        updated.members = updated.members.filter { $0.id != newID && $0.id != previous.id } + [me]
+        updated.myMemberID = previous.id
+        for index in updated.currentWeek.slots.indices where updated.currentWeek.slots[index].assigneeID == newID {
+            updated.currentWeek.slots[index].assigneeID = previous.id
+            updated.currentWeek.slots[index].assignedAt = nil
+        }
+        return updated
     }
 
     // MARK: - 写真

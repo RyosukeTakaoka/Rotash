@@ -13,11 +13,6 @@
 		773055A2303D307C001723C0 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 773055A1303D307C001723C0 /* FirebaseMessaging */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXFileReference section */
-		AA11BB22CC33DD44EE550001 /* Rotash.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rotash.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		AA11BB22CC33DD44EE550101 /* RotashTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RotashTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-/* End PBXFileReference section */
-
 /* Begin PBXContainerItemProxy section */
 		AA11BB22CC33DD44EE550108 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +22,11 @@
 			remoteInfo = Rotash;
 		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		AA11BB22CC33DD44EE550001 /* Rotash.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rotash.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA11BB22CC33DD44EE550101 /* RotashTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RotashTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		AA11BB22CC33DD44EE550002 /* Rotash */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Rotash; sourceTree = "<group>"; };
@@ -330,7 +330,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Supporting/Rotash.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202610160010;
+				CURRENT_PROJECT_VERSION = 202610171512;
 				DEVELOPMENT_TEAM = 5B2NQ74986;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -359,7 +359,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Supporting/Rotash.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202610160010;
+				CURRENT_PROJECT_VERSION = 202610171512;
 				DEVELOPMENT_TEAM = 5B2NQ74986;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;

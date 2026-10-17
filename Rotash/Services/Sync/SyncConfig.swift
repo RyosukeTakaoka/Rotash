@@ -76,7 +76,7 @@ enum SyncConfig {
     /// `tools/push-relay.gs` を Apps Script のウェブアプリとして公開した URL（`https://script.google.com/macros/s/…/exec`）。
     /// 空のあいだは「◯◯が撮った」を送らない（ほかは全部動く）。手順は docs/PUSH_RELAY_SETUP.md。
     /// この URL は知られても困らない（送り役が、本当にその人が撮ったかを確かめてから送るので）。
-    static let pushRelayURL = ""
+    static let pushRelayURL = "https://script.google.com/macros/s/AKfycbzFXK0pUu59n3KB0UFM4jHg-yeNcH05Fm7jS4y0qz9bxl5LFEgx1c4SCsOXOFD-3hz2Ug/exec"
 
     // MARK: - 問い合わせ先
 

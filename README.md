@@ -65,6 +65,10 @@ App Store 公開版ではなく、実際に友人と使って体験価値を検�
 > Firebase Analytics を導入している（無料）。イベント名の一覧とFirebaseコンソール側の
 > セットアップ手順は [`docs/ANALYTICS_SETUP.md`](docs/ANALYTICS_SETUP.md)。
 >
+> 「日常の報酬がない」「使う理由が見つからない」というオーナーの問題提起（2026-10-17）に対する、
+> Claude と ChatGPT の見解の比較は [`docs/DIAGNOSIS_REWARD_AND_NEED_2026-10-17.md`](docs/DIAGNOSIS_REWARD_AND_NEED_2026-10-17.md)
+> （ChatGPT の全文は [`docs/CHATGPT_ANALYSIS_2026-10-17.md`](docs/CHATGPT_ANALYSIS_2026-10-17.md)）。
+>
 > まだ決めていないこと・保留していることは [`docs/PENDING_DECISIONS.md`](docs/PENDING_DECISIONS.md) に集めてある。
 > 出したアイデアを判定せずに並べたものは [`docs/IDEAS_2026-10.md`](docs/IDEAS_2026-10.md)。
 > **Firebase コンソールでの有効化・デプロイ・App Store の申告**（オーナーの手作業）は [`docs/FIREBASE_SETUP.md`](docs/FIREBASE_SETUP.md)。

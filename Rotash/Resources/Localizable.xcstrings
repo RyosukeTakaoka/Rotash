@@ -2244,6 +2244,116 @@
           }
         }
       }
+    },
+    "まだメッセージはありません。\n写真の感想や「ありがとう」を送ってみましょう。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No messages yet.\nSay something about a photo, or just say thanks."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだメッセージはありません。\n写真の感想や「ありがとう」を送ってみましょう。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아직 메시지가 없어요.\n사진에 대한 감상이나 \"고마워\"를 보내 보세요."
+          }
+        }
+      }
+    },
+    "メッセージ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メッセージ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메시지"
+          }
+        }
+      }
+    },
+    "この人を見えなくする": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide this person"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この人を見えなくする"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 사람 숨기기"
+          }
+        }
+      }
+    },
+    "報告しました。このメッセージはこの端末では表示されません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reported. This message won't be shown on this device."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "報告しました。このメッセージはこの端末では表示されません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "신고했어요. 이 메시지는 이 기기에서 표시되지 않아요."
+          }
+        }
+      }
+    },
+    "報告を送れませんでした。このメッセージはこの端末では表示されません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't send the report. This message won't be shown on this device."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "報告を送れませんでした。このメッセージはこの端末では表示されません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "신고를 보내지 못했어요. 이 메시지는 이 기기에서 표시되지 않아요."
+          }
+        }
+      }
     }
   },
   "version": "1.1"

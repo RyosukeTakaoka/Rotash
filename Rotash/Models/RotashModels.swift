@@ -270,6 +270,25 @@ struct RotashWeek: Identifiable, Codable, Hashable {
     }
 }
 
+// MARK: - Message
+
+/// グループの中のひとこと（2026-10-19 から試験。`RotashFeatureFlags.groupMessages`）。
+///
+/// 写真への反応を LINE で送っていたのを、アプリの中でできるようにするためのもの。
+/// グループの状態（JSON 1個）に入れて、写真と同じ同期で届ける。リアルタイムではないので、
+/// 届くのは相手がアプリを開いたとき（送り役があれば、送った直後に通知も飛ぶ）。
+struct GroupMessage: Identifiable, Codable, Hashable {
+    var id: UUID = UUID()
+    var senderID: UUID
+    var text: String
+    var sentAt: Date
+
+    /// 1つのひとことの上限。長文の掲示板にはしない。
+    static let textLimit = 200
+    /// グループに残しておく数（新しい方から）。グループの状態はサーバーで 900KB までなので、それより十分小さく。
+    static let retainedCount = 300
+}
+
 // MARK: - Group
 
 /// グループは掛け持ちできる（端末には `RotashLibrary` として全部を保存し、1つずつ開いて見る）。
@@ -296,6 +315,13 @@ struct RotashGroup: Identifiable, Codable {
     var hiddenMemberIDs: Set<UUID>?
     /// この端末で見えなくしている写真（報告した写真）。写真の URL で覚える（枠の ID は端末ごとに違うことがある）。
     var hiddenPhotoURLs: Set<String>?
+    /// グループのひとこと（古い順）。同期でみんなに届く。
+    var messages: [GroupMessage]?
+    /// この端末で見えなくしているひとこと（報告したもの）。自分の端末だけの設定。
+    var hiddenMessageIDs: Set<UUID>?
+    /// この端末でひとことを最後に読んだ時刻。これより後に届いた他の人のひとことを「未読」として数える。
+    /// 自分の端末だけの設定（サーバーにも載せない）。
+    var messagesReadAt: Date?
 
     var me: Member? { members.first { $0.id == myMemberID } }
 
@@ -311,6 +337,20 @@ struct RotashGroup: Identifiable, Codable {
 
     /// その人を見えなくしているか。
     func isHiddenMember(_ id: UUID) -> Bool { hiddenMemberIDs?.contains(id) ?? false }
+
+    /// この端末で見せるひとこと（見えなくした人・報告したものを除く）。古い順。
+    var visibleMessages: [GroupMessage] {
+        (messages ?? []).filter { message in
+            !isHiddenMember(message.senderID) && !(hiddenMessageIDs?.contains(message.id) ?? false)
+        }
+    }
+
+    /// まだ読んでいない、ほかの人のひとことの数。
+    var unreadMessageCount: Int {
+        visibleMessages.filter { message in
+            message.senderID != myMemberID && messagesReadAt.map { message.sentAt > $0 } ?? true
+        }.count
+    }
 
     /// まだ抜けていないメンバー。当番を組むのはこの人たちだけ。
     var activeMembers: [Member] { members.filter(\.isActive) }
@@ -344,17 +384,6 @@ struct RotashGroup: Identifiable, Codable {
 
     func member(withID id: UUID) -> Member? {
         members.first { $0.id == id }
-    }
-
-    /// 累計の担当回数。次の週の担当者を決めるときの公平性の基準になる。
-    var cumulativeAssignmentCounts: [UUID: Int] {
-        var counts: [UUID: Int] = [:]
-        for week in [currentWeek] + archive {
-            for slot in week.slots {
-                if let id = slot.assigneeID { counts[id, default: 0] += 1 }
-            }
-        }
-        return counts
     }
 }
 

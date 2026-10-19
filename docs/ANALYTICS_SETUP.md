@@ -188,6 +188,8 @@ App Store Connectでアプリ情報を登録する際、データを収集する
 | `rotash_open` | アプリが前面に来た（起動・戻ってきた） | `is_my_day`（今日自分が担当か）, `today_filled`, `group_count` |
 | `week_viewed` | 横にして今週の作品を見た | `is_my_day`, `today_filled` |
 | `first_landscape` | そのグループで初めて横にした | `minutes_since_join`（招待で入ってから何分後か。作った人は -1） |
+| `message_sent` | グループのメッセージを送った（2026-10-19 から） | `is_my_day`（送った日が自分の担当日か）, `member_count` |
+| `messages_opened` | メッセージの画面を開いた（2026-10-19 から） | `unread`（開いたときに読んでいなかった数） |
 
 `week_completed` は「その週が終わって次の週に切り替わった瞬間」に、全枠が写真で埋まっていた場合だけ送られる
 （`AppViewModel.rolledWeek`）。7枚目を撮った瞬間ではない。

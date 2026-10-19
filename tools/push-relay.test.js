@@ -9,7 +9,7 @@ const vm = require("node:vm");
 const context = {};
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(__dirname, "push-relay.gs"), "utf8"), context);
-const { planNotification, messageText, isActive } = context;
+const { planNotification, planMessageNotification, groupMessageText, messageText, isActive } = context;
 
 const now = Date.parse("2026-10-15T12:00:00Z");
 const group = (slots, members) => ({
@@ -59,4 +59,34 @@ test("text follows the device language", () => {
   assert.strictEqual(messageText("ja", "G", "aki").body, "AKI が今日の1枚を撮りました");
   assert.strictEqual(messageText("ko", "G", "aki").body, "AKI 님이 오늘의 한 장을 찍었어요");
   assert.strictEqual(messageText("fr", "G", null).body, "Today's photo is in");
+});
+
+// グループのひとこと（2026-10-19）
+const messageID = "0F8E6A2C-1B3D-4E5F-8A9B-0C1D2E3F4A5B";
+const withMessages = (messages) => Object.assign(group([], members), { messages });
+const message = (extra) => Object.assign(
+  { id: messageID, senderID: "A", text: "今日の空きれい", sentAt: "2026-10-15T11:50:00Z" }, extra);
+
+test("a message goes to everyone else who is still in the group", () => {
+  const plan = planMessageNotification(withMessages([message()]), "uA", messageID, now);
+  assert.deepStrictEqual(Array.from(plan.recipients), ["uB", "uE"]);
+  assert.strictEqual(plan.senderName, "aki");
+  assert.strictEqual(plan.text, "今日の空きれい");
+});
+
+test("someone else cannot ring the bell for a message they did not send", () => {
+  assert.strictEqual(planMessageNotification(withMessages([message()]), "uB", messageID, now), null);
+  assert.strictEqual(planMessageNotification(withMessages([message({ senderID: "C" })]), "uC", messageID, now), null);
+});
+
+test("an unknown, missing or old message sends nothing", () => {
+  assert.strictEqual(planMessageNotification(withMessages([message()]), "uA", "00000000-0000-0000-0000-000000000000", now), null);
+  assert.strictEqual(planMessageNotification(group([], members), "uA", messageID, now), null);
+  assert.strictEqual(planMessageNotification(withMessages([message({ sentAt: "2026-10-15T10:00:00Z" })]), "uA", messageID, now), null);
+});
+
+test("a long message is cut in the notification", () => {
+  const plan = planMessageNotification(withMessages([message({ text: "あ".repeat(120) })]), "uA", messageID, now);
+  assert.strictEqual(plan.text.length, 81);
+  assert.strictEqual(groupMessageText("ja", "G", "aki", "hi").body, "AKI: hi");
 });

@@ -8,6 +8,7 @@
  * 流れ:
  *   1. 今日の1枚を撮ってサーバーに上げた端末が、ここへ「撮った」と知らせる（PushRelay.swift）
  *      送ってくるのは { idToken, inviteCode, dayIndex } だけ
+ *      グループのひとことを送ったときは { idToken, inviteCode, kind: "message", messageID }（2026-10-19）
  *   2. idToken（匿名ログインの身分証）が本物かを Firebase に確かめ、送ってきた人の uid を得る
  *   3. Firestore からそのグループを読み、本当にその人が今日その枠を撮ったかを確かめる
  *      （ここで確かめるので、URL を知っている他人が勝手に通知を飛ばすことはできない）
@@ -25,6 +26,10 @@ const SCOPES = "https://www.googleapis.com/auth/datastore https://www.googleapis
 const MAX_PHOTO_AGE_MS = 36 * 60 * 60 * 1000;
 /** 送ったことを覚えておく日数。 */
 const SENT_MEMORY_DAYS = 9;
+/** 送ってからこれより時間が経ったひとことについては送らない。 */
+const MAX_MESSAGE_AGE_MS = 30 * 60 * 1000;
+/** 通知に載せるひとことの長さ。 */
+const MESSAGE_PREVIEW_LENGTH = 80;
 
 // ---------------------------------------------------------------------------
 // 入口
@@ -52,8 +57,11 @@ function handle_(request) {
   const account = JSON.parse(accountText);
 
   const code = String(request.inviteCode || "").toUpperCase();
+  const isMessage = request.kind === "message";
   const dayIndex = Number(request.dayIndex);
-  if (!/^[A-Z0-9]{6}$/.test(code) || !(dayIndex >= 0 && dayIndex <= 6) || !request.idToken) {
+  const messageID = String(request.messageID || "").toUpperCase();
+  const validTarget = isMessage ? /^[0-9A-F-]{36}$/.test(messageID) : (dayIndex >= 0 && dayIndex <= 6);
+  if (!/^[A-Z0-9]{6}$/.test(code) || !validTarget || !request.idToken) {
     return { ok: false, error: "bad request" };
   }
 
@@ -65,11 +73,15 @@ function handle_(request) {
   const group = readGroup_(projectId, code, accessToken);
   if (!group) return { ok: false, error: "no such group" };
 
-  const plan = planNotification(group, uid, dayIndex, Date.now());
+  const plan = isMessage
+    ? planMessageNotification(group, uid, messageID, Date.now())
+    : planNotification(group, uid, dayIndex, Date.now());
   if (!plan) return { ok: true, sent: 0, reason: "nothing to send" };
 
-  // 同じ枠で2回送らない。同時に2つ届いても片方だけが通るよう、鍵をかけて確かめる。
-  const sentKey = "sent:" + code + "|" + plan.weekStart + "|" + dayIndex;
+  // 同じ枠（同じひとこと）で2回送らない。同時に2つ届いても片方だけが通るよう、鍵をかけて確かめる。
+  const sentKey = isMessage
+    ? "sent:msg:" + code + "|" + messageID
+    : "sent:" + code + "|" + plan.weekStart + "|" + dayIndex;
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -81,7 +93,13 @@ function handle_(request) {
   }
 
   const devices = readDevices_(projectId, plan.recipients, accessToken);
-  const sent = sendAll_(projectId, devices, plan, code, accessToken);
+  const sent = isMessage
+    ? sendAll_(projectId, devices, function (language) {
+        return groupMessageText(language, plan.groupName, plan.senderName, plan.text);
+      }, { inviteCode: code, kind: "message" }, accessToken)
+    : sendAll_(projectId, devices, function (language) {
+        return messageText(language, plan.groupName, plan.photographerName);
+      }, { inviteCode: code, dayIndex: String(plan.dayIndex) }, accessToken);
   return { ok: true, sent: sent };
 }
 
@@ -130,6 +148,46 @@ function planNotification(group, uid, dayIndex, now) {
     dayIndex: dayIndex,
     recipients: recipients,
   };
+}
+
+/**
+ * ひとことの通知の中身と宛先。送るべきでなければ null。
+ *   - 知らせてきた人（uid）がまだグループにいる
+ *   - そのひとことがグループの状態に載っていて、送ったのがその人
+ *   - 送ってから時間が経ちすぎていない
+ * 宛先は、送った人以外のまだいるメンバーのうち、uid を持っている人。
+ */
+function planMessageNotification(group, uid, messageID, now) {
+  const members = group.members || [];
+  const sender = members.find(function (m) { return m.uid === uid && isActive(m); });
+  if (!sender) return null;
+
+  const message = (group.messages || []).find(function (m) {
+    return String(m.id || "").toUpperCase() === messageID;
+  });
+  if (!message || message.senderID !== sender.id) return null;
+  const sentAt = Date.parse(message.sentAt || "");
+  if (!(now - sentAt <= MAX_MESSAGE_AGE_MS)) return null;
+
+  const recipients = [];
+  members.forEach(function (m) {
+    if (isActive(m) && m.uid && m.id !== sender.id && recipients.indexOf(m.uid) < 0) recipients.push(m.uid);
+  });
+  if (recipients.length === 0) return null;
+
+  const text = String(message.text || "");
+  return {
+    groupName: group.name || "ROTASH",
+    senderName: sender.name || null,
+    text: text.length > MESSAGE_PREVIEW_LENGTH ? text.slice(0, MESSAGE_PREVIEW_LENGTH) + "…" : text,
+    recipients: recipients,
+  };
+}
+
+/** ひとことの通知の本文（「AKI: 今日の空きれい」）。 */
+function groupMessageText(language, groupName, senderName, text) {
+  const who = (senderName || "").toUpperCase();
+  return { title: groupName, body: who ? who + ": " + text : text };
 }
 
 /** 端末の言語に合わせた本文。 */
@@ -245,11 +303,14 @@ function readDevices_(projectId, uids, accessToken) {
   return devices;
 }
 
-/** Cloud Messaging で送る。もう使われていない宛先（アプリを消した等）は消しておく。送れた数を返す。 */
-function sendAll_(projectId, devices, plan, code, accessToken) {
+/**
+ * Cloud Messaging で送る。もう使われていない宛先（アプリを消した等）は消しておく。送れた数を返す。
+ * textFor(language) は { title, body } を返す。data は通知に添える値（アプリが開いたときに使う）。
+ */
+function sendAll_(projectId, devices, textFor, data, accessToken) {
   if (devices.length === 0) return 0;
   const requests = devices.map(function (device) {
-    const text = messageText(device.language, plan.groupName, plan.photographerName);
+    const text = textFor(device.language);
     return {
       url: "https://fcm.googleapis.com/v1/projects/" + projectId + "/messages:send",
       method: "post",
@@ -261,7 +322,7 @@ function sendAll_(projectId, devices, plan, code, accessToken) {
           token: device.token,
           notification: text,
           apns: { payload: { aps: { sound: "default" } } },
-          data: { inviteCode: code, dayIndex: String(plan.dayIndex) },
+          data: data,
         },
       }),
     };

@@ -159,4 +159,53 @@ final class RotashMergeTests: XCTestCase {
         // でも Memories には出さない。
         XCTAssertTrue(group.memories.isEmpty)
     }
+
+    // MARK: - グループのひとこと
+
+    func testMessagesFromBothDevicesAreKeptInOrder() {
+        let early = GroupMessage(senderID: a, text: "1", sentAt: Fixture.date(day: 0, hour: 9))
+        let late = GroupMessage(senderID: b, text: "2", sentAt: Fixture.date(day: 0, hour: 10))
+        XCTAssertEqual(RotashMerge.mergeMessages([late], [early])?.map(\.text), ["1", "2"])
+        XCTAssertEqual(RotashMerge.mergeMessages([early, late], [late])?.map(\.text), ["1", "2"])
+        XCTAssertNil(RotashMerge.mergeMessages(nil, nil))
+    }
+
+    func testOnlyTheNewestMessagesAreKept() {
+        let start = Fixture.date(day: 0, hour: 0)
+        let many = (0..<(GroupMessage.retainedCount + 5)).map { index in
+            GroupMessage(senderID: a, text: "\(index)", sentAt: start.addingTimeInterval(TimeInterval(index)))
+        }
+        let merged = RotashMerge.mergeMessages(many, nil)
+        XCTAssertEqual(merged?.count, GroupMessage.retainedCount)
+        XCTAssertEqual(merged?.first?.text, "5")
+    }
+
+    func testMessagesSurviveAnOlderAppWritingBack() {
+        let message = GroupMessage(senderID: a, text: "hi", sentAt: Fixture.date(day: 1, hour: 9))
+        var local = RotashGroup(name: "G", inviteCode: "ABC234",
+                                members: [Member(id: a, name: "aki"), Member(id: b, name: "ben")],
+                                myMemberID: a, currentWeek: Fixture.fullWeek(assignees: [a, b]))
+        local.messages = [message]
+        // 古い版のアプリは messages を知らないので、書き戻すと消えている。
+        var remote = RemoteGroupState(group: local)
+        remote.messages = nil
+        XCTAssertEqual(RotashMerge.merge(local: local, remote: remote).messages, [message])
+    }
+
+    func testUnreadCountsOnlyOthersAfterTheLastRead() {
+        var group = RotashGroup(name: "G", inviteCode: "ABC234",
+                                members: [Member(id: a, name: "aki"), Member(id: b, name: "ben")],
+                                myMemberID: a, currentWeek: Fixture.fullWeek(assignees: [a, b]))
+        group.messages = [
+            GroupMessage(senderID: b, text: "old", sentAt: Fixture.date(day: 1, hour: 8)),
+            GroupMessage(senderID: a, text: "mine", sentAt: Fixture.date(day: 1, hour: 10)),
+            GroupMessage(senderID: b, text: "new", sentAt: Fixture.date(day: 1, hour: 11)),
+        ]
+        group.messagesReadAt = Fixture.date(day: 1, hour: 9)
+        XCTAssertEqual(group.unreadMessageCount, 1)
+        // 見えなくした人のひとことは、出さないし数えない。
+        group.hiddenMemberIDs = [b]
+        XCTAssertEqual(group.unreadMessageCount, 0)
+        XCTAssertEqual(group.visibleMessages.map(\.text), ["mine"])
+    }
 }

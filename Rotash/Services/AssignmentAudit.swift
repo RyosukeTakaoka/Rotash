@@ -95,15 +95,8 @@ enum AssignmentAudit {
             .map(\.dayIndex)
         guard !futureDays.isEmpty else { return updated }
 
-        var history: [UUID: Int] = [:]
-        for week in updated.archive {
-            for slot in week.slots {
-                if let id = slot.assigneeID { history[id, default: 0] += 1 }
-            }
-        }
-        for slot in updated.currentWeek.slots where slot.dayIndex <= today {
-            if let id = slot.assigneeID { history[id, default: 0] += 1 }
-        }
+        // 新しく入った人は、前からいる人のうち最も少ない回数から数える（`effectiveAssignmentCounts`）。
+        let history = updated.effectiveAssignmentCounts(currentWeekThrough: today)
 
         // 抜けた人には、もう当番を回さない（まだ来ていない日だけ組み直すので、撮った日はそのまま）。
         let ids = updated.activeMembers.map(\.id)
@@ -116,7 +109,12 @@ enum AssignmentAudit {
             days: futureDays,
             seed: AssignmentPlanner.seed(groupID: updated.id,
                                          weekStart: updated.currentWeek.startDate,
-                                         memberIDs: ids))
+                                         memberIDs: ids),
+            // 今週すでに担当だった回数も入れて、週全体で 3/2/2 などに揃える。
+            alreadyThisWeek: updated.assignmentsThisWeek(through: today),
+            // 誰も「人数+1日」を超えて待たせない。
+            lastTurn: updated.lastTurnDays(for: updated.currentWeek, before: futureDays.min() ?? today + 1),
+            maxGap: updated.maxTurnGap)
 
         // 結果が今と同じなら書かない。
         // 書くと決定時刻だけが新しくなり、同じ表を持っている他の端末の決定を

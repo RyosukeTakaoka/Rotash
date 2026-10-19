@@ -19,6 +19,15 @@ struct PhotoReport {
     var reporterMemberID: UUID
 }
 
+/// ひとことの報告（App Store ガイドライン 1.2）。写真の報告と同じ `reports` に書く。
+struct MessageReport {
+    var inviteCode: String
+    var messageID: UUID
+    var messageText: String
+    var reportedMemberID: UUID
+    var reporterMemberID: UUID
+}
+
 enum FirestoreClient {
 
     private enum Field {
@@ -80,8 +89,6 @@ enum FirestoreClient {
     /// 報告を1件書き込む（`reports` コレクションに新しいドキュメントを作る）。
     /// 報告は誰も読めず、書くだけ（セキュリティルールで読み取りを止める）。運営が Firebase コンソールで見る。
     static func send(_ report: PhotoReport) async throws {
-        guard SyncConfig.isConfigured, let url = SyncConfig.reportsURL else { throw SyncError.notConfigured }
-
         var fields: [String: Any] = [
             "inviteCode": ["stringValue": report.inviteCode],
             "weekStart": ["timestampValue": ISO8601DateFormatter().string(from: report.weekStart)],
@@ -92,7 +99,25 @@ enum FirestoreClient {
         ]
         if let reverse = report.reversePhotoURL { fields["reversePhotoURL"] = ["stringValue": reverse] }
         if let reported = report.reportedMemberID { fields["reportedMemberID"] = ["stringValue": reported.uuidString] }
+        try await postReport(fields)
+    }
 
+    /// ひとことの報告を1件書き込む。写真の報告と同じく、誰も読めず書くだけ。
+    /// サーバーのルールに messageID・messageText を足してから使える（firestore.rules。docs/FIREBASE_SETUP.md）。
+    static func send(_ report: MessageReport) async throws {
+        let fields: [String: Any] = [
+            "inviteCode": ["stringValue": report.inviteCode],
+            "messageID": ["stringValue": report.messageID.uuidString],
+            "messageText": ["stringValue": report.messageText],
+            "reportedMemberID": ["stringValue": report.reportedMemberID.uuidString],
+            "reporterMemberID": ["stringValue": report.reporterMemberID.uuidString],
+            "createdAt": ["timestampValue": ISO8601DateFormatter().string(from: Date())]
+        ]
+        try await postReport(fields)
+    }
+
+    private static func postReport(_ fields: [String: Any]) async throws {
+        guard SyncConfig.isConfigured, let url = SyncConfig.reportsURL else { throw SyncError.notConfigured }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

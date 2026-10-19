@@ -239,7 +239,25 @@ enum RotashMerge {
         }
         merged.archive = consolidate(archive, excluding: merged.currentWeek.startDate)
 
+        merged.messages = mergeMessages(local.messages, remote.messages)
+
         return merged
+    }
+
+    /// ひとことの突き合わせ。どちらか一方にしか無いものも必ず残す（写真と同じく、落とさない）。
+    ///
+    /// 同じ ID は同じひとこと（書き換える機能は無い）。古い順に並べ、多すぎたら古いものから落とす。
+    /// 並べる順も落とすものも中身だけで決まるので、どの端末でも同じ結果になる。
+    static func mergeMessages(_ local: [GroupMessage]?, _ remote: [GroupMessage]?) -> [GroupMessage]? {
+        guard local != nil || remote != nil else { return nil }
+        var byID: [UUID: GroupMessage] = [:]
+        for message in (remote ?? []) + (local ?? []) where byID[message.id] == nil {
+            byID[message.id] = message
+        }
+        let sorted = byID.values.sorted { lhs, rhs in
+            lhs.sentAt == rhs.sentAt ? lhs.id.uuidString < rhs.id.uuidString : lhs.sentAt < rhs.sentAt
+        }
+        return Array(sorted.suffix(GroupMessage.retainedCount))
     }
 
     /// 同じ開始日の週をひとつにまとめ、新しい順に並べる。
@@ -271,6 +289,9 @@ struct RemoteGroupState: Codable {
     /// K を測るための発行元グループ ID。集計はサーバー側の payload を舐めて出すので、
     /// 端末のローカルだけでなくここにも載せる。
     var originGroupID: UUID?
+    /// グループのひとこと。古い版のアプリは知らない項目なので、書き戻すと消える
+    /// （新しい版の端末が次に同期したとき、手元の分を合わせて書き戻すので戻ってくる）。
+    var messages: [GroupMessage]?
 
     init(group: RotashGroup) {
         self.id = group.id
@@ -280,6 +301,7 @@ struct RemoteGroupState: Codable {
         self.currentWeek = Self.shared(group.currentWeek)
         self.archive = group.archive.map(Self.shared)
         self.originGroupID = group.originGroupID
+        self.messages = group.messages
     }
 
     /// その人が撮った（まだ取り消していない）枠の数。今週と Memories の全部。

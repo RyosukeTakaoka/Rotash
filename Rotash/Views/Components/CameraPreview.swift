@@ -238,3 +238,24 @@ struct ThumbnailGuide: View {
         .allowsHitTesting(false)
     }
 }
+
+/// 外カメで撮ったあと、内カメで撮るまでの残り秒数（BeReal と同じ時間差。`CameraController.frontShotAt`）。
+/// 内カメが映っている所（大きい画面か、裏の丸）に重ねる。数字だけで、言葉は出さない。
+struct FrontShotCountdown: View {
+    let until: Date
+    var fontSize: CGFloat = 40
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.1)) { context in
+            let remaining = max(0, until.timeIntervalSince(context.date))
+            Text("\(Int(remaining.rounded(.up)))")
+                .font(Typo.label(fontSize, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .shadow(color: .black.opacity(0.6), radius: 4)
+                .monospacedDigit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black.opacity(0.25))
+        }
+        .allowsHitTesting(false)
+    }
+}

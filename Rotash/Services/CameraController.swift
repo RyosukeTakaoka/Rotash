@@ -25,6 +25,9 @@ final class CameraController: NSObject, ObservableObject {
     /// カメラが一時的に止められているか（ほかのアプリがカメラを使った、端末が熱くなった など）。
     /// 止められているあいだは映像が黒くなり、シャッターを押しても写真が撮れない。
     @Published private(set) var isInterrupted = false
+    /// 外カメで撮ったあと、内カメで撮る時刻（BeReal と同じ「外カメ → 内カメ」の時間差）。待っていないときは nil。
+    /// 画面はこれを見て、内カメが映っている所に残り秒数を出す（`RotashFeatureFlags.frontCameraDelaySeconds`）。
+    @Published private(set) var frontShotAt: Date?
     /// 撮れる状態か。シャッターはこれが true のときだけ押せるようにする
     /// （準備中や止められているときに押すと、写真が無いまま終わってしまうため）。
     var canCapture: Bool {
@@ -526,23 +529,54 @@ final class CameraController: NSObject, ObservableObject {
 
     /// 表（大きい画面側）と裏（シャッター側）を撮る。
     ///
-    /// - 同時撮影の端末: 2台のカメラで同じ瞬間に撮る
-    /// - それ以外: 表を撮ってからカメラを切り替え、少し待って裏を撮り、元に戻す（BeReal と同じく少しずれる）
-    /// - Parameter completion: 表と裏の JPEG。撮れなかった方は nil。画面のスレッドで呼ぶ。
-    func captureBoth(fallbackSeed: Int = 0, completion: @escaping (_ main: Data?, _ reverse: Data?) -> Void) {
+    /// BeReal と同じく、**先に外カメ、`frontDelay` 秒あとに内カメ**で撮る（表と裏のどちらが内カメかによらない）。
+    /// 待っているあいだに、スマホを自分に向け直したり、表情を作ったりできる。
+    ///
+    /// - 同時撮影の端末: 2台とも動かしたまま、外カメ → 待つ → 内カメ。`frontDelay` が 0 なら同じ瞬間に撮る
+    /// - それ以外: 外カメ → 内カメに切り替える → 待つ → 内カメ → 元のカメラに戻す
+    /// - Parameters:
+    ///   - frontDelay: 外カメから内カメまでの秒数。
+    ///   - onFirstShot: 外カメの1枚を撮った瞬間に、画面のスレッドで呼ぶ（光らせる・震わせるため）。時間差が無いときは呼ばない。
+    ///   - completion: 表と裏の JPEG。撮れなかった方は nil。画面のスレッドで呼ぶ。
+    func captureBoth(fallbackSeed: Int = 0,
+                     frontDelay: TimeInterval = RotashFeatureFlags.frontCameraDelaySeconds,
+                     onFirstShot: (() -> Void)? = nil,
+                     completion: @escaping (_ main: Data?, _ reverse: Data?) -> Void) {
         guard status == .ready else {
             completion(SimulatedCapture.jpegData(seed: fallbackSeed), nil)
             return
         }
         guard isDual else {
-            captureSequentially(fallbackSeed: fallbackSeed, completion: completion)
+            captureSequentially(fallbackSeed: fallbackSeed, frontDelay: frontDelay,
+                                onFirstShot: onFirstShot, completion: completion)
             return
         }
         guard let mainRig = rigs[position], let reverseRig = rigs[reversePosition] else {
             completion(nil, nil)
             return
         }
+        guard frontDelay > 0, let backRig = rigs[.back], let frontRig = rigs[.front] else {
+            captureSimultaneously(mainRig: mainRig, reverseRig: reverseRig, completion: completion)
+            return
+        }
 
+        // 待っているあいだに表と裏が入れ替わっても（呼び出し側で FLIP を止めているが念のため）、押した瞬間の割り当てで返す。
+        let mainIsBack = position == .back
+        shoot(with: backRig) { [weak self] back in
+            guard let self else { return }
+            onFirstShot?()
+            self.wait(frontDelay, countingDown: true) {
+                self.shoot(with: frontRig) { front in
+                    self.sessionQueue.async { self.processors.removeAll() }
+                    completion(mainIsBack ? back : front, mainIsBack ? front : back)
+                }
+            }
+        }
+    }
+
+    /// 同時撮影の端末で、2台のカメラを同じ瞬間に撮る。
+    private func captureSimultaneously(mainRig: Rig, reverseRig: Rig,
+                                       completion: @escaping (_ main: Data?, _ reverse: Data?) -> Void) {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             let group = DispatchGroup()
@@ -550,23 +584,12 @@ final class CameraController: NSObject, ObservableObject {
             // そこから var を読むとコンパイルエラーになりうるので、クラスに入れて let で持つ。
             let results = CaptureResults()
             for rig in [mainRig, reverseRig] {
-                if let angle = rig.rotationCoordinator?.videoRotationAngleForHorizonLevelCapture,
-                   let connection = rig.photoOutput.connection(with: .video),
-                   connection.isVideoRotationAngleSupported(angle) {
-                    connection.videoRotationAngle = angle
-                }
-                let settings = AVCapturePhotoSettings()
-                settings.flashMode = .off
-                settings.maxPhotoDimensions = rig.photoOutput.maxPhotoDimensions
-
                 group.enter()
                 let position = rig.device.position
-                let processor = PhotoProcessor { data in
+                self.startCapture(on: rig) { data in
                     results.set(data, for: position)
                     group.leave()
                 }
-                self.processors.append(processor)
-                rig.photoOutput.capturePhoto(with: settings, delegate: processor)
             }
             group.notify(queue: .main) {
                 self.sessionQueue.async { self.processors.removeAll() }
@@ -575,19 +598,88 @@ final class CameraController: NSObject, ObservableObject {
         }
     }
 
-    /// 同時撮影できない端末: 表 → カメラを切り替える → 少し待って裏 → 元に戻す。
-    private func captureSequentially(fallbackSeed: Int, completion: @escaping (Data?, Data?) -> Void) {
-        capture(fallbackSeed: fallbackSeed) { [weak self] main in
-            guard let self else { return completion(main, nil) }
-            self.switchCamera { switched in
-                // もう一方のカメラに切り替えられなければ、裏は無しで表だけ残す
-                // （同じカメラでもう1枚撮って「裏」にすると、表と同じ写真になってしまう）。
-                guard switched else { return completion(main, nil) }
-                // 切り替えた直後は明るさやピントが合っていないので、少しだけ待つ。
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+    /// 同時撮影の端末で、1台のカメラだけで撮る。completion は画面のスレッドで呼ぶ。
+    private func shoot(with rig: Rig, completion: @escaping (Data?) -> Void) {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.startCapture(on: rig) { data in
+                DispatchQueue.main.async { completion(data) }
+            }
+        }
+    }
+
+    /// 1台のカメラで撮り始める。セッションのスレッドから呼ぶこと。completion はどのスレッドで来るか決まっていない。
+    private func startCapture(on rig: Rig, completion: @escaping (Data?) -> Void) {
+        if let angle = rig.rotationCoordinator?.videoRotationAngleForHorizonLevelCapture,
+           let connection = rig.photoOutput.connection(with: .video),
+           connection.isVideoRotationAngleSupported(angle) {
+            connection.videoRotationAngle = angle
+        }
+        let settings = AVCapturePhotoSettings()
+        settings.flashMode = .off
+        settings.maxPhotoDimensions = rig.photoOutput.maxPhotoDimensions
+
+        let processor = PhotoProcessor(completion: completion)
+        processors.append(processor)
+        rig.photoOutput.capturePhoto(with: settings, delegate: processor)
+    }
+
+    /// 少し待ってから続ける。`countingDown` なら、待っているあいだ内カメで撮る時刻を画面に知らせる。画面のスレッドで呼ぶ。
+    private func wait(_ seconds: TimeInterval, countingDown: Bool, then action: @escaping () -> Void) {
+        if countingDown { frontShotAt = Date().addingTimeInterval(seconds) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            self?.frontShotAt = nil
+            action()
+        }
+    }
+
+    /// 同時撮影できない端末: 外カメ → 内カメ（時間差つき）の順に、カメラを切り替えながら撮る。
+    private func captureSequentially(fallbackSeed: Int,
+                                     frontDelay: TimeInterval,
+                                     onFirstShot: (() -> Void)?,
+                                     completion: @escaping (Data?, Data?) -> Void) {
+        // 切り替えた直後は明るさやピントが合っていないので、少なくともこれだけは待つ。
+        let settle: TimeInterval = 0.45
+        let frontWait = max(settle, frontDelay)
+        let countsDown = frontDelay > 0
+
+        if position == .back {
+            // 表が外カメ: 表 → 内カメに切り替える → 待って裏 → 外カメに戻す。
+            capture(fallbackSeed: fallbackSeed) { [weak self] main in
+                guard let self else { return completion(main, nil) }
+                if countsDown { onFirstShot?() }
+                self.switchCamera { switched in
+                    // もう一方のカメラに切り替えられなければ、裏は無しで表だけ残す
+                    // （同じカメラでもう1枚撮って「裏」にすると、表と同じ写真になってしまう）。
+                    guard switched else { return completion(main, nil) }
+                    self.wait(frontWait, countingDown: countsDown) {
+                        self.capture(fallbackSeed: fallbackSeed) { reverse in
+                            self.switchCamera { _ in
+                                completion(main, reverse)
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // 表が内カメ: 先に外カメ（裏）で撮る → 内カメに戻す → 待って表。
+            switchCamera { [weak self] switched in
+                guard let self else { return completion(nil, nil) }
+                // 外カメに切り替えられなければ、表（内カメ）だけ撮る。
+                guard switched else {
+                    return self.capture(fallbackSeed: fallbackSeed) { main in completion(main, nil) }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + settle) {
                     self.capture(fallbackSeed: fallbackSeed) { reverse in
-                        self.switchCamera { _ in
-                            completion(main, reverse)
+                        if countsDown { onFirstShot?() }
+                        self.switchCamera { back in
+                            // 内カメに戻せなければ表が撮れない。外カメの1枚を表にすると、どちらのカメラか取り違える。
+                            guard back else { return completion(nil, nil) }
+                            self.wait(frontWait, countingDown: countsDown) {
+                                self.capture(fallbackSeed: fallbackSeed) { main in
+                                    completion(main, reverse)
+                                }
+                            }
                         }
                     }
                 }

@@ -73,10 +73,12 @@ struct PortraitHomeView: View {
                 case .create: CreateRotashView()
                 case .join: JoinRotashView()
                 case .settings: SettingsView()
+                case .messages: GroupChatView()
                 }
             }
             .environmentObject(app)
-            .interactiveDismissDisabled()
+            // メッセージは、下に引いて閉じてもよい（書きかけを失っても困らない）。
+            .interactiveDismissDisabled(sheet != .messages)
         }
     }
 
@@ -90,6 +92,10 @@ struct PortraitHomeView: View {
                     .tracking(10)
                     .foregroundStyle(Palette.text)
                 Spacer()
+                if RotashFeatureFlags.groupMessages, app.group != nil {
+                    messagesButton
+                        .padding(.trailing, 18)
+                }
                 Button("SETTINGS") { app.activeSheet = .settings }
                     .font(Typo.label(9, weight: .medium))
                     .tracking(1.6)
@@ -100,6 +106,25 @@ struct PortraitHomeView: View {
             HairLine()
         }
         .padding(.horizontal, 24)
+    }
+
+    /// グループのひとことへの入口。まだ読んでいないものがあれば、その数を当番の色で添える。
+    private var messagesButton: some View {
+        let unread = app.unreadMessageCount
+        return Button { app.activeSheet = .messages } label: {
+            HStack(spacing: 6) {
+                Text("MESSAGES")
+                    .font(Typo.label(9, weight: .medium))
+                    .tracking(1.6)
+                    .foregroundStyle(unread > 0 ? Palette.text : Palette.faint)
+                if unread > 0 {
+                    Text(unread > 99 ? "99+" : "\(unread)")
+                        .font(Typo.label(9, weight: .semibold))
+                        .foregroundStyle(Palette.live)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private func groupBlock(_ group: RotashGroup) -> some View {

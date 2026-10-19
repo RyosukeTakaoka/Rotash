@@ -79,6 +79,17 @@ enum AnalyticsService {
         ])
     }
 
+    /// グループのひとことを送った（2026-10-19 から試験）。`isMyDay` は送った日が自分の担当日か。
+    /// 担当でない日の「やること」になっているかを見る（DIRECTION_2026-10.md 柱 A）。
+    static func messageSent(isMyDay: Bool, memberCount: Int) {
+        log("message_sent", params: ["is_my_day": isMyDay, "member_count": memberCount])
+    }
+
+    /// ひとことの画面を開いた。`unread` は開いたときに読んでいなかった数。
+    static func messagesOpened(unread: Int) {
+        log("messages_opened", params: ["unread": unread])
+    }
+
     /// 招待の共有シートを開いた。
     static func inviteShareTapped() {
         log("invite_share_tapped", params: [:])

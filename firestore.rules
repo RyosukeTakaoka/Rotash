@@ -32,11 +32,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // 写真の報告（App Store ガイドライン 1.2）。書くだけ。読むのは運営が Firebase コンソールで。
+    // 写真・ひとことの報告（App Store ガイドライン 1.2）。書くだけ。読むのは運営が Firebase コンソールで。
+    // messageID・messageText は、ひとこと（グループのメッセージ）の報告で使う（2026-10-19）。
     match /reports/{reportId} {
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly([
              'inviteCode', 'weekStart', 'dayIndex', 'photoURL', 'reversePhotoURL',
+             'messageID', 'messageText',
              'reportedMemberID', 'reporterMemberID', 'createdAt'
            ]);
       allow read, update, delete: if false;

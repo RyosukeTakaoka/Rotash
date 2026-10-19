@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 enum PortraitSheet: String, Identifiable {
-    case create, join, settings
+    case create, join, settings, messages
     var id: String { rawValue }
 }
 
@@ -462,6 +462,62 @@ final class AppViewModel: ObservableObject {
         }
     }
 
+    // MARK: - グループのひとこと
+
+    /// いま開いているグループで、まだ読んでいないほかの人のひとことの数。
+    var unreadMessageCount: Int { group?.unreadMessageCount ?? 0 }
+
+    /// ひとことを送る。空なら何もしない。長すぎるものは上限で切る。
+    func sendMessage(_ raw: String) {
+        let text = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(GroupMessage.textLimit))
+        guard !text.isEmpty, var current = group else { return }
+        // サーバーの日付は秒までなので、はじめから秒で切り捨てて持つ（端末とサーバーで同じ値にする）。
+        let now = Date(timeIntervalSince1970: Date().timeIntervalSince1970.rounded(.down))
+        let message = GroupMessage(senderID: current.myMemberID, text: text, sentAt: now)
+        current.messages = RotashMerge.mergeMessages(current.messages, [message])
+        current.messagesReadAt = now
+        group = current
+        persist()
+        AnalyticsService.messageSent(isMyDay: isMyDay(todayIndex), memberCount: current.activeMembers.count)
+        // 送ったらすぐ他の人に届くように同期する（送り役があれば、同期のあとに通知も飛ぶ）。
+        Task { await sync() }
+    }
+
+    /// いま開いているグループのひとことを、ここまで読んだことにする。
+    func markMessagesRead() {
+        guard var current = group else { return }
+        let latest = current.messages?.last?.sentAt ?? .distantPast
+        let readAt = max(Date(), latest)
+        guard current.unreadMessageCount > 0 || current.messagesReadAt == nil else { return }
+        current.messagesReadAt = readAt
+        group = current
+        persist()
+    }
+
+    /// ひとことを報告する。この端末ではすぐに見えなくし、報告をサーバーに残す（運営が確かめて対応する）。
+    func report(_ message: GroupMessage) {
+        guard var current = group, message.senderID != current.myMemberID else { return }
+        var ids = current.hiddenMessageIDs ?? []
+        ids.insert(message.id)
+        current.hiddenMessageIDs = ids
+        group = current
+        persist()
+
+        let report = MessageReport(inviteCode: current.inviteCode,
+                                   messageID: message.id,
+                                   messageText: message.text,
+                                   reportedMemberID: message.senderID,
+                                   reporterMemberID: current.myMemberID)
+        Task {
+            do {
+                try await FirestoreClient.send(report)
+                alertMessage = String(localized: "報告しました。このメッセージはこの端末では表示されません。")
+            } catch {
+                alertMessage = String(localized: "報告を送れませんでした。このメッセージはこの端末では表示されません。")
+            }
+        }
+    }
+
     // MARK: - リンクから入ってくる
 
     /// `rotash://` で開かれたときの入口。
@@ -657,7 +713,10 @@ final class AppViewModel: ObservableObject {
 
         let finished = current.currentWeek
         // 担当履歴は「入れ替える前」に取る（currentWeek と archive の二重計上を避ける）。
-        let history = current.cumulativeAssignmentCounts
+        // 新しく入った人は、前からいる人のうち最も少ない回数から数える（`effectiveAssignmentCounts`）。
+        let history = current.effectiveAssignmentCounts()
+        let nextWeek = RotashWeek.full(startDate: start)
+        let lastTurn = current.lastTurnDays(for: nextWeek, before: 0)
 
         if finished.isWorthKeeping {
             current.archive.insert(finished, at: 0)
@@ -682,7 +741,7 @@ final class AppViewModel: ObservableObject {
         // 抜けた人には、次の週から当番を回さない。
         let active = current.activeMembers.map(\.id)
         let memberIDs = active.isEmpty ? current.members.map(\.id) : active
-        current.currentWeek = WeekPlanner.planned(week: .full(startDate: start),
+        current.currentWeek = WeekPlanner.planned(week: nextWeek,
                                                   memberIDs: memberIDs,
                                                   history: history,
                                                   previousWeek: finished,
@@ -690,6 +749,8 @@ final class AppViewModel: ObservableObject {
                                                       groupID: current.id,
                                                       weekStart: start,
                                                       memberIDs: memberIDs),
+                                                  lastTurn: lastTurn,
+                                                  maxGap: current.maxTurnGap,
                                                   decidedAt: start)
         return current
     }
@@ -849,6 +910,14 @@ final class AppViewModel: ObservableObject {
             // 見えなくした人・写真はこの端末だけの設定。同期しているあいだに変えた分を、同期前の状態で上書きしない。
             result.hiddenMemberIDs = latest.hiddenMemberIDs
             result.hiddenPhotoURLs = latest.hiddenPhotoURLs
+            result.hiddenMessageIDs = latest.hiddenMessageIDs
+            result.messagesReadAt = latest.messagesReadAt
+            // 同期しているあいだに送ったひとことは、送った状態に入っていない。落とさずに残し、もう一度同期して届ける。
+            let syncedIDs = Set((result.messages ?? []).map(\.id))
+            if (latest.messages ?? []).contains(where: { !syncedIDs.contains($0.id) }) {
+                result.messages = RotashMerge.mergeMessages(latest.messages, result.messages)
+                syncAgainWhenFinished = true
+            }
             Self.deleteWithdrawnFiles(before: groups[index], after: result)
             groups[index] = result
             // 突き合わせで ID が変わったら（参加した直後など）、開いているグループもそれに合わせる。
@@ -877,8 +946,12 @@ final class AppViewModel: ObservableObject {
             persist()
 
             // 今日の1枚を撮って上げ終えたなら、ほかのメンバーへ「撮った」を送ってもらう（1枠に1回だけ）。
+            // ひとことを送っていたら、それも知らせてもらう（サーバーに載ったあとでないと、送り役が確かめられない）。
             let synced = result
-            Task { await PushRelay.notifyIfNeeded(for: synced) }
+            Task {
+                await PushRelay.notifyIfNeeded(for: synced)
+                await PushRelay.notifyMessagesIfNeeded(for: synced)
+            }
         } catch SyncError.groupFull {
             // 入ろうとしたグループが、もう定員（7人）だった。手元に作った仮のグループは消して、そう伝える。
             // 自分がまだサーバーに載っていないときだけ起きるので、すでに入っているグループが消えることはない。

@@ -52,4 +52,47 @@ enum PushRelay {
         sent.append(key)
         UserDefaults.standard.set(Array(sent.suffix(60)), forKey: sentKey)
     }
+
+    // MARK: - グループのひとこと
+
+    private static let messagesSentKey = "rotash.pushRelay.messagesSent"
+
+    /// 自分が送ったひとことのうち、まだ知らせていないものがあれば、いちばん新しい1件だけ知らせる。同期が終わったあとに呼ぶ。
+    ///
+    /// 続けて何件も送ったときに、相手の通知が何回も鳴らないよう、知らせるのは最後の1件だけ
+    /// （それより前の分は、知らせたことにする）。送ってから時間が経ったものは知らせない。
+    @MainActor
+    static func notifyMessagesIfNeeded(for group: RotashGroup, now: Date = Date()) async {
+        guard let url = URL(string: SyncConfig.pushRelayURL), !SyncConfig.pushRelayURL.isEmpty else { return }
+        var sent = UserDefaults.standard.stringArray(forKey: messagesSentKey) ?? []
+        let mine = (group.messages ?? []).filter { message in
+            message.senderID == group.myMemberID
+                && now.timeIntervalSince(message.sentAt) < 30 * 60
+                && !sent.contains(message.id.uuidString)
+        }
+        guard let latest = mine.last else { return }
+        let key = latest.id.uuidString
+        guard !inFlight.contains(key) else { return }
+        inFlight.insert(key)
+        defer { inFlight.remove(key) }
+        guard let idToken = await AuthService.shared.idToken() else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+        let body: [String: Any] = ["idToken": idToken, "inviteCode": group.inviteCode,
+                                   "kind": "message", "messageID": key]
+        guard let data = try? JSONSerialization.data(withJSONObject: body) else { return }
+        request.httpBody = data
+
+        guard let reply = try? await URLSession.shared.data(for: request),
+              (reply.1 as? HTTPURLResponse)?.statusCode == 200,
+              let answer = try? JSONSerialization.jsonObject(with: reply.0) as? [String: Any],
+              answer["ok"] as? Bool == true
+        else { return }   // 届かなければ、次の同期でもう一度
+
+        sent.append(contentsOf: mine.map(\.id.uuidString))
+        UserDefaults.standard.set(Array(sent.suffix(100)), forKey: messagesSentKey)
+    }
 }

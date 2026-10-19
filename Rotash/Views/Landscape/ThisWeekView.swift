@@ -464,6 +464,10 @@ struct ThisWeekView: View {
             if frame.width > cellWidth + 1 {
                 ThumbnailGuide(region: region)
             }
+            // 外カメを撮ったあと、内カメが大きい画面に映っているなら、ここに残り秒数を出す。
+            if let at = camera.frontShotAt, camera.position == .front {
+                FrontShotCountdown(until: at, fontSize: 40)
+            }
         }
         .frame(width: frame.width, height: frame.height)
         .clipped()
@@ -474,6 +478,13 @@ struct ThisWeekView: View {
             // 丸を押すと表と裏が入れ替わる（FLIP と同じ）。
             Button { camera.switchCamera() } label: {
                 ReverseLiveCircle(camera: camera, diameter: badge.diameter)
+                    .overlay {
+                        // 内カメが丸に映っているなら、丸の上に残り秒数を出す。
+                        if let at = camera.frontShotAt, camera.reversePosition == .front {
+                            FrontShotCountdown(until: at, fontSize: max(16, badge.diameter * 0.45))
+                                .clipShape(Circle())
+                        }
+                    }
             }
             .buttonStyle(.plain)
             .disabled(isCapturing)
@@ -599,7 +610,13 @@ struct ThisWeekView: View {
         // 表は大きい画面（枠）側、裏は丸の側。どちらが内カメかは FLIP しだい。
         let front = camera.position == .front
         let reverseFront = camera.reversePosition == .front
-        camera.captureBoth(fallbackSeed: day) { main, reverse in
+        // BeReal と同じく外カメ → 少し待って内カメ（`RotashFeatureFlags.frontCameraDelaySeconds`）。
+        // 外カメの1枚を撮った瞬間にも光らせて震わせ、撮れたこと・次は内カメであることを伝える。
+        camera.captureBoth(fallbackSeed: day, onFirstShot: {
+            self.flashOpacity = 0.85
+            withAnimation(.easeOut(duration: 0.28)) { self.flashOpacity = 0 }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }) { main, reverse in
             Task { @MainActor in
                 self.flashOpacity = 0.85
                 withAnimation(.easeOut(duration: 0.28)) { self.flashOpacity = 0 }

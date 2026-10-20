@@ -184,7 +184,7 @@ App Store Connectでアプリ情報を登録する際、データを収集する
 | `week_completed` | 週が切り替わるとき、7/7 だった | `member_count`, `is_first_week` |
 | `invite_share_tapped` | 招待の共有シートを開いた | — |
 | `work_share_tapped` | 作品の共有シートを開いた | `filled_count`, `is_complete` |
-| `work_share_completed` | 共有シートで送信まで完了した | `is_complete`, `destination`（送り先の種類。Instagram は `com.burbn.instagram.shareextension`） |
+| `work_share_completed` | 共有シートで送信まで完了した | `is_complete`, `destination`（送り先の種類。Instagram は `com.burbn.instagram.shareextension`、共有シートの「Instagram ストーリーズ」からは `app.rotash.instagram-story`） |
 | `rotash_open` | アプリが前面に来た（起動・戻ってきた） | `is_my_day`（今日自分が担当か）, `today_filled`, `group_count` |
 | `week_viewed` | 横にして今週の作品を見た | `is_my_day`, `today_filled` |
 | `first_landscape` | そのグループで初めて横にした | `minutes_since_join`（招待で入ってから何分後か。作った人は -1） |
@@ -231,7 +231,8 @@ App Store Connectでアプリ情報を登録する際、データを収集する
   そのままだと 403 になる。`--codes ABC123,DEF456` のように招待コードを渡して1つずつ読む
 - イベントの数は登録なしで見られる。**パラメータ（`is_complete` など）で分けて見るには**、
   Analytics → カスタム定義 で、パラメータ名をカスタムディメンションとして登録する（登録した日以降の分だけ集計される）
-- ③は「共有シートで送信まで完了した」までしか分からない。Instagram に出したかどうかは、今は区別できない
+- ③は「共有シートで送信まで完了した」までしか分からない。`destination` が `app.rotash.instagram-story` のものは
+  ストーリーズを開いたところまでで、実際に投稿したかは分からない（Instagram は結果を返さない）
 - レポートへの反映は最大24時間後。すぐ確かめたいときは 4章の DebugView
 - 公開した作品から生まれたグループ（K）は、今は測れない。`group_created` の `from_origin_group` は、
   `rotash://new?from=…` から作られたときだけ true になるが、そのリンクをどの共有にも載せていないため（README「リンク」）

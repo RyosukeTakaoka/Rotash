@@ -86,7 +86,8 @@ struct PortraitHomeView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
+            // 右のボタンはアイコンなので、文字の下の線ではなく真ん中でそろえる。
+            HStack(alignment: .center) {
                 Text("ROTASH")
                     .font(Typo.wordmark(28))
                     .tracking(10)
@@ -96,10 +97,15 @@ struct PortraitHomeView: View {
                     messagesButton
                         .padding(.trailing, 18)
                 }
-                Button("SETTINGS") { app.activeSheet = .settings }
-                    .font(Typo.label(9, weight: .medium))
-                    .tracking(1.6)
-                    .foregroundStyle(Palette.faint)
+                Button { app.activeSheet = .settings } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(Palette.faint)
+                        .frame(minWidth: 32, minHeight: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("設定"))
             }
             .padding(.top, 18)
             .padding(.bottom, 16)
@@ -113,10 +119,10 @@ struct PortraitHomeView: View {
         let unread = app.unreadMessageCount
         return Button { app.activeSheet = .messages } label: {
             HStack(spacing: 6) {
-                Text("MESSAGES")
-                    .font(Typo.label(9, weight: .medium))
-                    .tracking(1.6)
+                Image(systemName: "bubble.left")
+                    .font(.system(size: 17, weight: .regular))
                     .foregroundStyle(unread > 0 ? Palette.text : Palette.faint)
+                    .frame(minHeight: 32)
                 if unread > 0 {
                     Text(unread > 99 ? "99+" : "\(unread)")
                         .font(Typo.label(9, weight: .semibold))
@@ -125,6 +131,7 @@ struct PortraitHomeView: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(unread > 0 ? Text("メッセージ（未読 \(unread) 件）") : Text("メッセージ"))
     }
 
     private func groupBlock(_ group: RotashGroup) -> some View {
@@ -141,9 +148,12 @@ struct PortraitHomeView: View {
                             .font(Typo.label(15, weight: .semibold))
                             .tracking(4)
                             .foregroundStyle(Palette.text)
-                        Text("SEND").rotashLabel(8, color: Palette.live, tracking: 1.6)
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Palette.live)
                     }
                 }
+                .accessibilityLabel(Text("招待コード \(group.inviteCode) を送る"))
                 Spacer(minLength: 8)
                 // 対面でそのまま伝えたいときのために、コピーも残しておく（1画面に収めるため、同じ行に）。
                 Button {

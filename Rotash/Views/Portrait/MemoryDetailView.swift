@@ -61,10 +61,15 @@ struct MemoryDetailView: View {
 
     private var topBar: some View {
         HStack {
-            Button("← BACK") { dismiss() }
-                .font(Typo.label(10, weight: .medium))
-                .tracking(2)
-                .foregroundStyle(Palette.dim)
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Palette.dim)
+                    .frame(minWidth: 44, minHeight: 32, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("戻る"))
             Spacer()
             Text("\(week.filledCount) / \(week.slots.count)")
                 .rotashLabel(9, color: Palette.faint)
@@ -281,15 +286,15 @@ struct MemoryDetailView: View {
     private var shareButton: some View {
         VStack(alignment: .leading, spacing: 12) {
             WorkShareButton(week: week) {
-                Text("SHARE")
-                    .font(Typo.label(13, weight: .semibold))
-                    .tracking(3)
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(Palette.live)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 15)
                     .overlay(Rectangle().stroke(Palette.live, lineWidth: 1))
                     .contentShape(Rectangle())
             }
+            .accessibilityLabel(Text("共有"))
             Text("加工はしません。画面のまま1枚にして書き出します。")
                 .rotashLabel(9, color: Palette.faint, tracking: 0.4)
         }

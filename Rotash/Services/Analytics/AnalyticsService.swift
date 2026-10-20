@@ -109,6 +109,8 @@ enum AnalyticsService {
     /// `destination` は送り先の種類（`com.burbn.instagram.shareextension` なら Instagram、
     /// `jp.naver.line.Share` なら LINE など）。「ストーリーなどにあげる割合」を見るのに使う。
     /// Instagram の中でストーリーかフィードかまでは分からない。
+    /// ただし共有シートの「Instagram ストーリーズ」（`InstagramStoryActivity`）から出したものは
+    /// `app.rotash.instagram-story` になり、ストーリーズだと分かる（Instagram を開けたところまで）。
     static func workShareCompleted(isComplete: Bool, destination: String?) {
         var params: [String: Any] = ["is_complete": isComplete]
         // Analytics のパラメータの値は100文字まで。

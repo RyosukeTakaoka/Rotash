@@ -8,11 +8,16 @@ struct SharePayload: Identifiable {
 
 struct ActivityView: UIViewControllerRepresentable {
     let items: [Any]
+    /// iOS が並べるものに、こちらで足す行き先（Instagram ストーリーズなど）。
+    var activities: [UIActivity]? = nil
+    /// この共有には関係のない行き先（「連絡先に割り当てる」「プリント」など）。並びを短くして、行き先を探しやすくする。
+    var excluded: [UIActivity.ActivityType]? = nil
     /// 送ったか（取り消しではないか）と、送り先の種類（Instagram・LINE など）。
     var onComplete: ((Bool, UIActivity.ActivityType?) -> Void)? = nil
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: activities)
+        controller.excludedActivityTypes = excluded
         controller.completionWithItemsHandler = { activityType, completed, _, _ in
             onComplete?(completed, activityType)
         }
@@ -71,6 +76,10 @@ final class ShareableLink: NSObject, UIActivityItemSource {
 /// **宣伝文は付けない。**「Rotash で作りました！」は広告に見えて、投稿者が恥ずかしい。
 /// 画像が十分に強ければ言葉は要らないし、弱いなら言葉では埋まらない。
 ///
+/// 共有シートには「Instagram ストーリーズ」を足す（`InstagramStoryActivity`）。作品は 9:16 の1枚で、
+/// 行き先はほぼストーリーズなので、Instagram を探して開いてから選ぶ手間を省く。
+/// 招待（`InviteShareButton`）には足さない。あちらは公開の場に出してはいけないリンクを含むため。
+///
 /// `rotash://new?from=…` のリンクも添えない。
 /// 公開の場に出す画像に付けても、アプリを持っていない人には押せない文字列でしかなく、
 /// そのうえ AirDrop を共有先から消してしまう（ShareableLink のコメントを参照）。
@@ -94,7 +103,9 @@ struct WorkShareButton<Label: View>: View {
         }
         .buttonStyle(.plain)
         .sheet(item: $payload) { payload in
-            ActivityView(items: payload.items) { completed, activityType in
+            ActivityView(items: payload.items,
+                         activities: [InstagramStoryActivity()],
+                         excluded: [.assignToContact, .print, .addToReadingList, .openInIBooks]) { completed, activityType in
                 if completed {
                     AnalyticsService.workShareCompleted(isComplete: week.isComplete,
                                                         destination: activityType?.rawValue)

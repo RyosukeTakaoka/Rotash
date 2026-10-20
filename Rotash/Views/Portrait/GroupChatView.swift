@@ -136,13 +136,15 @@ struct GroupChatView: View {
                 app.sendMessage(draft)
                 draft = ""
             } label: {
-                Text("SEND")
-                    .rotashLabel(10, color: canSend ? Palette.live : Palette.faint, tracking: 2)
-                    .frame(minWidth: 56, minHeight: 44)
+                Image(systemName: "paperplane")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(canSend ? Palette.live : Palette.faint)
+                    .frame(minWidth: 44, minHeight: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(!canSend)
+            .accessibilityLabel(Text("送信"))
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 12)

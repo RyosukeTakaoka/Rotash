@@ -155,11 +155,13 @@ struct ThisWeekView: View {
             // 完成を待たずに共有できる。3/7 は「これ何？」を生むが、7/7 は答えなので、
             // 途中のほうがむしろ強い。押し付けはしない — ここに静かに置いておくだけ。
             WorkShareButton(week: week) {
-                Text("SHARE")
-                    .rotashLabel(11,
-                                 color: week.isFinished ? Palette.live : Palette.dim,
-                                 tracking: 2.4)
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(week.isFinished ? Palette.live : Palette.dim)
+                    .frame(minWidth: 44, minHeight: 32)
+                    .contentShape(Rectangle())
             }
+            .accessibilityLabel(Text("共有"))
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
@@ -588,14 +590,16 @@ struct ThisWeekView: View {
     private var flipButton: some View {
         if camera.status == .ready {
             Button { camera.switchCamera() } label: {
-                Text("FLIP")
-                    .rotashLabel(10, color: Palette.text, tracking: 1.8)
+                Image(systemName: "arrow.triangle.2.circlepath.camera")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(Palette.text)
                     .frame(width: flipButtonWidth, height: 46)
                     .background(Color.black.opacity(0.5))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(isCapturing)
+            .accessibilityLabel(Text("カメラを切り替える"))
         } else {
             Color.clear.frame(width: flipButtonWidth, height: 1)
         }

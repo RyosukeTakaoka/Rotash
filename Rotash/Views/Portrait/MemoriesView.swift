@@ -36,12 +36,17 @@ struct MemoriesView: View {
 
     private var topBar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button("← BACK") { dismiss() }
-                .font(Typo.label(10, weight: .medium))
-                .tracking(2)
-                .foregroundStyle(Palette.dim)
-                .padding(.top, 22)
-                .padding(.bottom, 20)
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Palette.dim)
+                    .frame(minWidth: 44, minHeight: 32, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("戻る"))
+            .padding(.top, 22)
+            .padding(.bottom, 20)
             HStack(alignment: .firstTextBaseline) {
                 Text("MEMORIES").rotashLabel(12, color: Palette.text, tracking: 3)
                 Spacer()
